@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+  <title>SwC IDE · Python 运行环境</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+  <link rel="stylesheet" href="swc-ide.css">
+</head>
+<body>
+<div class="corner-tl">不自由毋宁死 · 不自由毋寧死 · Give me liberty or give me death · 自由か、死か</div>
+<div class="corner-tr" id="fpsDisplay">FPS: --</div>
+<div class="corner-br">made by ZZC-jeizuchin, Github</div>
+<button class="theme-toggle" id="themeToggle">深色</button>
+
+<div class="main-panel">
+  <div class="header"><h1>SwC IDE · Python 版</h1><a href="index.html" class="back-btn">← 返回主站</a></div>
+
+  <!-- 文件管理工具栏 -->
+  <div class="file-area" id="fileArea">
+    <select class="file-select" id="localFileSelect"><option value="">-- 本地存储文件 --</option></select>
+    <button class="file-btn" id="localOpenBtn" disabled>打开</button>
+    <button class="file-btn danger" id="localDeleteBtn" disabled>删除</button>
+    <button class="file-btn" id="saveAsBtn">另存为…</button>
+    <button class="file-btn" id="saveCurrentBtn">保存当前</button>
+    <input type="file" id="diskFileInput" accept=".py,.txt" style="display:none;">
+    <button class="file-btn" id="diskOpenBtn">打开本地文件</button>
+    <span class="current-file" id="currentFileName">未命名</span>
+  </div>
+
+  <div class="tab-bar">
+    <div class="tabs">
+      <button class="tab active" data-tab="editor">编辑器</button>
+      <button class="tab" data-tab="output">输出</button>
+    </div>
+  </div>
+
+  <div class="editor-container" id="editorContainer">
+    <textarea id="pythonCode" style="display:none;"></textarea>
+  </div>
+
+  <div class="output-container" id="outputContainer">
+    <div id="outputViewport"><div id="outputSpacer"></div><div id="outputCanvas"></div></div>
+  </div>
+
+  <div class="stdin-container" id="stdinContainer">
+    <label for="stdinData">标准输入（每行对应一次 input() 调用）</label>
+    <textarea id="stdinData" placeholder="如需使用 input()，请在此处填入数据，每行一个"></textarea>
+    <div class="stdin-hint">程序执行到 input() 时将依次读取这些行，用完则返回空字符串</div>
+  </div>
+
+  <div class="action-bar">
+    <button class="nav-btn" id="runBtn" disabled>运行代码</button>
+    <button class="nav-btn secondary" id="saveBtn">保存当前代码</button>
+    <button class="nav-btn secondary" id="resetBtn">重置为默认</button>
+    <button class="nav-btn danger" id="stopBtn" style="display:none;">终止运行</button>
+    <span class="status" id="statusMsg">准备中…</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ======================== 日志 ========================
+  const logBuffer = []; let logReady = false;
+  function flushLogs() { if (logReady && logBuffer.length) { logBuffer.forEach(m => appendOutput(m)); logBuffer.length = 0; } }
+  function log(msg, isError) {
+    const prefix = isError ? '❌ ' : '• '; const full = prefix + msg;
+    console.log(`[PY] ${full}`);
+    if (typeof appendOutput === 'function') { appendOutput(full); logReady = true; flushLogs(); }
+    else { logBuffer.push(full); }
+  }
+
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  // ======================== 主题 ========================
+  const themeToggle = document.getElementById('themeToggle');
+  const currentTheme = localStorage.getItem('swc_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  themeToggle.textContent = currentTheme === 'light' ? '深色' : '亮色';
+  themeToggle.addEventListener('click', () => {
+    const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('swc_theme', newTheme);
+    themeToggle.textContent = newTheme === 'light' ? '深色' : '亮色';
+    editor.refresh();
+  });
+
+  // FPS
+  const fpsDisplay = document.getElementById('fpsDisplay');
+  let frameCount = 0, lastFpsUpdate = performance.now();
+  function updateFPS() {
+    frameCount++;
+    const now = performance.now();
+    if (now - lastFpsUpdate >= 1000) {
+      fpsDisplay.textContent = `FPS: ${Math.round((frameCount * 1000) / (now - lastFpsUpdate))}`;
+      frameCount = 0; lastFpsUpdate = now;
+    }
+    requestAnimationFrame(updateFPS);
+  }
+  requestAnimationFrame(updateFPS);
+
+  // ======================== 编辑器 ========================
+  const DEFAULT_CODE = `# 欢迎使用 SwC Python 环境
+from time import sleep
+
+print("Hello, SwC!")
+sleep(1)
+print("Done.")
+`;
+  const textarea = document.getElementById('pythonCode');
+  const editorContainer = document.getElementById('editorContainer');
+  const BRACKET_PAIRS = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'" };
+  const editor = CodeMirror.fromTextArea(textarea, {
+    mode: 'python', theme: 'default', lineNumbers: true, matchBrackets: true,
+    indentUnit: 4, tabSize: 4, indentWithTabs: false, smartIndent: true, lineWrapping: true,
+    styleActiveLine: true, gutters: ['CodeMirror-linenumbers'],
+    inputStyle: isMobile ? 'textarea' : 'contenteditable',
+    extraKeys: {
+      'Enter': function(cm) {
+        const cursor = cm.getCursor(); const line = cm.getLine(cursor.line);
+        const textBeforeCursor = line.slice(0, cursor.ch);
+        if (textBeforeCursor.trimEnd().endsWith(':')) {
+          const indent = line.match(/^\s*/)[0]; const newIndent = indent + '    ';
+          cm.replaceSelection('\n' + newIndent);
+          cm.setCursor({ line: cursor.line + 1, ch: newIndent.length });
+        } else cm.execCommand('newlineAndIndent');
+      },
+      'Backspace': function(cm) {
+        const cursor = cm.getCursor(); const line = cm.getLine(cursor.line);
+        const beforeCursor = line.slice(0, cursor.ch);
+        if (beforeCursor.endsWith('    ')) {
+          cm.replaceRange('', { line: cursor.line, ch: cursor.ch - 4 }, { line: cursor.line, ch: cursor.ch });
+        } else CodeMirror.commands.delCharBefore(cm);
+      }
+    }
+  });
+
+  let autoClosing = false;
+  editor.on('beforeChange', function(cm, change) {
+    if (autoClosing) return;
+    const origin = change.origin;
+    if ((origin === '+input' || origin === 'complete') && change.text.length === 1) {
+      const char = change.text[0];
+      if (BRACKET_PAIRS[char]) {
+        change.cancel(); autoClosing = true;
+        const cursor = cm.getCursor();
+        cm.replaceRange(char + BRACKET_PAIRS[char], cursor, cursor);
+        cm.setCursor({ line: cursor.line, ch: cursor.ch + 1 });
+        autoClosing = false;
+      } else if (char === '<') {
+        const cursor = cm.getCursor(); const line = cm.getLine(cursor.line);
+        const prevChar = cursor.ch > 0 ? line[cursor.ch - 1] : '';
+        if (prevChar === '' || prevChar === ' ' || prevChar === '(' || prevChar === '{' || prevChar === '[' || prevChar === ';') {
+          change.cancel(); autoClosing = true;
+          cm.replaceRange('<>', cursor, cursor);
+          cm.setCursor({ line: cursor.line, ch: cursor.ch + 1 });
+          autoClosing = false;
+        }
+      }
+    }
+  });
+
+  function resizeEditor() {
+    if (editorContainer.style.display === 'none') return;
+    const height = editorContainer.clientHeight;
+    if (height > 0) { editor.getWrapperElement().style.height = height + 'px'; editor.refresh(); }
+  }
+  setTimeout(resizeEditor, 50);
+  if (window.ResizeObserver) { new ResizeObserver(() => resizeEditor()).observe(editorContainer); }
+  window.addEventListener('resize', resizeEditor);
+  if (isMobile) {
+    editor.on('keydown', (cm, e) => {
+      if (e.key === 'Backspace' || e.key === 'Delete') setTimeout(() => cm.focus(), 10);
+    });
+  }
+
+  // ======================== UI 元素 ========================
+  const outputViewport = document.getElementById('outputViewport');
+  const outputCanvas = document.getElementById('outputCanvas');
+  const outputSpacer = document.getElementById('outputSpacer');
+  const outputContainer = document.getElementById('outputContainer');
+  const runBtn = document.getElementById('runBtn');
+  const saveBtn = document.getElementById('saveBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const statusMsg = document.getElementById('statusMsg');
+  const stdinContainer = document.getElementById('stdinContainer');
+  const stdinData = document.getElementById('stdinData');
+
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+    const target = t.dataset.tab;
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    t.classList.add('active');
+    if (target === 'editor') {
+      editorContainer.style.display = 'block'; outputContainer.style.display = 'none'; stdinContainer.style.display = 'none'; resizeEditor();
+    } else {
+      editorContainer.style.display = 'none'; outputContainer.style.display = 'block'; stdinContainer.style.display = 'flex';
+      if (typeof scheduleRender === 'function') scheduleRender();
+    }
+  }));
+
+  // ======================== 文件管理 ========================
+  const FILE_PREFIX = 'swc_file_py_';
+  const FILE_LIST_KEY = 'swc_filelist_py';
+  const CURRENT_FILE_KEY = 'swc_current_py_file';
+  let currentFile = localStorage.getItem(CURRENT_FILE_KEY) || '';
+
+  function sanitizeFilename(name) {
+    return name.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fff]/g, '').substring(0, 60);
+  }
+
+  function getFullFilename(baseName) {
+    const sanitized = sanitizeFilename(baseName);
+    return sanitized + (sanitized.endsWith('.py') ? '' : '.py');
+  }
+
+  function getFileList() {
+    try { return JSON.parse(localStorage.getItem(FILE_LIST_KEY) || '[]'); }
+    catch { return []; }
+  }
+
+  function saveFileList(list) {
+    localStorage.setItem(FILE_LIST_KEY, JSON.stringify(list));
+  }
+
+  function refreshFileSelect() {
+    const select = document.getElementById('localFileSelect');
+    const files = getFileList();
+    select.innerHTML = '<option value="">-- 本地存储文件 --</option>';
+    files.forEach(f => { const opt = document.createElement('option'); opt.value = f; opt.textContent = f; select.appendChild(opt); });
+    document.getElementById('localOpenBtn').disabled = files.length === 0;
+    document.getElementById('localDeleteBtn').disabled = files.length === 0;
+    if (currentFile && !files.includes(currentFile)) {
+      currentFile = '';
+      localStorage.removeItem(CURRENT_FILE_KEY);
+    }
+    document.getElementById('currentFileName').textContent = currentFile || '未命名';
+  }
+
+  function setEditorContent(code, filename) {
+    editor.setValue(code);
+    editor.clearHistory();
+    currentFile = filename;
+    localStorage.setItem(CURRENT_FILE_KEY, filename);
+    document.getElementById('currentFileName').textContent = filename || '未命名';
+    localStorage.setItem('swc_standalone_python_code', code);
+  }
+
+  function localSave(filename, code) {
+    const full = getFullFilename(filename);
+    const files = getFileList();
+    if (!files.includes(full)) {
+      files.push(full);
+      saveFileList(files);
+    }
+    localStorage.setItem(FILE_PREFIX + full, code);
+    refreshFileSelect();
+    return full;
+  }
+
+  function localDelete(filename) {
+    localStorage.removeItem(FILE_PREFIX + filename);
+    const files = getFileList().filter(f => f !== filename);
+    saveFileList(files);
+    if (currentFile === filename) {
+      currentFile = '';
+      localStorage.removeItem(CURRENT_FILE_KEY);
+    }
+    refreshFileSelect();
+  }
+
+  document.getElementById('saveAsBtn').addEventListener('click', () => {
+    const name = prompt('请输入文件名（自动添加 .py）：', currentFile.replace('.py', '') || '');
+    if (!name) return;
+    const full = getFullFilename(name);
+    const code = editor.getValue();
+    if (getFileList().includes(full)) {
+      if (!confirm(`文件 ${full} 已存在，是否覆盖？`)) return;
+    }
+    const savedName = localSave(name, code);
+    currentFile = savedName;
+    localStorage.setItem(CURRENT_FILE_KEY, savedName);
+    document.getElementById('currentFileName').textContent = savedName;
+    log(`文件已保存: ${savedName}`);
+  });
+
+  document.getElementById('saveCurrentBtn').addEventListener('click', () => {
+    if (currentFile) {
+      localStorage.setItem(FILE_PREFIX + currentFile, editor.getValue());
+      log(`文件 ${currentFile} 已保存`);
+      const files = getFileList();
+      if (!files.includes(currentFile)) {
+        files.push(currentFile);
+        saveFileList(files);
+        refreshFileSelect();
+      }
+    } else {
+      document.getElementById('saveAsBtn').click();
+    }
+  });
+
+  document.getElementById('localOpenBtn').addEventListener('click', () => {
+    const select = document.getElementById('localFileSelect');
+    const filename = select.value;
+    if (!filename) return;
+    const code = localStorage.getItem(FILE_PREFIX + filename);
+    if (code !== null) {
+      setEditorContent(code, filename);
+      log(`已打开: ${filename}`);
+    }
+  });
+
+  document.getElementById('localDeleteBtn').addEventListener('click', () => {
+    const select = document.getElementById('localFileSelect');
+    const filename = select.value;
+    if (!filename) return;
+    if (confirm(`确定删除 ${filename}？`)) {
+      localDelete(filename);
+      log(`已删除: ${filename}`);
+    }
+  });
+
+  document.getElementById('diskOpenBtn').addEventListener('click', () => {
+    document.getElementById('diskFileInput').click();
+  });
+  document.getElementById('diskFileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setEditorContent(ev.target.result, file.name);
+      log(`已从磁盘加载: ${file.name}`);
+    };
+    reader.onerror = () => log('文件读取失败', true);
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 's') {
+      e.preventDefault();
+      document.getElementById('saveCurrentBtn').click();
+    }
+  });
+
+  refreshFileSelect();
+  if (currentFile) {
+    const code = localStorage.getItem(FILE_PREFIX + currentFile);
+    if (code !== null) {
+      editor.setValue(code);
+      editor.clearHistory();
+    } else {
+      currentFile = '';
+      localStorage.removeItem(CURRENT_FILE_KEY);
+    }
+  }
+
+  // 自动保存草稿
+  const STORAGE_KEY = 'swc_standalone_python_code';
+  function loadCode() { try { editor.setValue(localStorage.getItem(STORAGE_KEY) || DEFAULT_CODE); } catch { editor.setValue(DEFAULT_CODE); } }
+  function saveCode() {
+    try { localStorage.setItem(STORAGE_KEY, editor.getValue()); statusMsg.textContent = '已保存';
+      setTimeout(() => { statusMsg.textContent = workerReady ? 'Python 就绪' : '准备中…'; }, 1500); }
+    catch { statusMsg.textContent = '保存失败'; }
+  }
+  function resetCode() {
+    editor.setValue(DEFAULT_CODE); resetOutput();
+    saveCode(); statusMsg.textContent = '已重置';
+    setTimeout(() => { statusMsg.textContent = workerReady ? 'Python 就绪' : '准备中…'; }, 1500);
+  }
+  editor.on('change', () => {
+    clearTimeout(window._saveTimer);
+    window._saveTimer = setTimeout(saveCode, 800);
+  });
+
+  // ======================== 虚拟滚动 + 行缓冲 ========================
+  const LINE_HEIGHT = 21;
+  const outputLines = [];
+  let userScrolledUp = false, needsRender = false, pendingScrollBottom = false, renderRaf = null, isProgrammaticScroll = false;
+  let lineBuffer = '';
+
+  function flushLineBuffer() {
+    if (lineBuffer.length > 0) {
+      outputLines.push(lineBuffer);
+      lineBuffer = '';
+      outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
+      if (!userScrolledUp) pendingScrollBottom = true;
+      scheduleRender();
+    }
+  }
+
+  function feedOutput(text) {
+    if (!text) return;
+    lineBuffer += text;
+    const lines = lineBuffer.split('\n');
+    lineBuffer = lines.pop();
+    for (const line of lines) outputLines.push(line);
+    outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
+    if (!userScrolledUp) pendingScrollBottom = true;
+    scheduleRender();
+  }
+
+  function appendOutput(line) { feedOutput(line + '\n'); }
+  function appendMultipleLines(text) { if (text) feedOutput(text + '\n'); }
+
+  function scheduleRender() { if (!needsRender) { needsRender = true; renderRaf = requestAnimationFrame(performRender); } }
+  function performRender() {
+    renderRaf = null; needsRender = false;
+    if (pendingScrollBottom) {
+      const viewportHeight = outputViewport.clientHeight;
+      if (viewportHeight === 0 || outputLines.length === 0) { outputCanvas.textContent = ''; outputCanvas.style.transform = 'translateY(0px)'; pendingScrollBottom = false; return; }
+      const visibleCount = Math.ceil(viewportHeight / LINE_HEIGHT) * 2;
+      const startLine = Math.max(0, outputLines.length - visibleCount);
+      const textChunk = outputLines.slice(startLine, outputLines.length).join('\n');
+      outputCanvas.textContent = textChunk;
+      outputCanvas.style.transform = `translateY(${startLine * LINE_HEIGHT}px)`;
+      isProgrammaticScroll = true;
+      outputViewport.scrollTop = outputViewport.scrollHeight;
+      pendingScrollBottom = false;
+    } else { renderVisibleLines(); }
+  }
+  function renderVisibleLines() {
+    const scrollTop = outputViewport.scrollTop, viewportHeight = outputViewport.clientHeight;
+    if (viewportHeight === 0 || outputLines.length === 0) { outputCanvas.textContent = ''; outputCanvas.style.transform = 'translateY(0px)'; return; }
+    const startLine = Math.floor(scrollTop / LINE_HEIGHT);
+    const visibleCount = Math.ceil(viewportHeight / LINE_HEIGHT) * 2;
+    const endLine = Math.min(startLine + visibleCount, outputLines.length);
+    outputCanvas.textContent = outputLines.slice(startLine, endLine).join('\n');
+    outputCanvas.style.transform = `translateY(${startLine * LINE_HEIGHT}px)`;
+  }
+  outputViewport.addEventListener('scroll', () => {
+    if (isProgrammaticScroll) { isProgrammaticScroll = false; return; }
+    userScrolledUp = !(outputViewport.scrollTop + outputViewport.clientHeight >= outputViewport.scrollHeight - 5);
+    scheduleRender();
+  });
+  function resetOutput() {
+    outputLines.length = 0; lineBuffer = '';
+    outputSpacer.style.height = '0px';
+    outputCanvas.textContent = ''; outputCanvas.style.transform = 'translateY(0px)';
+    userScrolledUp = false; pendingScrollBottom = false;
+    if (renderRaf) { cancelAnimationFrame(renderRaf); renderRaf = null; needsRender = false; }
+    isProgrammaticScroll = false;
+  }
+
+  logReady = true; flushLogs();
+
+  // ======================== Service Worker ========================
+  let swReady = false;
+  async function initServiceWorker() {
+    if (!('serviceWorker' in navigator)) { log('浏览器不支持 Service Worker，无法离线', true); statusMsg.textContent = '无 SW'; return false; }
+    try {
+      log('注册 Service Worker...');
+      const registration = await navigator.serviceWorker.register('sw.js');
+      log('SW 已注册');
+      if (registration.installing) {
+        log('SW 安装中...');
+        await new Promise(resolve => {
+          registration.installing.addEventListener('statechange', (e) => {
+            if (e.target.state === 'activated') { log('SW 已激活'); resolve(); }
+          });
+        });
+      } else if (registration.active) { log('SW 已处于活动状态'); }
+      await navigator.serviceWorker.ready;
+      swReady = true;
+      log('Service Worker 已接管页面，离线缓存就绪');
+      statusMsg.textContent = 'SW 就绪';
+      return true;
+    } catch (err) { log(`SW 注册失败: ${err.message}`, true); statusMsg.textContent = 'SW 失败'; return false; }
+  }
+
+  async function clearCache() {
+    try {
+      const cache = await caches.open('swc-compiler-final');
+      const keys = await cache.keys();
+      for (const req of keys) await cache.delete(req);
+      log('已清除离线缓存（将重新下载）');
+    } catch (err) { log(`清除缓存失败: ${err.message}`, true); }
+  }
+
+  // ======================== Worker 管理 ========================
+  let worker = null, workerReady = false, running = false, runStartTime = 0;
+  let initTimer = null, isInitializing = false;
+
+  function createWorker() {
+    const workerScript = `
+      const dec = new TextDecoder();
+      let inputLines = [], inputIndex = 0;
+      self.onmessage = async (e) => {
+        const { code, stdinLines } = e.data;
+        if (!self.pyodide) {
+          self.postMessage({type:'log', text:'Worker 下载 Pyodide 环境...'});
+          try {
+            importScripts('https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js');
+            self.pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.1/full/', env: { PYTHONUNBUFFERED: '1' } });
+            self.pyodide.setStdout({ write: (buffer) => { self.postMessage({ type:'stdout', text: dec.decode(buffer) }); return buffer.length; } });
+            self.pyodide.setStderr({ write: (buffer) => { self.postMessage({ type:'stderr', text: dec.decode(buffer) }); return buffer.length; } });
+            self.pyodide.setStdin({ stdin: getStdin });
+            self.postMessage({ type:'ready' });
+          } catch (err) { self.postMessage({ type:'error', error: 'init: ' + err.message }); }
+          return;
+        }
+        inputLines = stdinLines || [];
+        inputIndex = 0;
+        await self.pyodide.runPythonAsync('import builtins\\nkeep = {"__builtins__","__name__","__doc__","__package__","__loader__","__spec__"}\\nfor key in list(globals().keys()):\\n    if key not in keep and not key.startswith("_"):\\n        try: del globals()[key]\\n        except: pass');
+        try {
+          await self.pyodide.runPythonAsync(code);
+          self.postMessage({ type:'done' });
+        } catch (err) { self.postMessage({ type:'error', error: err.message }); }
+      };
+      function getStdin() {
+        if (inputIndex < inputLines.length) {
+          const line = inputLines[inputIndex++];
+          self.postMessage({ type:'stdout', text: line + '\\n' });
+          return line;
+        }
+        return '';
+      }
+    `;
+    return new Worker(URL.createObjectURL(new Blob([workerScript],{type:'application/javascript'})));
+  }
+
+  function handleWorkerMessage(e) {
+    const msg = e.data;
+    if (msg.type === 'log') { log(`[Worker] ${msg.text}`); return; }
+    if (initTimer) { clearTimeout(initTimer); initTimer = null; }
+    switch (msg.type) {
+      case 'ready':
+        workerReady = true; isInitializing = false;
+        runBtn.disabled = false; statusMsg.textContent = 'Python 就绪';
+        log('✅ Python 环境就绪');
+        break;
+      case 'stdout': case 'stderr': feedOutput(msg.text); break;
+      case 'done':
+        flushLineBuffer();
+        running = false;
+        runBtn.disabled = false;
+        stopBtn.style.display = 'none';
+        const elapsed = performance.now() - runStartTime;
+        feedOutput('\n--- 运行完成 ---\n');
+        feedOutput(`感知总耗时：${elapsed.toFixed(0)} ms\n`);
+        log('运行完成');
+        break;
+      case 'error':
+        flushLineBuffer();
+        feedOutput('[错误] ' + msg.error + '\n');
+        running = false; runBtn.disabled = false; stopBtn.style.display = 'none';
+        if (msg.error.includes('Failed to fetch') || msg.error.includes('NetworkError')) {
+          if (!isInitializing) {
+            isInitializing = true;
+            log('检测到网络/缓存错误，尝试清除缓存并重试...');
+            clearCache().then(() => {
+              if (worker) { worker.terminate(); worker = null; }
+              initCompiler(true);
+            });
+          }
+        }
+        break;
+    }
+  }
+
+  async function initCompiler(forceOnline = false) {
+    if (isInitializing) return;
+    isInitializing = true;
+    if (worker) { worker.terminate(); worker = null; }
+    if (initTimer) { clearTimeout(initTimer); initTimer = null; }
+    workerReady = false; running = false;
+    runBtn.disabled = true; stopBtn.style.display = 'none';
+    statusMsg.textContent = '启动中...';
+    log('===== 初始化 =====');
+
+    const swOk = await initServiceWorker();
+    if (!swOk && !forceOnline) log('SW 不可用，将依赖在线模式');
+    if (forceOnline) log('强制在线模式（忽略缓存）');
+
+    worker = createWorker();
+    worker.onmessage = handleWorkerMessage;
+    worker.onerror = (e) => { log(`Worker 运行时错误: ${e.message}`, true); isInitializing = false; };
+
+    initTimer = setTimeout(() => {
+      if (!workerReady) {
+        log('初始化超时 (60s)，请检查网络或刷新', true);
+        isInitializing = false;
+        statusMsg.textContent = '超时';
+      }
+    }, 60000);
+
+    worker.postMessage({ code: '' });
+  }
+
+  function terminateRun() {
+    if (!running) return;
+    if (worker) worker.terminate();
+    if (initTimer) clearTimeout(initTimer);
+    isInitializing = false; workerReady = false; running = false;
+    runBtn.disabled = true; stopBtn.style.display = 'none';
+    appendOutput('（用户终止）');
+    initCompiler();
+  }
+
+  stopBtn.addEventListener('click', terminateRun);
+
+  runBtn.addEventListener('click', () => {
+    if (!workerReady || running) return;
+    const code = editor.getValue(); if (!code.trim()) return;
+    const rawInput = stdinData.value;
+    const stdinLines = rawInput.length > 0 ? rawInput.split('\n') : [];
+    document.querySelector('[data-tab="output"]').click(); resetOutput();
+    runStartTime = performance.now(); running = true;
+    runBtn.disabled = true; stopBtn.style.display = 'inline-block';
+    statusMsg.textContent = '运行中…';
+    requestAnimationFrame(() => worker.postMessage({ code, stdinLines }));
+  });
+
+  saveBtn.addEventListener('click', saveCode);
+  resetBtn.addEventListener('click', resetCode);
+
+  loadCode();
+  initCompiler();
+  editorContainer.style.display = 'block';
+  outputContainer.style.display = 'none';
+  stdinContainer.style.display = 'none';
+})();
+</script>
+</body>
+</html>

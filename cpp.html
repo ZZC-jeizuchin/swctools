@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+  <title>SwC IDE · C++ 运行环境</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+  <link rel="stylesheet" href="swc-ide.css">
+</head>
+<body>
+<div class="corner-tl">不自由毋宁死 · 不自由毋寧死 · Give me liberty or give me death · 自由か、死か</div>
+<div class="corner-tr" id="fpsDisplay">FPS: --</div>
+<div class="corner-br">made by ZZC-jeizuchin, Github</div>
+<button class="theme-toggle" id="themeToggle">深色</button>
+
+<div class="main-panel">
+  <div class="header"><h1>SwC IDE · C++ 版</h1><a href="index.html" class="back-btn">← 返回主站</a></div>
+
+  <!-- 文件管理工具栏 -->
+  <div class="file-area" id="fileArea">
+    <select class="file-select" id="localFileSelect"><option value="">-- 本地存储文件 --</option></select>
+    <button class="file-btn" id="localOpenBtn" disabled>打开</button>
+    <button class="file-btn danger" id="localDeleteBtn" disabled>删除</button>
+    <button class="file-btn" id="saveAsBtn">另存为…</button>
+    <button class="file-btn" id="saveCurrentBtn">保存当前</button>
+    <input type="file" id="diskFileInput" accept=".cpp,.h,.hpp,.c,.txt" style="display:none;">
+    <button class="file-btn" id="diskOpenBtn">打开本地文件</button>
+    <span class="current-file" id="currentFileName">未命名</span>
+  </div>
+
+  <div class="tab-bar">
+    <div class="tabs">
+      <button class="tab active" data-tab="editor">编辑器</button>
+      <button class="tab" data-tab="output">输出</button>
+    </div>
+    <div class="opt-group">
+      <span class="opt-label">优化：</span>
+      <select id="optLevel" class="opt-select">
+        <option value="O1">-O1</option>
+        <option value="O2">-O2</option>
+        <option value="O3" selected>-O3</option>
+        <option value="Oz">-Oz</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="editor-container" id="editorContainer">
+    <textarea id="cppCode" style="display:none;"></textarea>
+  </div>
+
+  <div class="output-container" id="outputContainer">
+    <div id="outputViewport"><div id="outputSpacer"></div><div id="outputCanvas"></div></div>
+  </div>
+
+  <div class="stdin-container" id="stdinContainer">
+    <label for="stdinData">标准输入（每行对应一次 cin / scanf 调用）</label>
+    <textarea id="stdinData" placeholder="如需使用 cin / scanf，请在此处填入数据，每行一个"></textarea>
+    <div class="stdin-hint">程序执行到 cin / scanf 时将依次读取这些行，用完则返回空行</div>
+  </div>
+
+  <div class="action-bar">
+    <button class="nav-btn" id="compileBtn" disabled>编译代码</button>
+    <button class="nav-btn" id="runBtn" disabled>运行</button>
+    <button class="nav-btn secondary" id="saveBtn">保存当前代码</button>
+    <button class="nav-btn secondary" id="resetBtn">重置为默认</button>
+    <button class="nav-btn danger" id="stopBtn" style="display:none;">终止运行</button>
+    <span class="status" id="statusMsg">准备中…</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ======================== 日志 ========================
+  const logBuffer = []; let logReady = false;
+  function flushLogs() { if (logReady && logBuffer.length) { logBuffer.forEach(m => appendOutput(m)); logBuffer.length = 0; } }
+  function log(msg, isError) {
+    const prefix = isError ? '❌ ' : '• '; const full = prefix + msg;
+    console.log(`[CPP] ${full}`);
+    if (typeof appendOutput === 'function') { appendOutput(full); logReady = true; flushLogs(); }
+    else { logBuffer.push(full); }
+  }
+
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  // ======================== 主题 ========================
+  const themeToggle = document.getElementById('themeToggle');
+  const currentTheme = localStorage.getItem('swc_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  themeToggle.textContent = currentTheme === 'light' ? '深色' : '亮色';
+  themeToggle.addEventListener('click', () => {
+    const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('swc_theme', newTheme);
+    themeToggle.textContent = newTheme === 'light' ? '深色' : '亮色';
+    editor.refresh();
+  });
+
+  // FPS
+  const fpsDisplay = document.getElementById('fpsDisplay');
+  let frameCount = 0, lastFpsUpdate = performance.now();
+  function updateFPS() {
+    frameCount++;
+    const now = performance.now();
+    if (now - lastFpsUpdate >= 1000) {
+      fpsDisplay.textContent = `FPS: ${Math.round((frameCount * 1000) / (now - lastFpsUpdate))}`;
+      frameCount = 0; lastFpsUpdate = now;
+    }
+    requestAnimationFrame(updateFPS);
+  }
+  requestAnimationFrame(updateFPS);
+
+  // ======================== 编辑器 ========================
+  const DEFAULT_CODE = `#include <iostream>
+using namespace std;
+int main() {
+    cout << "Hello, SwC!" << endl;
+    for (int i = 1; i <= 1000; ++i) {
+        cout << i << "^3 = " << i*i*i << endl;
+    }
+    return 0;
+}`;
+  const textarea = document.getElementById('cppCode');
+  const editorContainer = document.getElementById('editorContainer');
+  const BRACKET_PAIRS = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'" };
+  const editor = CodeMirror.fromTextArea(textarea, {
+    mode: 'text/x-c++src', theme: 'default', lineNumbers: true, matchBrackets: true,
+    indentUnit: 4, tabSize: 4, indentWithTabs: false, smartIndent: true, lineWrapping: true,
+    styleActiveLine: true, gutters: ['CodeMirror-linenumbers'],
+    inputStyle: isMobile ? 'textarea' : 'contenteditable',
+    extraKeys: {
+      'Enter': function(cm) {
+        const cursor = cm.getCursor(); const line = cm.getLine(cursor.line);
+        const textBeforeCursor = line.slice(0, cursor.ch);
+        if (textBeforeCursor.trimEnd().endsWith('{')) {
+          const indent = line.match(/^\s*/)[0]; const newIndent = indent + '    ';
+          cm.replaceSelection('\n' + newIndent);
+          cm.setCursor({ line: cursor.line + 1, ch: newIndent.length });
+        } else cm.execCommand('newlineAndIndent');
+      },
+      'Backspace': function(cm) {
+        const cursor = cm.getCursor(); const line = cm.getLine(cursor.line);
+        const beforeCursor = line.slice(0, cursor.ch);
+        if (beforeCursor.endsWith('    ')) {
+          cm.replaceRange('', { line: cursor.line, ch: cursor.ch - 4 }, { line: cursor.line, ch: cursor.ch });
+        } else CodeMirror.commands.delCharBefore(cm);
+      }
+    }
+  });
+
+  let autoClosing = false;
+  editor.on('beforeChange', function(cm, change) {
+    if (autoClosing) return;
+    const origin = change.origin;
+    if ((origin === '+input' || origin === 'complete') && change.text.length === 1) {
+      const char = change.text[0];
+      if (BRACKET_PAIRS[char]) {
+        change.cancel(); autoClosing = true;
+        const cursor = cm.getCursor();
+        cm.replaceRange(char + BRACKET_PAIRS[char], cursor, cursor);
+        cm.setCursor({ line: cursor.line, ch: cursor.ch + 1 });
+        autoClosing = false;
+      } else if (char === '<') {
+        const cursor = cm.getCursor(); const line = cm.getLine(cursor.line);
+        const prevChar = cursor.ch > 0 ? line[cursor.ch - 1] : '';
+        if (prevChar === '' || prevChar === ' ' || prevChar === '(' || prevChar === '{' || prevChar === '[' || prevChar === ';') {
+          change.cancel(); autoClosing = true;
+          cm.replaceRange('<>', cursor, cursor);
+          cm.setCursor({ line: cursor.line, ch: cursor.ch + 1 });
+          autoClosing = false;
+        }
+      }
+    }
+  });
+
+  function resizeEditor() {
+    if (editorContainer.style.display === 'none') return;
+    const height = editorContainer.clientHeight;
+    if (height > 0) { editor.getWrapperElement().style.height = height + 'px'; editor.refresh(); }
+  }
+  setTimeout(resizeEditor, 50);
+  if (window.ResizeObserver) { new ResizeObserver(() => resizeEditor()).observe(editorContainer); }
+  window.addEventListener('resize', resizeEditor);
+
+  // ======================== UI 元素 ========================
+  const outputViewport = document.getElementById('outputViewport');
+  const outputCanvas = document.getElementById('outputCanvas');
+  const outputSpacer = document.getElementById('outputSpacer');
+  const outputContainer = document.getElementById('outputContainer');
+  const compileBtn = document.getElementById('compileBtn');
+  const runBtn = document.getElementById('runBtn');
+  const saveBtn = document.getElementById('saveBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const statusMsg = document.getElementById('statusMsg');
+  const stdinContainer = document.getElementById('stdinContainer');
+  const stdinData = document.getElementById('stdinData');
+  const optLevelSelect = document.getElementById('optLevel');
+
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+    const target = t.dataset.tab;
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    t.classList.add('active');
+    if (target === 'editor') {
+      editorContainer.style.display = 'block'; outputContainer.style.display = 'none'; stdinContainer.style.display = 'none'; resizeEditor();
+    } else {
+      editorContainer.style.display = 'none'; outputContainer.style.display = 'block'; stdinContainer.style.display = 'flex';
+      if (typeof scheduleRender === 'function') scheduleRender();
+    }
+  }));
+
+  // ======================== 文件管理 ========================
+  const FILE_PREFIX = 'swc_file_cpp_';
+  const FILE_LIST_KEY = 'swc_filelist_cpp';
+  const CURRENT_FILE_KEY = 'swc_current_cpp_file';
+  let currentFile = localStorage.getItem(CURRENT_FILE_KEY) || '';
+
+  function sanitizeFilename(name) {
+    return name.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fff]/g, '').substring(0, 60);
+  }
+
+  function getFullFilename(baseName) {
+    const sanitized = sanitizeFilename(baseName);
+    return sanitized + (sanitized.endsWith('.cpp') ? '' : '.cpp');
+  }
+
+  function getFileList() {
+    try { return JSON.parse(localStorage.getItem(FILE_LIST_KEY) || '[]'); }
+    catch { return []; }
+  }
+
+  function saveFileList(list) {
+    localStorage.setItem(FILE_LIST_KEY, JSON.stringify(list));
+  }
+
+  function refreshFileSelect() {
+    const select = document.getElementById('localFileSelect');
+    const files = getFileList();
+    select.innerHTML = '<option value="">-- 本地存储文件 --</option>';
+    files.forEach(f => { const opt = document.createElement('option'); opt.value = f; opt.textContent = f; select.appendChild(opt); });
+    document.getElementById('localOpenBtn').disabled = files.length === 0;
+    document.getElementById('localDeleteBtn').disabled = files.length === 0;
+    if (currentFile && !files.includes(currentFile)) {
+      // 当前文件可能已被删除
+      currentFile = '';
+      localStorage.removeItem(CURRENT_FILE_KEY);
+    }
+    document.getElementById('currentFileName').textContent = currentFile || '未命名';
+  }
+
+  function setEditorContent(code, filename) {
+    editor.setValue(code);
+    editor.clearHistory();
+    // 更新当前文件
+    currentFile = filename;
+    localStorage.setItem(CURRENT_FILE_KEY, filename);
+    document.getElementById('currentFileName').textContent = filename || '未命名';
+    // 也更新自动保存草稿
+    localStorage.setItem('swc_standalone_cpp_code', code);
+  }
+
+  function localSave(filename, code) {
+    const full = getFullFilename(filename);
+    const files = getFileList();
+    if (!files.includes(full)) {
+      files.push(full);
+      saveFileList(files);
+    }
+    localStorage.setItem(FILE_PREFIX + full, code);
+    refreshFileSelect();
+    return full;
+  }
+
+  function localDelete(filename) {
+    localStorage.removeItem(FILE_PREFIX + filename);
+    const files = getFileList().filter(f => f !== filename);
+    saveFileList(files);
+    if (currentFile === filename) {
+      currentFile = '';
+      localStorage.removeItem(CURRENT_FILE_KEY);
+    }
+    refreshFileSelect();
+  }
+
+  // 另存为
+  document.getElementById('saveAsBtn').addEventListener('click', () => {
+    const name = prompt('请输入文件名（自动添加 .cpp）：', currentFile.replace('.cpp', '') || '');
+    if (!name) return;
+    const full = getFullFilename(name);
+    const code = editor.getValue();
+    if (getFileList().includes(full)) {
+      if (!confirm(`文件 ${full} 已存在，是否覆盖？`)) return;
+    }
+    const savedName = localSave(name, code);
+    currentFile = savedName;
+    localStorage.setItem(CURRENT_FILE_KEY, savedName);
+    document.getElementById('currentFileName').textContent = savedName;
+    log(`文件已保存: ${savedName}`);
+  });
+
+  // 保存当前
+  document.getElementById('saveCurrentBtn').addEventListener('click', () => {
+    if (currentFile) {
+      localStorage.setItem(FILE_PREFIX + currentFile, editor.getValue());
+      log(`文件 ${currentFile} 已保存`);
+      // 确保在文件列表中
+      const files = getFileList();
+      if (!files.includes(currentFile)) {
+        files.push(currentFile);
+        saveFileList(files);
+        refreshFileSelect();
+      }
+    } else {
+      document.getElementById('saveAsBtn').click();
+    }
+  });
+
+  // 从本地存储打开
+  document.getElementById('localOpenBtn').addEventListener('click', () => {
+    const select = document.getElementById('localFileSelect');
+    const filename = select.value;
+    if (!filename) return;
+    const code = localStorage.getItem(FILE_PREFIX + filename);
+    if (code !== null) {
+      setEditorContent(code, filename);
+      log(`已打开: ${filename}`);
+    }
+  });
+
+  // 删除本地文件
+  document.getElementById('localDeleteBtn').addEventListener('click', () => {
+    const select = document.getElementById('localFileSelect');
+    const filename = select.value;
+    if (!filename) return;
+    if (confirm(`确定删除 ${filename}？`)) {
+      localDelete(filename);
+      log(`已删除: ${filename}`);
+    } else {
+      log('取消删除');
+    }
+  });
+
+  // 从磁盘打开
+  document.getElementById('diskOpenBtn').addEventListener('click', () => {
+    document.getElementById('diskFileInput').click();
+  });
+  document.getElementById('diskFileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const content = ev.target.result;
+      setEditorContent(content, file.name);
+      log(`已从磁盘加载: ${file.name}`);
+    };
+    reader.onerror = () => log('文件读取失败', true);
+    reader.readAsText(file);
+    // 清除选择以允许重复打开同一文件
+    e.target.value = '';
+  });
+
+  // 键盘快捷键 Ctrl+S 保存当前
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 's') {
+      e.preventDefault();
+      document.getElementById('saveCurrentBtn').click();
+    }
+  });
+
+  // 刷新文件列表并恢复当前文件状态
+  refreshFileSelect();
+  if (currentFile) {
+    const code = localStorage.getItem(FILE_PREFIX + currentFile);
+    if (code !== null) {
+      editor.setValue(code);
+      editor.clearHistory();
+    } else {
+      currentFile = '';
+      localStorage.removeItem(CURRENT_FILE_KEY);
+    }
+  }
+
+  // 自动保存草稿 (原有机制)
+  const STORAGE_KEY = 'swc_standalone_cpp_code';
+  function loadCode() { try { editor.setValue(localStorage.getItem(STORAGE_KEY) || DEFAULT_CODE); } catch { editor.setValue(DEFAULT_CODE); } }
+  function saveCode() {
+    try { localStorage.setItem(STORAGE_KEY, editor.getValue()); statusMsg.textContent = '已保存';
+      setTimeout(() => { statusMsg.textContent = workerReady ? `C++ (Clang -${currentOptLevel.value})` : '准备中…'; }, 1500); }
+    catch { statusMsg.textContent = '保存失败'; }
+  }
+  function resetCode() {
+    editor.setValue(DEFAULT_CODE); resetOutput();
+    compileBtn.disabled = !workerReady; runBtn.disabled = true; saveCode(); statusMsg.textContent = '已重置';
+    setTimeout(() => { statusMsg.textContent = workerReady ? `C++ (Clang -${currentOptLevel.value})` : '准备中…'; }, 1500);
+  }
+  editor.on('change', () => {
+    clearTimeout(window._saveTimer);
+    window._saveTimer = setTimeout(saveCode, 800);
+    if (workerReady) { runBtn.disabled = true; compileBtn.disabled = false; statusMsg.textContent = '代码已修改，请重新编译'; }
+  });
+
+  const currentOptLevel = { value: optLevelSelect.value };
+  optLevelSelect.addEventListener('change', () => {
+    currentOptLevel.value = optLevelSelect.value;
+    if (workerReady) { runBtn.disabled = true; compileBtn.disabled = false; statusMsg.textContent = `优化级别已切换为 -${currentOptLevel.value}，请重新编译`; }
+  });
+
+  // ======================== 虚拟滚动 ========================
+  const LINE_HEIGHT = 21;
+  const outputLines = [];
+  let userScrolledUp = false, needsRender = false, pendingScrollBottom = false, renderRaf = null, isProgrammaticScroll = false;
+
+  function appendOutput(line) {
+    outputLines.push(line);
+    outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
+    if (!userScrolledUp) pendingScrollBottom = true;
+    scheduleRender();
+  }
+  function appendMultipleLines(text) {
+    if (!text) return;
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i++) outputLines.push(lines[i]);
+    outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
+    if (!userScrolledUp) pendingScrollBottom = true;
+    scheduleRender();
+  }
+  function scheduleRender() { if (!needsRender) { needsRender = true; renderRaf = requestAnimationFrame(performRender); } }
+  function performRender() {
+    renderRaf = null; needsRender = false;
+    if (pendingScrollBottom) {
+      const viewportHeight = outputViewport.clientHeight;
+      if (viewportHeight === 0 || outputLines.length === 0) { outputCanvas.textContent = ''; outputCanvas.style.transform = 'translateY(0px)'; pendingScrollBottom = false; return; }
+      const visibleCount = Math.ceil(viewportHeight / LINE_HEIGHT) * 2;
+      const startLine = Math.max(0, outputLines.length - visibleCount);
+      const textChunk = outputLines.slice(startLine, outputLines.length).join('\n');
+      outputCanvas.textContent = textChunk;
+      outputCanvas.style.transform = `translateY(${startLine * LINE_HEIGHT}px)`;
+      isProgrammaticScroll = true;
+      outputViewport.scrollTop = outputViewport.scrollHeight;
+      pendingScrollBottom = false;
+    } else { renderVisibleLines(); }
+  }
+  function renderVisibleLines() {
+    const scrollTop = outputViewport.scrollTop, viewportHeight = outputViewport.clientHeight;
+    if (viewportHeight === 0 || outputLines.length === 0) { outputCanvas.textContent = ''; outputCanvas.style.transform = 'translateY(0px)'; return; }
+    const startLine = Math.floor(scrollTop / LINE_HEIGHT);
+    const visibleCount = Math.ceil(viewportHeight / LINE_HEIGHT) * 2;
+    const endLine = Math.min(startLine + visibleCount, outputLines.length);
+    outputCanvas.textContent = outputLines.slice(startLine, endLine).join('\n');
+    outputCanvas.style.transform = `translateY(${startLine * LINE_HEIGHT}px)`;
+  }
+  outputViewport.addEventListener('scroll', () => {
+    if (isProgrammaticScroll) { isProgrammaticScroll = false; return; }
+    userScrolledUp = !(outputViewport.scrollTop + outputViewport.clientHeight >= outputViewport.scrollHeight - 5);
+    scheduleRender();
+  });
+  function resetOutput() {
+    outputLines.length = 0; outputSpacer.style.height = '0px';
+    outputCanvas.textContent = ''; outputCanvas.style.transform = 'translateY(0px)';
+    userScrolledUp = false; pendingScrollBottom = false;
+    if (renderRaf) { cancelAnimationFrame(renderRaf); renderRaf = null; needsRender = false; }
+    isProgrammaticScroll = false;
+  }
+
+  logReady = true; flushLogs();
+
+  // ======================== Service Worker ========================
+  let swReady = false;
+  async function initServiceWorker() {
+    if (!('serviceWorker' in navigator)) { log('浏览器不支持 Service Worker，无法离线', true); statusMsg.textContent = '无 SW'; return false; }
+    try {
+      log('注册 Service Worker...');
+      const registration = await navigator.serviceWorker.register('sw.js');
+      log('SW 已注册');
+      if (registration.installing) {
+        log('SW 安装中...');
+        await new Promise(resolve => {
+          registration.installing.addEventListener('statechange', (e) => {
+            if (e.target.state === 'activated') { log('SW 已激活'); resolve(); }
+          });
+        });
+      } else if (registration.active) { log('SW 已处于活动状态'); }
+      await navigator.serviceWorker.ready;
+      swReady = true;
+      log('Service Worker 已接管页面，离线缓存就绪');
+      statusMsg.textContent = 'SW 就绪';
+      return true;
+    } catch (err) { log(`SW 注册失败: ${err.message}`, true); statusMsg.textContent = 'SW 失败'; return false; }
+  }
+
+  async function clearCache() {
+    try {
+      const cache = await caches.open('swc-compiler-final');
+      const keys = await cache.keys();
+      for (const req of keys) await cache.delete(req);
+      log('已清除离线缓存（将重新下载）');
+    } catch (err) { log(`清除缓存失败: ${err.message}`, true); }
+  }
+
+  // ======================== Worker 管理 ========================
+  const BROWSERCC_URL = 'https://cdn.jsdelivr.net/npm/browsercc@0.1.0/dist/index.min.js';
+  const SHIM_URL = 'https://cdn.jsdelivr.net/npm/@bjorn3/browser_wasi_shim@0.4.2/dist/index.js';
+  let worker = null, workerReady = false, compiling = false, running = false, runStartTime = 0;
+  let initTimer = null, isInitializing = false;
+
+  function createWorker() {
+    const code = `
+      let compile, WASI, File, OpenFile, ConsoleStdout; const moduleCache = new Map();
+      function hashCode(str) { let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return h.toString(); }
+      async function ensureCompiler() {
+        if (compile) return true;
+        self.postMessage({type:'log',text:'Worker 加载 browsercc...'});
+        const bc = await import("${BROWSERCC_URL}");
+        self.postMessage({type:'log',text:'browsercc 加载成功'});
+        self.postMessage({type:'log',text:'Worker 加载 shim...'});
+        const ws = await import("${SHIM_URL}");
+        self.postMessage({type:'log',text:'shim 加载成功'});
+        compile = bc.compile; WASI = ws.WASI; File = ws.File; OpenFile = ws.OpenFile; ConsoleStdout = ws.ConsoleStdout;
+        self.postMessage({type:'log',text:'预热编译器中...'});
+        await compile({source:'int main(){return 0;}',fileName:'t.cpp',flags:['-std=c++11','-O3']});
+        self.postMessage({type:'log',text:'预热完成'});
+        return true;
+      }
+      function ensureFd(fd){ if(!fd.fd_fdstat_get)fd.fd_fdstat_get=()=>({fs_filetype:0,fs_flags:0,fs_rights_base:0n,fs_rights_inheriting:0n}); if(!fd.fd_close)fd.fd_close=()=>{}; if(!fd.fd_seek)fd.fd_seek=()=>0; return fd; }
+      self.onmessage=async e=>{
+        let m=e.data;
+        if(m.type==='init'){ try{await ensureCompiler(); self.postMessage({type:'ready'});}catch(err){self.postMessage({type:'error',error:'init: '+err.message});} }
+        else if(m.type==='compile'){ if(!compile){self.postMessage({type:'error',error:'no compiler'});return;} let {code,optLevel}=m; let flag=optLevel.startsWith('-')?optLevel:'-'+optLevel; let flags=["-std=c++11","-fno-exceptions",flag]; let hash=hashCode(code+flag); let start=performance.now(); try{ if(moduleCache.has(hash)){ let c=moduleCache.get(hash); self.postMessage({type:'compileDone',hash,compileOutput:c.compileOutput,compileTime:0,fromCache:true}); return; } self.postMessage({type:'status',text:'compiling ('+flag+')...'}); let r=await compile({source:code,fileName:"main.cpp",flags}); let t=performance.now()-start; if(!r.module){ self.postMessage({type:'stderr',text:r.compileOutput}); self.postMessage({type:'compileError'}); return; } moduleCache.set(hash,{module:r.module,compileOutput:r.compileOutput}); self.postMessage({type:'compileDone',hash,compileOutput:r.compileOutput,compileTime:t,fromCache:false}); }catch(err){ self.postMessage({type:'error',error:'compile: '+err.message}); } }
+        else if(m.type==='run'){ if(!compile){self.postMessage({type:'error',error:'no compiler'});return;} let {code,stdinStr,optLevel}=m; let flag=optLevel.startsWith('-')?optLevel:'-'+optLevel; let hash=hashCode(code+flag); if(!moduleCache.has(hash)){self.postMessage({type:'error',error:'compile first'});return;} let mod=moduleCache.get(hash).module; let runStart=performance.now(); let inst,exitCode,memBefore,memAfter,instTime=0,execTime=0; try{ let stdinBytes=new TextEncoder().encode(stdinStr); let stdinFile=new File(stdinBytes); let stdinFd=new OpenFile(stdinFile); stdinFd=ensureFd(stdinFd); let outFd=ConsoleStdout.lineBuffered(msg=>self.postMessage({type:'stdout',text:msg})); outFd=ensureFd(outFd); let errFd=ConsoleStdout.lineBuffered(msg=>self.postMessage({type:'stderr',text:msg})); errFd=ensureFd(errFd); let fds=[stdinFd,outFd,errFd]; let wasi=new WASI([],[],fds); let instStart=performance.now(); inst=await WebAssembly.instantiate(mod,{wasi_snapshot_preview1:wasi.wasiImport}); instTime=performance.now()-instStart; memBefore=inst.exports.memory?inst.exports.memory.buffer.byteLength:0; let execStart=performance.now(); exitCode=wasi.start(inst); execTime=performance.now()-execStart; memAfter=inst.exports.memory?inst.exports.memory.buffer.byteLength:0; }catch(err){ self.postMessage({type:'error',error:'runtime: '+err.message}); return; } let total=performance.now()-runStart; self.postMessage({type:'runDone',exitCode,instantiateTime:instTime,execTime,totalRunTime:total,memDelta:memAfter-memBefore}); }
+      };
+      (async()=>{ try{await ensureCompiler(); self.postMessage({type:'ready'}); }catch(err){ self.postMessage({type:'error',error:'init: '+err.message}); } })();
+    `;
+    return new Worker(URL.createObjectURL(new Blob([code],{type:'application/javascript'})));
+  }
+
+  function handleWorkerMessage(e) {
+    const msg = e.data;
+    if (msg.type === 'log') { log(`[Worker] ${msg.text}`); return; }
+    if (initTimer) { clearTimeout(initTimer); initTimer = null; }
+    switch (msg.type) {
+      case 'ready':
+        workerReady = true; isInitializing = false;
+        compileBtn.disabled = false; runBtn.disabled = true;
+        statusMsg.textContent = `C++ (Clang -${currentOptLevel.value})`;
+        log('✅ 编译器就绪，可以编译和运行 C++ 代码');
+        break;
+      case 'status': resetOutput(); appendOutput(msg.text); break;
+      case 'compileDone':
+        resetOutput();
+        if (msg.compileOutput) appendMultipleLines(msg.compileOutput);
+        appendOutput(msg.fromCache ? '使用缓存，编译完成 (0 ms)' : `编译耗时：${msg.compileTime.toFixed(0)} ms`);
+        appendOutput(`编译成功（优化 -${currentOptLevel.value}），可以运行了。`);
+        compileBtn.disabled = false; runBtn.disabled = false; compiling = false;
+        statusMsg.textContent = `C++ (Clang -${currentOptLevel.value}) - 已编译`;
+        break;
+      case 'compileError': appendOutput('编译失败，请检查代码。'); compileBtn.disabled = false; runBtn.disabled = true; compiling = false; statusMsg.textContent = `C++ (Clang -${currentOptLevel.value}) - 编译失败`; break;
+      case 'stdout': appendOutput(msg.text); break;
+      case 'stderr': appendOutput(msg.text); break;
+      case 'runDone': {
+        const { exitCode, instantiateTime, execTime, totalRunTime, memDelta } = msg;
+        const perceived = performance.now() - runStartTime;
+        ['⸻', `返回码：${exitCode}`, `实例化：${instantiateTime.toFixed(0)} ms`, `执行时间：${execTime.toFixed(0)} ms`, `Worker内总耗时：${totalRunTime.toFixed(0)} ms`, `感知总耗时：${perceived.toFixed(0)} ms`, `Wasm内存增长：${(memDelta/1024).toFixed(1)} KB`].forEach(l => appendOutput(l));
+        running = false; runBtn.disabled = false; compileBtn.disabled = false; stopBtn.style.display = 'none';
+        statusMsg.textContent = `C++ (Clang -${currentOptLevel.value}) - 运行完成`;
+        break;
+      }
+      case 'error':
+        appendOutput(`[错误] ${msg.error}`);
+        running = false; compiling = false;
+        if (msg.error && (msg.error.includes('Failed to fetch') || msg.error.includes('NetworkError'))) {
+          if (!isInitializing) {
+            isInitializing = true;
+            log('检测到网络/缓存错误，尝试清除缓存并重试...');
+            clearCache().then(() => {
+              if (worker) { worker.terminate(); worker = null; }
+              initCompiler(true);
+            });
+          }
+        } else {
+          runBtn.disabled = false; compileBtn.disabled = false;
+          stopBtn.style.display = 'none';
+        }
+        break;
+    }
+  }
+
+  async function initCompiler(forceOnline = false) {
+    if (isInitializing) { log('已在初始化中'); return; }
+    isInitializing = true;
+    if (worker) { worker.terminate(); worker = null; }
+    if (initTimer) { clearTimeout(initTimer); initTimer = null; }
+    workerReady = compiling = running = false;
+    compileBtn.disabled = true; runBtn.disabled = true; stopBtn.style.display = 'none';
+    statusMsg.textContent = '启动中...';
+    log('===== 初始化 =====');
+
+    const swOk = await initServiceWorker();
+    if (!swOk && !forceOnline) log('SW 不可用，将依赖在线模式');
+    if (forceOnline) log('强制在线模式（忽略缓存）');
+
+    worker = createWorker();
+    worker.onmessage = handleWorkerMessage;
+    worker.onerror = (e) => { log(`Worker 运行时错误: ${e.message}`, true); isInitializing = false; };
+
+    initTimer = setTimeout(() => {
+      if (!workerReady) {
+        log('初始化超时 (45s)，请检查网络或刷新', true);
+        isInitializing = false;
+        statusMsg.textContent = '超时';
+      }
+    }, 45000);
+
+    worker.postMessage({ type: 'init' });
+  }
+
+  function terminateRun() {
+    if (!running && !compiling) return;
+    if (worker) worker.terminate();
+    if (initTimer) clearTimeout(initTimer);
+    isInitializing = false;
+    workerReady = compiling = running = false;
+    compileBtn.disabled = true; runBtn.disabled = true; stopBtn.style.display = 'none';
+    appendOutput('（用户终止）');
+    initCompiler();
+  }
+
+  stopBtn.addEventListener('click', terminateRun);
+  compileBtn.addEventListener('click', () => {
+    if (!workerReady || compiling || running) return;
+    let code = editor.getValue(); if (!code.trim()) return;
+    document.querySelector('[data-tab="output"]').click(); resetOutput();
+    compiling = true; compileBtn.disabled = true; runBtn.disabled = true; stopBtn.style.display = 'inline-block';
+    statusMsg.textContent = '编译中…';
+    worker.postMessage({ type: 'compile', code, optLevel: currentOptLevel.value });
+  });
+  runBtn.addEventListener('click', () => {
+    if (!workerReady || compiling || running) return;
+    let code = editor.getValue(); if (!code.trim()) return;
+    document.querySelector('[data-tab="output"]').click(); resetOutput();
+    runStartTime = performance.now(); running = true; runBtn.disabled = true; compileBtn.disabled = true; stopBtn.style.display = 'inline-block';
+    statusMsg.textContent = '运行中…';
+    requestAnimationFrame(() => worker.postMessage({ type: 'run', code, stdinStr: stdinData.value, optLevel: currentOptLevel.value }));
+  });
+  saveBtn.addEventListener('click', saveCode);
+  resetBtn.addEventListener('click', resetCode);
+
+  loadCode();
+  initCompiler();
+  editorContainer.style.display = 'block';
+  outputContainer.style.display = 'none';
+  stdinContainer.style.display = 'none';
+})();
+</script>
+</body>
+</html>
