@@ -21,7 +21,7 @@
 <div class="main-panel">
   <div class="header"><h1>SwC IDE · Python 版</h1><a href="index.html" class="back-btn">← 返回主站</a></div>
 
-  <!-- 文件管理工具栏 -->
+  <!-- 文件管理 + 云端同步工具栏 -->
   <div class="file-area" id="fileArea">
     <select class="file-select" id="localFileSelect"><option value="">-- 本地存储文件 --</option></select>
     <button class="file-btn" id="localOpenBtn" disabled>打开</button>
@@ -29,7 +29,9 @@
     <button class="file-btn" id="saveAsBtn">另存为…</button>
     <button class="file-btn" id="saveCurrentBtn">保存当前</button>
     <input type="file" id="diskFileInput" accept=".py,.txt" style="display:none;">
-    <button class="file-btn" id="diskOpenBtn">打开本地文件</button>
+    <button class="file-btn" id="diskOpenBtn">📂 打开本地文件</button>
+    <button class="file-btn" id="uploadCloudBtn" title="需先登录">☁️ 上传云端</button>
+    <button class="file-btn" id="downloadCloudBtn" title="需先登录">⬇️ 下载云端</button>
     <span class="current-file" id="currentFileName">未命名</span>
   </div>
 
@@ -67,7 +69,7 @@
 (function(){
   "use strict";
 
-  // ======================== 日志 ========================
+  // 日志
   const logBuffer = []; let logReady = false;
   function flushLogs() { if (logReady && logBuffer.length) { logBuffer.forEach(m => appendOutput(m)); logBuffer.length = 0; } }
   function log(msg, isError) {
@@ -79,7 +81,7 @@
 
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-  // ======================== 主题 ========================
+  // 主题
   const themeToggle = document.getElementById('themeToggle');
   const currentTheme = localStorage.getItem('swc_theme') || 'light';
   document.documentElement.setAttribute('data-theme', currentTheme);
@@ -106,7 +108,7 @@
   }
   requestAnimationFrame(updateFPS);
 
-  // ======================== 编辑器 ========================
+  // 编辑器
   const DEFAULT_CODE = `# 欢迎使用 SwC Python 环境
 from time import sleep
 
@@ -181,7 +183,7 @@ print("Done.")
     });
   }
 
-  // ======================== UI 元素 ========================
+  // UI 元素
   const outputViewport = document.getElementById('outputViewport');
   const outputCanvas = document.getElementById('outputCanvas');
   const outputSpacer = document.getElementById('outputSpacer');
@@ -206,7 +208,7 @@ print("Done.")
     }
   }));
 
-  // ======================== 文件管理 ========================
+  // 文件管理
   const FILE_PREFIX = 'swc_file_py_';
   const FILE_LIST_KEY = 'swc_filelist_py';
   const CURRENT_FILE_KEY = 'swc_current_py_file';
@@ -380,7 +382,7 @@ print("Done.")
     window._saveTimer = setTimeout(saveCode, 800);
   });
 
-  // ======================== 虚拟滚动 + 行缓冲 ========================
+  // 虚拟滚动 + 行缓冲
   const LINE_HEIGHT = 21;
   const outputLines = [];
   let userScrolledUp = false, needsRender = false, pendingScrollBottom = false, renderRaf = null, isProgrammaticScroll = false;
@@ -451,7 +453,7 @@ print("Done.")
 
   logReady = true; flushLogs();
 
-  // ======================== Service Worker ========================
+  // Service Worker
   let swReady = false;
   async function initServiceWorker() {
     if (!('serviceWorker' in navigator)) { log('浏览器不支持 Service Worker，无法离线', true); statusMsg.textContent = '无 SW'; return false; }
@@ -484,7 +486,7 @@ print("Done.")
     } catch (err) { log(`清除缓存失败: ${err.message}`, true); }
   }
 
-  // ======================== Worker 管理 ========================
+  // Worker 管理
   let worker = null, workerReady = false, running = false, runStartTime = 0;
   let initTimer = null, isInitializing = false;
 
@@ -620,6 +622,117 @@ print("Done.")
 
   saveBtn.addEventListener('click', saveCode);
   resetBtn.addEventListener('click', resetCode);
+
+  // ======================== 云端同步 ========================
+  const CODE_TYPE = 'py';
+  const UPLOAD_BTN = document.getElementById('uploadCloudBtn');
+  const DOWNLOAD_BTN = document.getElementById('downloadCloudBtn');
+
+  function getToken() {
+    return localStorage.getItem('swc_token') || '';
+  }
+
+  function tokenIsValid() {
+    const token = getToken();
+    if (!token) return false;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.exp * 1000 > Date.now();
+    } catch { return false; }
+  }
+
+  function updateCloudButtons() {
+    const loggedIn = tokenIsValid();
+    UPLOAD_BTN.disabled = !loggedIn;
+    DOWNLOAD_BTN.disabled = !loggedIn;
+    if (!loggedIn) {
+      UPLOAD_BTN.title = '需要登录才能上传';
+      DOWNLOAD_BTN.title = '需要登录才能下载';
+    } else {
+      UPLOAD_BTN.title = '';
+      DOWNLOAD_BTN.title = '';
+    }
+  }
+
+  updateCloudButtons();
+
+  UPLOAD_BTN.addEventListener('click', async () => {
+    const token = getToken();
+    if (!token) { log('❌ 请先登录', true); return; }
+
+    const content = editor.getValue();
+    try {
+      UPLOAD_BTN.disabled = true;
+      DOWNLOAD_BTN.disabled = true;
+      log('☁️ 正在上传云端...');
+      const resp = await fetch('/api/code/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ type: CODE_TYPE, content })
+      });
+      if (resp.status === 401) {
+        localStorage.removeItem('swc_token');
+        updateCloudButtons();
+        log('❌ 登录已过期，请重新登录', true);
+        return;
+      }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        log(`❌ 上传失败: ${err.error || resp.statusText}`, true);
+        return;
+      }
+      log('✅ 已上传至云端');
+    } catch (e) {
+      log('❌ 网络错误，上传失败', true);
+    } finally {
+      updateCloudButtons();
+    }
+  });
+
+  DOWNLOAD_BTN.addEventListener('click', async () => {
+    const token = getToken();
+    if (!token) { log('❌ 请先登录', true); return; }
+
+    try {
+      UPLOAD_BTN.disabled = true;
+      DOWNLOAD_BTN.disabled = true;
+      log('⬇️ 正在从云端下载...');
+      const resp = await fetch(`/api/code/load?type=${CODE_TYPE}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resp.status === 401) {
+        localStorage.removeItem('swc_token');
+        updateCloudButtons();
+        log('❌ 登录已过期，请重新登录', true);
+        return;
+      }
+      const data = await resp.json();
+      if (!data.found) {
+        log('📭 云端暂无代码');
+        return;
+      }
+      if (confirm('云端代码将覆盖当前编辑器内容，是否继续？')) {
+        editor.setValue(data.content);
+        editor.clearHistory();
+        if (currentFile) {
+          localStorage.setItem(FILE_PREFIX + currentFile, data.content);
+        }
+        localStorage.setItem('swc_standalone_python_code', data.content);
+        log('✅ 已从云端下载并覆盖');
+      } else {
+        log('已取消下载');
+      }
+    } catch (e) {
+      log('❌ 网络错误，下载失败', true);
+    } finally {
+      updateCloudButtons();
+    }
+  });
+
+  window.addEventListener('storage', updateCloudButtons);
 
   loadCode();
   initCompiler();
