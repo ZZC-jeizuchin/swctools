@@ -847,7 +847,7 @@
     titleH1.addEventListener('click', () => {
       if (unlocked) return;
       clickCount++;
-      if (clickCount >= 5) { unlocked = true; badgeEl.textContent = '开发者指南'; badgeEl.style.cursor = 'pointer'; badgeEl.addEventListener('click', (e) => { e.stopPropagation(); window.location.href = 'guide.html'; }); }
+      if (clickCount >= 5) { unlocked = true; badgeEl.textContent = 'Administrator '; badgeEl.style.cursor = 'pointer'; badgeEl.addEventListener('click', (e) => { e.stopPropagation(); window.location.href = 'admin.html'; }); }
     });
     document.addEventListener('click', (e) => { if (!unlocked && !titleH1.contains(e.target)) clickCount = 0; });
   })();
