@@ -89,13 +89,20 @@
       position: relative;
     }
 
+    /* 全局消除蓝色选中效果 */
+    button, a, input, select, .drawer-overlay, .modal-overlay, .drawer-panel, .modal-card,
+    .cat-btn, .go-btn, .tool-btn, .nav-btn, .link-item, .run-ide-btn,
+    .theme-toggle, .perf-toggle {
+      -webkit-tap-highlight-color: transparent;
+      outline: none;
+    }
+
     .corner-tl { position: fixed; top: calc(var(--main-h) * 0.015); left: calc(var(--main-w) * 0.015); font-size: calc(var(--main-h) * 0.026); color: var(--corner-text-color); opacity: 0.8; z-index: 3000; pointer-events: none; }
     .corner-tr { position: fixed; top: calc(var(--main-h) * 0.015); right: calc(var(--main-w) * 0.02); font-size: calc(var(--main-h) * 0.026); color: var(--corner-text-color); opacity: 0.8; z-index: 3000; pointer-events: none; background: var(--fps-bg); padding: calc(var(--main-h) * 0.005) calc(var(--main-w) * 0.012); border-radius: calc(var(--main-w) * 0.02); border: 1px solid var(--panel-border); }
     .corner-br { position: fixed; bottom: calc(var(--main-h) * 0.015); right: calc(var(--main-w) * 0.02); font-size: calc(var(--main-h) * 0.026); color: var(--corner-text-color); opacity: 0.8; z-index: 3000; pointer-events: none; }
 
     .theme-toggle, .perf-toggle {
       position: fixed; bottom: 12px; font-size: 0.9rem; background: var(--cat-btn-bg); border: 1px solid var(--panel-border); color: var(--corner-text-color); padding: 5px 14px; border-radius: 32px; cursor: pointer; opacity: 0.85; transition: 0.2s; z-index: 3000; font-weight: 500;
-      -webkit-tap-highlight-color: transparent; outline: none;
     }
     .theme-toggle { left: 16px; } .perf-toggle { left: 100px; }
     .theme-toggle:hover, .perf-toggle:hover { opacity: 1; background: var(--cat-btn-hover-bg); }
@@ -115,14 +122,25 @@
     .title-section h1 { font-size: calc(var(--main-h) * 0.065); font-weight: 550; color: var(--title-color); white-space: nowrap; }
     .badge { font-size: calc(var(--main-h) * 0.039); color: var(--badge-color); background: var(--badge-bg); padding: calc(var(--main-h) * 0.01) calc(var(--main-w) * 0.025); border-radius: calc(var(--main-w) * 0.04); border: 1px solid var(--cat-btn-border); white-space: nowrap; }
 
-    .category-bar { flex: 0 0 calc(var(--main-h) * 0.13); display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--main-w) * 0.012); padding: 0 calc(var(--main-w) * 0.02); margin: calc(var(--main-h) * 0.005) 0; }
+    /* 分类栏：一行显示，允许横向滚动 */
+    .category-bar {
+      flex: 0 0 calc(var(--main-h) * 0.13);
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: calc(var(--main-w) * 0.01);
+      padding: 0 calc(var(--main-w) * 0.02);
+      margin: calc(var(--main-h) * 0.005) 0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
     .cat-btn {
       background: var(--cat-btn-bg); border: 1px solid var(--cat-btn-border); color: var(--cat-btn-color);
-      padding: calc(var(--main-h) * 0.025) calc(var(--main-w) * 0.035); border-radius: calc(var(--main-w) * 0.05);
+      padding: calc(var(--main-h) * 0.022) calc(var(--main-w) * 0.03); border-radius: calc(var(--main-w) * 0.05);
       font-size: calc(var(--main-h) * 0.0325); font-weight: 520;
       box-shadow: 0 calc(var(--main-h) * 0.004) calc(var(--main-h) * 0.008) rgba(50, 85, 110, 0.05);
       cursor: pointer; transition: all 0.15s ease; white-space: nowrap;
-      -webkit-tap-highlight-color: transparent; outline: none;
+      flex-shrink: 0;
     }
 
     .jump-section { flex: 0 0 calc(var(--main-h) * 0.40); display: flex; flex-direction: column; gap: calc(var(--main-h) * 0.002); padding: 0 calc(var(--main-w) * 0.02); }
@@ -132,7 +150,6 @@
       padding: 0 calc(var(--main-w) * 0.025); border: calc(var(--main-w) * 0.0015) solid var(--input-border);
       border-radius: calc(var(--main-w) * 0.05); background: var(--panel-bg);
       font-size: calc(var(--main-h) * 0.0325); line-height: calc(var(--main-h) * 0.10); outline: none; color: var(--text-color);
-      -webkit-tap-highlight-color: transparent;
     }
     .jump-row select { flex: 1 1 0; cursor: pointer; }
     .jump-row input:focus, .jump-row select:focus { border-color: var(--input-focus-border); box-shadow: 0 0 0 calc(var(--main-w) * 0.003) rgba(79,127,163,0.2); }
@@ -140,7 +157,6 @@
       background: var(--go-btn-bg); border: none; color: white;
       padding: calc(var(--main-h) * 0.015) calc(var(--main-w) * 0.035); border-radius: calc(var(--main-w) * 0.05);
       font-size: calc(var(--main-h) * 0.0325); font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.15s;
-      -webkit-tap-highlight-color: transparent; outline: none;
     }
 
     .tools-bar { flex: 0 0 calc(var(--main-h) * 0.26); display: flex; align-items: center; gap: calc(var(--main-w) * 0.012); padding: 0 calc(var(--main-w) * 0.02); margin-top: calc(var(--main-h) * 0.02); }
@@ -148,66 +164,92 @@
       background: var(--tool-btn-bg); border: 1px solid var(--tool-btn-border); color: var(--tool-btn-color);
       padding: calc(var(--main-h) * 0.03) 0; border-radius: calc(var(--main-w) * 0.07);
       font-size: calc(var(--main-h) * 0.0364); font-weight: 550; cursor: pointer; flex: 1 1 0; text-align: center; transition: all 0.15s;
-      -webkit-tap-highlight-color: transparent; outline: none;
     }
 
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-overlay-bg); backdrop-filter: blur(3px); visibility: hidden; opacity: 0; transition: opacity 0.2s, visibility 0.2s; z-index: 2000; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; outline: none; }
-    .modal-overlay.show { visibility: visible; opacity: 1; }
-    .modal-swiper { width: 100%; max-width: 100vw; overflow: hidden; -webkit-tap-highlight-color: transparent; outline: none; }
-    .modal-slides { display: flex; transition: transform 0.2s ease-out; will-change: transform; -webkit-tap-highlight-color: transparent; outline: none; }
-    .modal-card { background: var(--modal-card-bg); width: 90vw; max-width: 700px; max-height: 70vh; border-radius: calc(var(--main-w) * 0.04); border: 1px solid var(--panel-border); box-shadow: 0 calc(var(--main-h) * 0.02) calc(var(--main-h) * 0.04) rgba(28, 60, 84, 0.25); padding: calc(var(--main-h) * 0.03) calc(var(--main-w) * 0.03); overflow-y: auto; flex-shrink: 0; margin: 0 5vw; position: relative; -webkit-tap-highlight-color: transparent; outline: none; opacity: 1; transition: opacity 0.15s; }
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-overlay-bg); backdrop-filter: blur(3px); visibility: hidden; opacity: 0; transition: opacity 0.2s, visibility 0s 0.2s; z-index: 2000; display: flex; align-items: center; justify-content: center; }
+    .modal-overlay.show { visibility: visible; opacity: 1; transition: opacity 0.2s, visibility 0s; }
+    .modal-swiper { width: 100%; max-width: 100vw; overflow: hidden; }
+    .modal-slides { display: flex; transition: transform 0.2s ease-out; will-change: transform; }
+    .modal-card {
+      background: var(--modal-card-bg); width: 90vw; max-width: 700px; max-height: 70vh;
+      border-radius: calc(var(--main-w) * 0.04); border: 1px solid var(--panel-border);
+      box-shadow: 0 calc(var(--main-h) * 0.02) calc(var(--main-h) * 0.04) rgba(28, 60, 84, 0.25);
+      padding: calc(var(--main-h) * 0.03) calc(var(--main-w) * 0.03); overflow-y: auto;
+      flex-shrink: 0; margin: 0 5vw; position: relative;
+      opacity: 1; transition: opacity 0.15s, transform 0.2s, filter 0.1s;
+    }
     .modal-card.hidden-card { opacity: 0; pointer-events: none; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: calc(var(--main-h) * 0.02); border-bottom: calc(var(--main-h) * 0.002) solid var(--panel-border); padding-bottom: calc(var(--main-h) * 0.01); }
     .modal-header h3 { font-size: calc(var(--main-h) * 0.0676); color: var(--title-color); }
-    .modal-close { background: none; border: none; font-size: calc(var(--main-h) * 0.091); cursor: pointer; color: var(--corner-text-color); line-height: 1; -webkit-tap-highlight-color: transparent; outline: none; }
+    .modal-close { background: none; border: none; font-size: calc(var(--main-h) * 0.091); cursor: pointer; color: var(--corner-text-color); line-height: 1; }
     .link-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--main-w) * 0.2), 1fr)); gap: calc(var(--main-w) * 0.018); }
-    .link-item { background: var(--link-item-bg); border: 1px solid var(--link-item-border); color: var(--cat-btn-color); padding: calc(var(--main-h) * 0.018) calc(var(--main-w) * 0.012); border-radius: calc(var(--main-w) * 0.05); text-align: center; text-decoration: none; font-weight: 520; font-size: calc(var(--main-h) * 0.026); transition: all 0.15s; display: block; -webkit-tap-highlight-color: transparent; outline: none; }
+    .link-item { background: var(--link-item-bg); border: 1px solid var(--link-item-border); color: var(--cat-btn-color); padding: calc(var(--main-h) * 0.018) calc(var(--main-w) * 0.012); border-radius: calc(var(--main-w) * 0.05); text-align: center; text-decoration: none; font-weight: 520; font-size: calc(var(--main-h) * 0.026); transition: all 0.15s; display: block; }
     .link-item:hover { background: var(--cat-btn-hover-bg); border-color: #7fa5c5; }
 
-    .drawer-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-overlay-bg); backdrop-filter: blur(3px); visibility: hidden; opacity: 0; transition: opacity 0.2s, visibility 0.2s; z-index: 2000; display: flex; align-items: flex-end; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent; outline: none; }
-    .drawer-overlay.show { visibility: visible; opacity: 1; }
-    .drawer-swiper { width: 100%; overflow: hidden; -webkit-tap-highlight-color: transparent; outline: none; }
-    .drawer-slides { display: flex; transition: transform 0.2s ease-out; will-change: transform; -webkit-tap-highlight-color: transparent; outline: none; }
-    .drawer-panel { background: var(--drawer-panel-bg); width: 100vw; border-radius: calc(var(--main-w) * 0.04) calc(var(--main-w) * 0.04) 0 0; border: 1px solid var(--panel-border); height: 80vh; overflow: hidden; display: flex; flex-direction: column; flex-shrink: 0; -webkit-tap-highlight-color: transparent; outline: none; }
+    .drawer-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--modal-overlay-bg); backdrop-filter: blur(3px); visibility: hidden; opacity: 0; transition: opacity 0.3s, visibility 0s 0.3s; z-index: 2000; display: flex; align-items: flex-end; justify-content: center; cursor: pointer; }
+    .drawer-overlay.show { visibility: visible; opacity: 1; transition: opacity 0.3s, visibility 0s; }
+    .drawer-swiper { width: 100%; overflow: hidden; }
+    .drawer-slides { display: flex; transition: transform 0.2s ease-out; will-change: transform; }
+    .drawer-panel {
+      background: var(--drawer-panel-bg); width: 100vw;
+      border-radius: calc(var(--main-w) * 0.04) calc(var(--main-w) * 0.04) 0 0; border: 1px solid var(--panel-border);
+      height: 80vh; overflow: hidden; display: flex; flex-direction: column; flex-shrink: 0;
+      transform: translateY(100%); transition: transform 0.3s ease, filter 0.1s;
+    }
+    .drawer-overlay.show .drawer-panel { transform: translateY(0); }
     .drawer-header { padding: calc(var(--main-h) * 0.02) calc(var(--main-w) * 0.03); display: flex; justify-content: space-between; border-bottom: 1px solid var(--panel-border); }
     .drawer-header h3 { font-size: calc(var(--main-h) * 0.052); color: var(--title-color); }
-    .drawer-close-btn { background: none; border: none; font-size: calc(var(--main-h) * 0.117); cursor: pointer; color: var(--corner-text-color); line-height: 1; -webkit-tap-highlight-color: transparent; outline: none; }
-    .drawer-content { padding: calc(var(--main-h) * 0.02) calc(var(--main-w) * 0.03); overflow-y: auto; flex: 1; color: var(--text-color); -webkit-tap-highlight-color: transparent; outline: none; }
+    .drawer-close-btn { background: none; border: none; font-size: calc(var(--main-h) * 0.117); cursor: pointer; color: var(--corner-text-color); line-height: 1; }
+    .drawer-content { padding: calc(var(--main-h) * 0.02) calc(var(--main-w) * 0.03); overflow-y: auto; flex: 1; color: var(--text-color); }
 
     .device-grid-2x2 { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--main-w) * 0.02); pointer-events: none; }
-    .device-item { background: var(--device-item-bg); border-radius: calc(var(--main-w) * 0.03); padding: calc(var(--main-h) * 0.02) calc(var(--main-w) * 0.02); border: 1px solid var(--panel-border); pointer-events: none; }
+    .device-item { background: var(--device-item-bg); border-radius: calc(var(--main-w) * 0.03); padding: calc(var(--main-h) * 0.02) calc(var(--main-w) * 0.02); border: 1px solid var(--panel-border); }
     .device-label { font-weight: 600; color: var(--device-label-color); margin-bottom: calc(var(--main-h) * 0.01); font-size: calc(var(--main-h) * 0.0364); text-transform: uppercase; }
     .device-value { color: var(--device-value-color); word-break: break-word; font-size: calc(var(--main-h) * 0.0338); }
     .drawer-footer-link { margin-top: calc(var(--main-h) * 0.02); text-align: center; pointer-events: auto; }
 
     .ide-container { display: flex; flex-direction: column; gap: calc(var(--main-h) * 0.02); }
     .ide-editor { background: var(--panel-bg); border-radius: calc(var(--main-w) * 0.03); border: 2px solid var(--input-border); overflow: hidden; }
-    .ide-textarea { width: 100%; padding: calc(var(--main-h) * 0.02); font-family: 'JetBrains Mono', monospace; font-size: calc(var(--main-h) * 0.026); background: transparent; border: none; outline: none; color: var(--text-color); resize: vertical; min-height: calc(var(--main-h) * 0.25); -webkit-tap-highlight-color: transparent; }
+    .ide-textarea { width: 100%; padding: calc(var(--main-h) * 0.02); font-family: 'JetBrains Mono', monospace; font-size: calc(var(--main-h) * 0.026); background: transparent; border: none; outline: none; color: var(--text-color); resize: vertical; min-height: calc(var(--main-h) * 0.25); }
     .ide-preview { background: white; border-radius: calc(var(--main-w) * 0.03); border: 2px solid var(--input-border); padding: calc(var(--main-h) * 0.02); }
     .ide-preview iframe { width: 100%; height: calc(var(--main-h) * 0.3); border: none; background: white; border-radius: calc(var(--main-w) * 0.02); }
     .ide-action-row { display: flex; align-items: center; gap: calc(var(--main-w) * 0.02); flex-wrap: wrap; }
-    .run-ide-btn { background: var(--go-btn-bg); color: white; border: none; padding: calc(var(--main-h) * 0.018) calc(var(--main-w) * 0.035); border-radius: calc(var(--main-w) * 0.06); font-weight: 600; cursor: pointer; font-size: calc(var(--main-h) * 0.039); -webkit-tap-highlight-color: transparent; outline: none; }
+    .run-ide-btn { background: var(--go-btn-bg); color: white; border: none; padding: calc(var(--main-h) * 0.018) calc(var(--main-w) * 0.035); border-radius: calc(var(--main-w) * 0.06); font-weight: 600; cursor: pointer; font-size: calc(var(--main-h) * 0.039); }
 
     .nav-btn {
       background: var(--tool-btn-bg); border: 1px solid var(--tool-btn-border); color: var(--tool-btn-color);
       padding: calc(var(--main-h) * 0.025) calc(var(--main-w) * 0.025); border-radius: calc(var(--main-w) * 0.07);
       text-align: center; font-weight: 550; font-size: calc(var(--main-h) * 0.039); transition: all 0.15s; cursor: pointer; display: block;
       width: 100%; margin-bottom: calc(var(--main-h) * 0.015);
-      -webkit-tap-highlight-color: transparent; outline: none; pointer-events: auto;
     }
     .nav-btn:last-child { margin-bottom: 0; }
     .nav-btn:hover { background: var(--cat-btn-hover-bg); border-color: #7b9fc2; }
 
-    .loading-placeholder { display: flex; align-items: center; justify-content: center; padding: calc(var(--main-h) * 0.04); pointer-events: none; }
+    .loading-placeholder { display: flex; align-items: center; justify-content: center; padding: calc(var(--main-h) * 0.04); }
     .loading-spinner { width: calc(var(--main-w) * 0.035); height: calc(var(--main-w) * 0.035); border: calc(var(--main-w) * 0.003) solid rgba(79, 127, 158, 0.2); border-top-color: #4f7f9e; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: calc(var(--main-w) * 0.018); }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* 确保 Base64 表格边框正常显示 */
     .base64-table {
-      width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace;
-      font-size: calc(var(--main-h) * 0.026); margin-top: calc(var(--main-h) * 0.02); table-layout: fixed;
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: calc(var(--main-h) * 0.026);
+      margin-top: calc(var(--main-h) * 0.02);
+      table-layout: fixed;
     }
-    .base64-table th, .base64-table td { border: 1px solid var(--panel-border); padding: calc(var(--main-h) * 0.006) calc(var(--main-w) * 0.006); text-align: center; word-break: break-all; }
-    .base64-table th { background: var(--jump-row-bg); font-weight: 600; color: var(--title-color); }
+    .base64-table th,
+    .base64-table td {
+      border: 1px solid var(--panel-border);
+      padding: calc(var(--main-h) * 0.006) calc(var(--main-w) * 0.006);
+      text-align: center;
+      word-break: break-all;
+    }
+    .base64-table th {
+      background: var(--jump-row-bg);
+      font-weight: 600;
+      color: var(--title-color);
+    }
 
     .perf-mode .cat-btn, .perf-mode .go-btn, .perf-mode .tool-btn, .perf-mode .nav-btn,
     .perf-mode .link-item, .perf-mode .run-ide-btn, .perf-mode .theme-toggle, .perf-mode .perf-toggle,
@@ -216,8 +258,9 @@
     .perf-mode .nav-btn:hover, .perf-mode .link-item:hover, .perf-mode .run-ide-btn:hover,
     .perf-mode .theme-toggle:hover, .perf-mode .perf-toggle:hover { background: var(--cat-btn-hover-bg); border-color: #7fa5c5; }
     .perf-mode .modal-slides, .perf-mode .drawer-slides { transition: none !important; will-change: auto !important; }
-    .perf-mode .modal-overlay, .perf-mode .drawer-overlay { transition: none !important; }
-    .perf-mode .main-panel { box-shadow: none !important; }
+    .perf-mode .modal-overlay, .perf-mode .drawer-overlay { transition: none !important; backdrop-filter: none !important; }
+    .perf-mode .modal-card, .perf-mode .drawer-panel { transform: none !important; filter: none !important; transition: none !important; }
+    .perf-mode .main-panel, .perf-mode .modal-card, .perf-mode .cat-btn, .perf-mode .tool-btn, .perf-mode .go-btn, .perf-mode .nav-btn, .perf-mode .link-item { box-shadow: none !important; }
   </style>
 </head>
 <body>
@@ -235,6 +278,7 @@
     <button class="cat-btn" data-cat="media">通信音乐</button>
     <button class="cat-btn" data-cat="dev">开发</button>
     <button class="cat-btn" data-cat="other">其他</button>
+    <button class="cat-btn" id="loginBtn" style="display:none;">登录</button>
   </div>
   <div class="jump-section">
     <div class="jump-row"><input type="text" id="customUrlInput" placeholder="输入网址，回车或点击跳转"><button class="go-btn" id="jumpBtn">前往</button></div>
@@ -317,10 +361,10 @@
     search: [{ name: 'Google', url: 'https://www.google.com' },{ name: 'Bing (国内)', url: 'https://cn.bing.com' },{ name: 'Bing (国际)', url: 'https://www.bing.com' },{ name: 'MSN', url: 'https://www.msn.com' },{ name: 'DuckDuckGo', url: 'https://duckduckgo.com' },{ name: 'Baidu', url: 'https://baidu.com' },{ name: 'Yandex', url: 'https://yandex.com' },{ name: 'Yandex RU', url: 'https://yandex.ru' },{ name: 'Bilibili', url: 'https://bilibili.com' }],
     media: [{ name: '自由公园', url: 'https://ziyoupark.com' },{ name: 'XCloud Music', url: 'https://music.xcloudv.top' },{ name: 'PJMP3', url: 'https://pjmp3.com' },{ name: 'PeanutDL', url: 'https://peanutdl.com' },{ name: 'WyAPI', url: 'https://wyapi.toubiec.cn' },{ name: 'GDStudio Music', url: 'https://music.gdstudio.org' }],
     dev: [{ name: 'GitHub', url: 'https://github.com' },{ name: 'IP.SB', url: 'https://www.ip.sb' },{ name: 'Intel', url: 'https://www.intel.com' },{ name: 'AMD', url: 'https://www.amd.com' },{ name: 'NVIDIA', url: 'https://www.nvidia.com' },{ name: 'Lenovo', url: 'https://www.lenovo.com' },{ name: 'Huawei', url: 'https://www.huawei.com' },{ name: 'Apple', url: 'https://www.apple.com' },{ name: 'Microsoft', url: 'https://www.microsoft.com' },{ name: 'cpp.sh', url: 'https://cpp.sh' },{ name: 'Python (官网)', url: 'https://www.python.org' },{ name: 'Python IDE', url: 'https://www.programiz.com/python-programming/online-compiler/' },{ name: 'Cloudflare', url: 'https://www.cloudflare.com' }],
-    other: [{ name: 'MMPan.top', url: 'https://mmpan.top' },{ name: 'CNN Edition', url: 'https://edition.cnn.com' },{ name: 'Poki', url: 'https://poki.com' },{ name: 'Steam', url: 'https://store.steampowered.com' },{ name: 'Slow Roads', url: 'https://slowroads.io' },{ name: 'CopyOS', url: 'https://copy.sh/v86' }]
+    other: [{ name: 'MMPan.top', url: 'https://mmpan.top' },{ name: 'CNN Edition', url: 'https://edition.cnn.com' },{ name: 'Poki', url: 'https://poki.com' },{ name: 'Steam', url: 'https://store.steampowered.com' },{ name: 'Slow Roads', url: 'https://slowroads.io' },{ name: 'CopyOS', url: 'https://copy.sh/v86' },{ name: 'GitHub同项目', url: 'https://zzc-jeizuchin.github.io' },{ name: '作者主页', url: 'https://github.com/ZZC-jeizuchin' }]
   };
-  const catNames = { ai:'AI工具', search:'搜索引擎', media:'通信音乐', dev:'开发', other:'其他' };
-  const categories = ['ai','search','media','dev','other'];
+  const catNames = { ai:'AI工具', search:'搜索引擎', media:'通信音乐', dev:'开发', other:'其他', login:'登录' };
+  const categories = ['ai','search','media','dev','other','login'];
   const drawerTypes = ['device','ide','stress','base64'];
 
   function performJump(url, addTimestamp = true) {
@@ -331,7 +375,6 @@
     window.location.href = final;
   }
 
-  // 搜索事件（无历史记录）
   document.getElementById('jumpBtn').addEventListener('click', ()=> { const raw = document.getElementById('customUrlInput').value.trim(); if(raw) performJump(raw, false); });
   document.getElementById('customUrlInput').addEventListener('keydown', e=> { if(e.key==='Enter') document.getElementById('jumpBtn').click(); });
   document.getElementById('baiduImageBtn').addEventListener('click', ()=> { const kw = document.getElementById('baiduImageInput').value.trim(); if(kw) performJump('https://image.baidu.com/search/index?tn=baiduimage&ie=utf-8&word='+encodeURIComponent(kw), false); });
@@ -343,10 +386,39 @@
   });
   document.getElementById('searchKeywordInput').addEventListener('keydown', e=> { if(e.key==='Enter') document.getElementById('searchEngineBtn').click(); });
 
-  // 模态框系统
+  // ========== 登录系统 ==========
+  const loginBtn = document.getElementById('loginBtn');
+  let currentUser = null;
+
+  function getUsernameFromToken() {
+    const token = localStorage.getItem('swc_token');
+    if (!token) return null;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+      return payload.sub;
+    } catch { return null; }
+  }
+
+  function updateLoginButton() {
+    const username = getUsernameFromToken();
+    if (username) {
+      currentUser = username;
+      loginBtn.textContent = username;
+    } else {
+      currentUser = null;
+      loginBtn.textContent = '登录';
+    }
+    loginBtn.style.display = 'inline-block';
+  }
+
+  updateLoginButton();
+
+  // ========== 模态框系统 ==========
   const modalOverlay = document.getElementById('modalOverlay'), modalSlides = document.getElementById('modalSlides');
   let currentCatIndex = 0, modalStartX = 0, modalCurrentX = 0, isModalDragging = false;
   let cachedModalSlideWidth = 0, modalCenteringOffset = 0;
+  let lastModalTime = 0, lastModalX = 0;
 
   function recalcModalWidth() {
     const card = modalSlides.children[0];
@@ -361,16 +433,168 @@
     for (let i = 0; i < cards.length; i++) cards[i].classList.toggle('hidden-card', i !== index);
   }
 
+  function buildLoginCard() {
+    if (currentUser) {
+      return `
+        <div class="modal-card" data-cat="login">
+          <div class="modal-header"><h3>账号管理</h3><button class="modal-close" data-close-modal>&times;</button></div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <p style="text-align:center;color:var(--text-color);">当前用户：${currentUser}</p>
+            <button class="nav-btn" id="changePwdBtn" style="margin:0;">修改密码</button>
+            <button class="nav-btn" id="logoutBtn" style="margin:0;">退出登录</button>
+            <button class="nav-btn" id="deleteAccountBtn" style="margin:0;background:var(--go-btn-bg);color:white;">注销账号</button>
+          </div>
+        </div>`;
+    } else {
+      return `
+        <div class="modal-card" data-cat="login">
+          <div class="modal-header"><h3>登录 / 注册</h3><button class="modal-close" data-close-modal>&times;</button></div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <input id="authUsername" placeholder="用户名" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--panel-border);background:var(--panel-bg);color:var(--text-color);font-size:1rem;outline:none;">
+            <input id="authPassword" type="password" placeholder="密码" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--panel-border);background:var(--panel-bg);color:var(--text-color);font-size:1rem;outline:none;">
+            <input id="authAdminPass" type="password" placeholder="管理员密码（注册/管理员登录）" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--panel-border);background:var(--panel-bg);color:var(--text-color);font-size:1rem;outline:none;">
+            <label style="display:flex;align-items:center;gap:8px;color:var(--text-color);">
+              <input type="checkbox" id="adminLoginCheckbox"> 以管理员身份登录（无需用户密码）
+            </label>
+            <div style="display:flex;gap:10px;">
+              <button id="authLoginBtn" style="flex:1;padding:12px;background:var(--go-btn-bg);color:white;border:none;border-radius:24px;cursor:pointer;font-weight:600;">登录</button>
+              <button id="authRegisterBtn" style="flex:1;padding:12px;background:var(--tool-btn-bg);color:var(--tool-btn-color);border:1px solid var(--tool-btn-border);border-radius:24px;cursor:pointer;font-weight:600;">注册</button>
+            </div>
+            <p id="authMsg" style="color:#ff6b6b;font-size:0.9rem;text-align:center;"></p>
+          </div>
+        </div>`;
+    }
+  }
+
   function buildModalSlides() {
-    modalSlides.innerHTML = categories.map(cat => `
-      <div class="modal-card" data-cat="${cat}">
-        <div class="modal-header"><h3>${catNames[cat]}</h3><button class="modal-close" data-close-modal>&times;</button></div>
-        <div class="link-grid">${linkDB[cat].map(l => `<a class="link-item" href="${l.url}" target="_blank" rel="noopener">${l.name}</a>`).join('')}</div>
-      </div>`).join('');
+    modalSlides.innerHTML = categories.map(cat => {
+      if (cat === 'login') {
+        return buildLoginCard();
+      } else {
+        return `
+          <div class="modal-card" data-cat="${cat}">
+            <div class="modal-header"><h3>${catNames[cat]}</h3><button class="modal-close" data-close-modal>&times;</button></div>
+            <div class="link-grid">${linkDB[cat].map(l => `<a class="link-item" href="${l.url}" target="_blank" rel="noopener">${l.name}</a>`).join('')}</div>
+          </div>`;
+      }
+    }).join('');
+
     modalSlides.querySelectorAll('[data-close-modal]').forEach(btn => {
       btn.addEventListener('click', (e) => { e.preventDefault(); closeModal(); });
       btn.addEventListener('touchend', (e) => { e.preventDefault(); closeModal(); });
     });
+
+    const authLoginBtn = document.getElementById('authLoginBtn');
+    const authRegisterBtn = document.getElementById('authRegisterBtn');
+    const authMsg = document.getElementById('authMsg');
+    const adminLoginCheckbox = document.getElementById('adminLoginCheckbox');
+    const changePwdBtn = document.getElementById('changePwdBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const deleteAccountBtn = document.getElementById('deleteAccountBtn');
+
+    if (authLoginBtn) {
+      authLoginBtn.addEventListener('click', async () => {
+        const username = document.getElementById('authUsername').value.trim();
+        const password = document.getElementById('authPassword').value;
+        const adminPass = document.getElementById('authAdminPass').value;
+        const isAdminLogin = adminLoginCheckbox && adminLoginCheckbox.checked;
+
+        if (!username) { authMsg.textContent = '请输入用户名'; return; }
+        if (!isAdminLogin && !password) { authMsg.textContent = '请输入密码'; return; }
+        if (isAdminLogin && !adminPass) { authMsg.textContent = '管理员登录需要管理员密码'; return; }
+
+        const body = { username, password: isAdminLogin ? undefined : password, adminPass };
+        if (isAdminLogin) delete body.password;
+
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          const data = await res.json();
+          if (!res.ok) { authMsg.textContent = data.error || '登录失败'; return; }
+          localStorage.setItem('swc_token', data.token);
+          updateLoginButton();
+          buildModalSlides();
+          recalcModalWidth();
+          snapModalToIndex(currentCatIndex);
+        } catch(e) { authMsg.textContent = '网络错误'; }
+      });
+    }
+
+    if (authRegisterBtn) {
+      authRegisterBtn.addEventListener('click', async () => {
+        const username = document.getElementById('authUsername').value.trim();
+        const password = document.getElementById('authPassword').value;
+        const adminPass = document.getElementById('authAdminPass').value;
+        if (!username || !password || !adminPass) { authMsg.textContent = '请填写所有字段'; return; }
+        try {
+          const res = await fetch('/api/auth/register', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, adminPass })
+          });
+          const data = await res.json();
+          if (!res.ok) { authMsg.textContent = data.error || '注册失败'; return; }
+          localStorage.setItem('swc_token', data.token);
+          updateLoginButton();
+          buildModalSlides();
+          recalcModalWidth();
+          snapModalToIndex(currentCatIndex);
+        } catch(e) { authMsg.textContent = '网络错误'; }
+      });
+    }
+
+    if (changePwdBtn) {
+      changePwdBtn.addEventListener('click', async () => {
+        const newPassword = prompt('请输入新密码：');
+        if (!newPassword) return;
+        const token = localStorage.getItem('swc_token');
+        try {
+          const res = await fetch('/api/auth/change-password', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ newPassword })
+          });
+          const data = await res.json();
+          if (res.ok) { alert('修改成功'); } else { alert('修改失败：' + (data.error || '未知错误')); }
+        } catch { alert('网络错误'); }
+      });
+    }
+
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('swc_token');
+        updateLoginButton();
+        buildModalSlides();
+        recalcModalWidth();
+        snapModalToIndex(currentCatIndex);
+      });
+    }
+
+    if (deleteAccountBtn) {
+      deleteAccountBtn.addEventListener('click', async () => {
+        const reason = prompt('确认注销？请输入管理员密码或您的用户密码：');
+        if (!reason) return;
+        const token = localStorage.getItem('swc_token');
+        try {
+          const res = await fetch('/api/auth/delete-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ adminPass: reason })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            localStorage.removeItem('swc_token');
+            updateLoginButton();
+            buildModalSlides();
+            recalcModalWidth();
+            snapModalToIndex(currentCatIndex);
+          } else {
+            alert('注销失败：' + (data.error || '未知错误'));
+          }
+        } catch { alert('网络错误'); }
+      });
+    }
   }
 
   function translateToIndex(index, extraDelta = 0) {
@@ -382,20 +606,42 @@
     translateToIndex(index, 0);
     currentCatIndex = index;
     showOnlyCurrentModalCard(index);
+    for (let card of modalSlides.children) { card.style.transform = ''; card.style.filter = ''; }
   }
 
   modalOverlay.addEventListener('touchstart', (e) => {
     if (e.target.closest('[data-close-modal]')) return;
     if (modalSlides.children.length === 0) return;
     modalStartX = e.touches[0].clientX; modalCurrentX = modalStartX; isModalDragging = true;
+    lastModalTime = performance.now(); lastModalX = modalStartX;
     modalSlides.style.transition = 'none';
     for (let card of modalSlides.children) card.classList.remove('hidden-card');
   });
+
   modalOverlay.addEventListener('touchmove', (e) => {
     if(!isModalDragging || cachedModalSlideWidth === 0) return;
-    translateToIndex(currentCatIndex, e.touches[0].clientX - modalStartX);
-    modalCurrentX = e.touches[0].clientX;
+    const now = performance.now();
+    const currentX = e.touches[0].clientX;
+    const deltaTime = now - lastModalTime;
+    const deltaX = currentX - modalStartX;
+    const absDeltaX = Math.abs(currentX - lastModalX);
+    const speed = deltaTime > 0 ? absDeltaX / deltaTime : 0;
+    const distance = Math.abs(deltaX);
+
+    translateToIndex(currentCatIndex, deltaX);
+    modalCurrentX = currentX;
+
+    const card = modalSlides.children[currentCatIndex];
+    if (card) {
+      const scale = Math.max(0.8, 1 - Math.min(distance / 150, 1) * 0.2);
+      card.style.transform = `scale(${scale})`;
+      const blurPx = Math.min(4, speed * 4);
+      card.style.filter = `blur(${blurPx}px)`;
+    }
+    lastModalTime = now;
+    lastModalX = currentX;
   });
+
   modalOverlay.addEventListener('touchend', (e) => {
     if(!isModalDragging) return; isModalDragging = false;
     const delta = modalCurrentX - modalStartX, threshold = 60;
@@ -408,6 +654,7 @@
     else if (delta > threshold && currentCatIndex > 0) newIndex = currentCatIndex - 1;
     snapModalToIndex(newIndex);
   });
+
   modalOverlay.addEventListener('click', (e) => { if (!e.target.closest('.modal-card')) closeModal(); });
 
   function openModalAt(index) {
@@ -421,6 +668,7 @@
     showOnlyCurrentModalCard(index);
     modalOverlay.classList.add('show');
     document.body.style.overflow = 'hidden';
+    for (let card of modalSlides.children) { card.style.transform = ''; card.style.filter = ''; }
   }
   function closeModal() { modalOverlay.classList.remove('show'); document.body.style.overflow = ''; }
 
@@ -432,11 +680,16 @@
   });
 
   document.querySelectorAll('[data-cat]').forEach((btn, idx) => btn.addEventListener('click', ()=> openModalAt(idx)));
+  loginBtn.addEventListener('click', () => {
+    buildModalSlides();
+    openModalAt(5);
+  });
 
-  // 抽屉系统
+  // ========== 抽屉系统 ==========
   const drawerOverlay = document.getElementById('drawerOverlay'), drawerSlides = document.getElementById('drawerSlides');
   let currentDrawerIndex = 0, drawerStartX = 0, drawerCurrentX = 0, drawerStartY = 0, drawerCurrentY = 0, isDrawerDragging = false;
   let cachedDrawerPanelWidth = 0;
+  let lastDrawerTime = 0, lastDrawerX = 0, lastDrawerY = 0;
   const drawerTitles = { device: '设备信息', ide: 'SwCIDE', stress: '压力测试', base64: 'Base64编译' };
   const drawerRendered = { device: false, ide: false, stress: false, base64: false };
 
@@ -461,6 +714,7 @@
       else if(type === 'base64') renderBase64();
       drawerRendered[type] = true;
     }
+    for (let p of drawerSlides.children) { p.style.transform = ''; p.style.filter = ''; }
   }
 
   function buildDrawerSlides() {
@@ -485,19 +739,40 @@
       else if(type === 'base64') renderBase64();
       drawerRendered[type] = true;
     }
+    for (let p of drawerSlides.children) { p.style.transform = ''; p.style.filter = ''; }
   }
 
   drawerOverlay.addEventListener('touchstart', (e) => {
     drawerStartX = e.touches[0].clientX; drawerStartY = e.touches[0].clientY;
     drawerCurrentX = drawerStartX; drawerCurrentY = drawerStartY;
     isDrawerDragging = true; drawerSlides.style.transition = 'none';
+    lastDrawerTime = performance.now(); lastDrawerX = drawerStartX; lastDrawerY = drawerStartY;
   });
+
   drawerOverlay.addEventListener('touchmove', (e) => {
     if(!isDrawerDragging || cachedDrawerPanelWidth === 0) return;
-    const deltaX = e.touches[0].clientX - drawerStartX;
+    const now = performance.now();
+    const currentX = e.touches[0].clientX, currentY = e.touches[0].clientY;
+    const deltaTime = now - lastDrawerTime;
+    const absDeltaX = Math.abs(currentX - lastDrawerX);
+    const absDeltaY = Math.abs(currentY - lastDrawerY);
+    const speed = deltaTime > 0 ? Math.max(absDeltaX, absDeltaY) / deltaTime : 0;
+    const distance = Math.max(Math.abs(currentX - drawerStartX), Math.abs(currentY - drawerStartY));
+
+    const deltaX = currentX - drawerStartX;
     updateDrawerSlidePosition(-currentDrawerIndex * cachedDrawerPanelWidth + deltaX);
-    drawerCurrentX = e.touches[0].clientX; drawerCurrentY = e.touches[0].clientY;
+    drawerCurrentX = currentX; drawerCurrentY = currentY;
+
+    const panel = drawerSlides.children[currentDrawerIndex];
+    if (panel) {
+      const scale = Math.max(0.8, 1 - Math.min(distance / 150, 1) * 0.2);
+      panel.style.transform = `translateY(0) scale(${scale})`;
+      const blurPx = Math.min(4, speed * 4);
+      panel.style.filter = `blur(${blurPx}px)`;
+    }
+    lastDrawerTime = now; lastDrawerX = currentX; lastDrawerY = currentY;
   });
+
   drawerOverlay.addEventListener('touchend', () => {
     if(!isDrawerDragging) return; isDrawerDragging = false;
     const deltaX = drawerCurrentX - drawerStartX, deltaY = drawerCurrentY - drawerStartY, threshold = 60;
@@ -510,6 +785,7 @@
     else if (deltaX > threshold && currentDrawerIndex > 0) newIndex = currentDrawerIndex - 1;
     snapDrawerToIndex(newIndex);
   });
+
   drawerOverlay.addEventListener('click', (e) => { if (!e.target.closest('.drawer-panel')) closeDrawer(); });
 
   document.getElementById('showDeviceInfoBtn').addEventListener('click', ()=> openDrawerAt(0));
@@ -517,7 +793,6 @@
   document.getElementById('showStressBtn').addEventListener('click', ()=> openDrawerAt(2));
   document.getElementById('showBase64Btn').addEventListener('click', ()=> openDrawerAt(3));
 
-  // SwCIDE 渲染函数
   function renderSwCIDE() {
     const container = document.getElementById('drawer-ide');
     container.innerHTML = `
@@ -560,7 +835,7 @@
     let html = '<table class="base64-table"><thead><tr>';
     for (let c = 0; c < 4; c++) html += `<th>Chr ${c*32}-${c*32+31}</th><th>Base64</th>`;
     html += '</tr></thead><tbody>';
-    for (let row = 0; row < 32; row++) { html += '<tr>'; for (let col = 0; col < 4; col++) { const code = col * 32 + row; html += `<td>${charToDisplay(code)}</td><td>${singleByteBase64(code)}</td>`; } html += '</tr>'; }
+    for (let row = 0; row < 32; row++) { html += '<tr>'; for (let col = 0; col < 4; col++) { const code = col * 32 + row; html += `<td>${charToDisplay(code)}</td><td>${singleByteBase64(code)}</td>`; } html += '<tr>'; }
     html += '</tbody></table>'; return html;
   }
   function renderBase64() { document.getElementById('drawer-base64').innerHTML = `<button class="nav-btn" onclick="location.href='tb64.html'">完整Base64编译</button><div style="overflow-x:auto; padding-bottom:60px;">${buildBase64Table()}</div>`; }
@@ -579,6 +854,33 @@
 
   buildModalSlides();
 })();
+</script>
+<!-- 强制弹出可关闭的登录框 -->
+<!-- 智能弹出登录框：仅未登录时弹出 -->
+<script>
+  (function() {
+    const token = localStorage.getItem('swc_token');
+    let needLogin = true;
+
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        // 检查是否过期
+        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+          needLogin = true;   // 过期了需要重新登录
+        } else {
+          needLogin = false;  // 有效 token，已登录
+        }
+      } catch (e) {
+        needLogin = true;     // token 格式错误，当未登录处理
+      }
+    }
+
+    if (needLogin) {
+      const loginBtn = document.getElementById('loginBtn');
+      if (loginBtn) loginBtn.click();
+    }
+  })();
 </script>
 </body>
 </html>
