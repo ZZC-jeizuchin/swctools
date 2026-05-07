@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - SwCTools</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #e8edf2; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    #loginBox, #mainBox { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 500px; width: 90%; }
+    input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; }
+    button { padding: 10px 20px; background: #4f7f9e; color: white; border: none; border-radius: 8px; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #f0f0f0; }
+    .hash { font-family: monospace; font-size: 0.8em; word-break: break-all; }
+  </style>
+</head>
+<body>
+<div id="loginBox">
+  <h2>管理员验证</h2>
+  <input type="password" id="adminPassInput" placeholder="请输入管理员密码">
+  <button onclick="verifyAdmin()">验证</button>
+  <p id="error" style="color:red;"></p>
+</div>
+<div id="mainBox" style="display:none;">
+  <h2>用户列表</h2>
+  <table id="userTable">
+    <thead><tr><th>用户名</th><th>密码哈希</th><th>注册时间</th><th>最后登录</th></tr></thead>
+    <tbody></tbody>
+   </table>
+</div>
+<script>
+async function verifyAdmin() {
+  const pass = document.getElementById('adminPassInput').value;
+  if (!pass) return;
+  try {
+    const res = await fetch('/api/auth/admin-users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminPass: pass })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    document.getElementById('loginBox').style.display = 'none';
+    document.getElementById('mainBox').style.display = 'block';
+    const tbody = document.querySelector('#userTable tbody');
+    data.users.forEach(user => {
+      const row = `<tr>
+        <td>${user.username}</td>
+        <td class="hash">${user.passwordHash}</td>
+        <td>${new Date(user.createdAt).toLocaleString()}</td>
+        <td>${user.lastLogin ? new Date(user.lastLogin).toLocaleString() : '从未登录'}</td>
+      </tr>`;
+      tbody.innerHTML += row;
+    });
+  } catch(e) {
+    document.getElementById('error').textContent = '密码错误或网络异常';
+  }
+}
+</script>
+</body>
+</html>
