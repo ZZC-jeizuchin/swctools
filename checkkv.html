@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
+  <script>
+  if (!localStorage.getItem('swc_token')) {
+    alert('未登录!');
+  }
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>我的 KV 数据 - SwCTools</title>
@@ -80,6 +85,7 @@
 </head>
 <body>
   <div class="container">
+    <h3><a href="index.html">返回主站</a></h3>
     <h1>我的 KV 数据</h1>
     <button onclick="loadKV()">刷新数据</button>
     <table id="kvTable">
