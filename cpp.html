@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
+  <script>
+  if (!localStorage.getItem('swc_token')) {
+    alert('未登录!');
+    window.location.href = '/index.html';
+  }
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <title>SwC IDE · C++ 运行环境</title>
