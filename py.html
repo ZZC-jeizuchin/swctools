@@ -486,7 +486,7 @@ print("Done.")
     } catch (err) { log(`清除缓存失败: ${err.message}`, true); }
   }
 
-  // Worker 管理
+  // Worker 管理 (关键修改)
   let worker = null, workerReady = false, running = false, runStartTime = 0;
   let initTimer = null, isInitializing = false;
 
@@ -512,6 +512,8 @@ print("Done.")
         inputIndex = 0;
         await self.pyodide.runPythonAsync('import builtins\\nkeep = {"__builtins__","__name__","__doc__","__package__","__loader__","__spec__"}\\nfor key in list(globals().keys()):\\n    if key not in keep and not key.startswith("_"):\\n        try: del globals()[key]\\n        except: pass');
         try {
+          // ★ 关键：自动加载代码中 import 的第三方库
+          await self.pyodide.loadPackagesFromImports(code);
           await self.pyodide.runPythonAsync(code);
           self.postMessage({ type:'done' });
         } catch (err) { self.postMessage({ type:'error', error: err.message }); }
@@ -623,7 +625,7 @@ print("Done.")
   saveBtn.addEventListener('click', saveCode);
   resetBtn.addEventListener('click', resetCode);
 
-  // ======================== 云端全量同步 ========================
+  // 云端同步（保持不变）
   const CODE_TYPE = 'py';
   const UPLOAD_BTN = document.getElementById('uploadCloudBtn');
   const DOWNLOAD_BTN = document.getElementById('downloadCloudBtn');
