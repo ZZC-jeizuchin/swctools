@@ -16,14 +16,15 @@
   </style>
 </head>
 <body>
-<a href="index.html">返回主站</a>
 <div id="loginBox">
+  <h3 onclick="locations.href='index.html'">返回主站</h3>
   <h2>管理员验证</h2>
   <input type="password" id="adminPassInput" placeholder="请输入管理员密码">
   <button onclick="verifyAdmin()">验证</button>
   <p id="error" style="color:red;"></p>
 </div>
 <div id="mainBox" style="display:none;">
+  <h3 onclick="location.href='index.html'">返回主站</h3>
   <h2>用户列表</h2>
   <table id="userTable">
     <thead><tr><th>用户名</th><th>密码哈希</th><th>注册时间</th><th>最后登录</th></tr></thead>
