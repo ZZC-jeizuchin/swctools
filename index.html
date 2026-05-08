@@ -89,7 +89,6 @@
       position: relative;
     }
 
-    /* 全局消除蓝色选中效果 */
     button, a, input, select, .drawer-overlay, .modal-overlay, .drawer-panel, .modal-card,
     .cat-btn, .go-btn, .tool-btn, .nav-btn, .link-item, .run-ide-btn,
     .theme-toggle, .perf-toggle {
@@ -122,7 +121,6 @@
     .title-section h1 { font-size: calc(var(--main-h) * 0.065); font-weight: 550; color: var(--title-color); white-space: nowrap; }
     .badge { font-size: calc(var(--main-h) * 0.039); color: var(--badge-color); background: var(--badge-bg); padding: calc(var(--main-h) * 0.01) calc(var(--main-w) * 0.025); border-radius: calc(var(--main-w) * 0.04); border: 1px solid var(--cat-btn-border); white-space: nowrap; }
 
-    /* 分类栏：一行显示，允许横向滚动 */
     .category-bar {
       flex: 0 0 calc(var(--main-h) * 0.13);
       display: flex;
@@ -208,14 +206,6 @@
     .device-value { color: var(--device-value-color); word-break: break-word; font-size: calc(var(--main-h) * 0.0338); }
     .drawer-footer-link { margin-top: calc(var(--main-h) * 0.02); text-align: center; pointer-events: auto; }
 
-    .ide-container { display: flex; flex-direction: column; gap: calc(var(--main-h) * 0.02); }
-    .ide-editor { background: var(--panel-bg); border-radius: calc(var(--main-w) * 0.03); border: 2px solid var(--input-border); overflow: hidden; }
-    .ide-textarea { width: 100%; padding: calc(var(--main-h) * 0.02); font-family: 'JetBrains Mono', monospace; font-size: calc(var(--main-h) * 0.026); background: transparent; border: none; outline: none; color: var(--text-color); resize: vertical; min-height: calc(var(--main-h) * 0.25); }
-    .ide-preview { background: white; border-radius: calc(var(--main-w) * 0.03); border: 2px solid var(--input-border); padding: calc(var(--main-h) * 0.02); }
-    .ide-preview iframe { width: 100%; height: calc(var(--main-h) * 0.3); border: none; background: white; border-radius: calc(var(--main-w) * 0.02); }
-    .ide-action-row { display: flex; align-items: center; gap: calc(var(--main-w) * 0.02); flex-wrap: wrap; }
-    .run-ide-btn { background: var(--go-btn-bg); color: white; border: none; padding: calc(var(--main-h) * 0.018) calc(var(--main-w) * 0.035); border-radius: calc(var(--main-w) * 0.06); font-weight: 600; cursor: pointer; font-size: calc(var(--main-h) * 0.039); }
-
     .nav-btn {
       background: var(--tool-btn-bg); border: 1px solid var(--tool-btn-border); color: var(--tool-btn-color);
       padding: calc(var(--main-h) * 0.025) calc(var(--main-w) * 0.025); border-radius: calc(var(--main-w) * 0.07);
@@ -229,7 +219,6 @@
     .loading-spinner { width: calc(var(--main-w) * 0.035); height: calc(var(--main-w) * 0.035); border: calc(var(--main-w) * 0.003) solid rgba(79, 127, 158, 0.2); border-top-color: #4f7f9e; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: calc(var(--main-w) * 0.018); }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* 确保 Base64 表格边框正常显示 */
     .base64-table {
       width: 100%;
       border-collapse: collapse;
@@ -685,11 +674,11 @@
     openModalAt(5);
   });
 
-  // ========== 抽屉系统 ==========
+  // ========== 抽屉系统（下滑关闭，左右滑动切换带动态模糊） ==========
   const drawerOverlay = document.getElementById('drawerOverlay'), drawerSlides = document.getElementById('drawerSlides');
   let currentDrawerIndex = 0, drawerStartX = 0, drawerCurrentX = 0, drawerStartY = 0, drawerCurrentY = 0, isDrawerDragging = false;
   let cachedDrawerPanelWidth = 0;
-  let lastDrawerTime = 0, lastDrawerX = 0, lastDrawerY = 0;
+  let isVerticalDrag = false;   // 新增：标记主拖拽方向
   const drawerTitles = { device: '设备信息', ide: 'SwCIDE', stress: '压力测试', base64: 'Base64编译' };
   const drawerRendered = { device: false, ide: false, stress: false, base64: false };
 
@@ -742,43 +731,90 @@
     for (let p of drawerSlides.children) { p.style.transform = ''; p.style.filter = ''; }
   }
 
+  // 新的事件处理：支持垂直下滑关闭 + 水平滑动切换（带模糊/缩放）
   drawerOverlay.addEventListener('touchstart', (e) => {
     drawerStartX = e.touches[0].clientX; drawerStartY = e.touches[0].clientY;
     drawerCurrentX = drawerStartX; drawerCurrentY = drawerStartY;
-    isDrawerDragging = true; drawerSlides.style.transition = 'none';
-    lastDrawerTime = performance.now(); lastDrawerX = drawerStartX; lastDrawerY = drawerStartY;
+    isDrawerDragging = true;
+    isVerticalDrag = false;
+    drawerSlides.style.transition = 'none';
+    // 清除当前面板的内联样式预备
+    const panel = drawerSlides.children[currentDrawerIndex];
+    if (panel) {
+      panel.style.transform = '';
+      panel.style.filter = '';
+    }
   });
 
   drawerOverlay.addEventListener('touchmove', (e) => {
     if(!isDrawerDragging || cachedDrawerPanelWidth === 0) return;
-    const now = performance.now();
     const currentX = e.touches[0].clientX, currentY = e.touches[0].clientY;
-    const deltaTime = now - lastDrawerTime;
-    const absDeltaX = Math.abs(currentX - lastDrawerX);
-    const absDeltaY = Math.abs(currentY - lastDrawerY);
-    const speed = deltaTime > 0 ? Math.max(absDeltaX, absDeltaY) / deltaTime : 0;
-    const distance = Math.max(Math.abs(currentX - drawerStartX), Math.abs(currentY - drawerStartY));
-
     const deltaX = currentX - drawerStartX;
-    updateDrawerSlidePosition(-currentDrawerIndex * cachedDrawerPanelWidth + deltaX);
-    drawerCurrentX = currentX; drawerCurrentY = currentY;
+    const deltaY = currentY - drawerStartY;
+    const distanceX = Math.abs(deltaX);
+    const distanceY = Math.abs(deltaY);
 
-    const panel = drawerSlides.children[currentDrawerIndex];
-    if (panel) {
-      const scale = Math.max(0.8, 1 - Math.min(distance / 150, 1) * 0.2);
-      panel.style.transform = `translateY(0) scale(${scale})`;
-      const blurPx = Math.min(4, speed * 4);
-      panel.style.filter = `blur(${blurPx}px)`;
+    // 判断主方向（只在滑动初期决定，避免中途切换）
+    if (!isDrawerDragging) return;
+    if (distanceY > distanceX) {
+      // 垂直滑动为主：面板跟随手指向下移动，禁止水平移动，清除模糊/缩放
+      isVerticalDrag = true;
+      const panel = drawerSlides.children[currentDrawerIndex];
+      if (panel) {
+        panel.style.transform = `translateY(${deltaY}px) scale(1)`;
+        panel.style.filter = 'blur(0)';
+      }
+    } else {
+      // 水平滑动为主：恢复垂直方向，执行左右切换逻辑和模糊/缩放
+      isVerticalDrag = false;
+      const panel = drawerSlides.children[currentDrawerIndex];
+      if (panel) {
+        panel.style.transform = 'translateY(0) scale(1)';
+        panel.style.filter = 'blur(0)';
+      }
+      // 更新容器的水平位移
+      updateDrawerSlidePosition(-currentDrawerIndex * cachedDrawerPanelWidth + deltaX);
+      drawerCurrentX = currentX;
+      // 应用动态模糊/缩放（仅水平）
+      if (panel) {
+        const scale = Math.max(0.8, 1 - Math.min(distanceX / 150, 1) * 0.2);
+        panel.style.transform = `translateY(0) scale(${scale})`;
+        const blurPx = Math.min(4, (distanceX / 150) * 4);
+        panel.style.filter = `blur(${blurPx}px)`;
+      }
     }
-    lastDrawerTime = now; lastDrawerX = currentX; lastDrawerY = currentY;
+    drawerCurrentY = currentY;
   });
 
   drawerOverlay.addEventListener('touchend', () => {
     if(!isDrawerDragging) return; isDrawerDragging = false;
-    const deltaX = drawerCurrentX - drawerStartX, deltaY = drawerCurrentY - drawerStartY, threshold = 60;
+    const deltaX = drawerCurrentX - drawerStartX, deltaY = drawerCurrentY - drawerStartY;
+    const threshold = 60;
+    const panel = drawerSlides.children[currentDrawerIndex];
+
+    if (isVerticalDrag) {
+      // 垂直滑动松手：如果下滑距离超过阈值，关闭抽屉；否则弹回原位
+      if (deltaY > threshold) {
+        closeDrawer();
+        return;
+      } else {
+        if (panel) {
+          panel.style.transition = 'transform 0.2s ease';
+          panel.style.transform = 'translateY(0)';
+          setTimeout(() => { panel.style.transition = ''; }, 200);
+        }
+      }
+      isVerticalDrag = false;
+      return;
+    }
+
+    // 水平滑动松手：原有切换逻辑，并检查是否通过下拉关闭（兼容原逻辑）
     if (Math.abs(deltaY) > Math.abs(deltaX) && deltaY > threshold) {
       const contentEl = document.getElementById('drawer-' + drawerTypes[currentDrawerIndex]);
-      if (!contentEl || contentEl.scrollTop <= 0) { closeDrawer(); return; }
+      if (!contentEl || contentEl.scrollTop <= 0) {
+        closeDrawer();
+        return;
+      }
     }
     let newIndex = currentDrawerIndex;
     if (deltaX < -threshold && currentDrawerIndex < drawerTypes.length - 1) newIndex = currentDrawerIndex + 1;
@@ -837,7 +873,7 @@
     let html = '<table class="base64-table"><thead><tr>';
     for (let c = 0; c < 4; c++) html += `<th>Chr ${c*32}-${c*32+31}</th><th>Base64</th>`;
     html += '</tr></thead><tbody>';
-    for (let row = 0; row < 32; row++) { html += '<tr>'; for (let col = 0; col < 4; col++) { const code = col * 32 + row; html += `<td>${charToDisplay(code)}</td><td>${singleByteBase64(code)}</td>`; } html += '<tr>'; }
+    for (let row = 0; row < 32; row++) { html += '<tr>'; for (let col = 0; col < 4; col++) { const code = col * 32 + row; html += `<td>${charToDisplay(code)}</td><td>${singleByteBase64(code)}</td>`; } html += '</tr>'; }
     html += '</tbody></table>'; return html;
   }
   function renderBase64() { document.getElementById('drawer-base64').innerHTML = `<button class="nav-btn" onclick="location.href='tb64.html'">完整Base64编译</button><div style="overflow-x:auto; padding-bottom:60px;">${buildBase64Table()}</div>`; }
@@ -857,7 +893,6 @@
   buildModalSlides();
 })();
 </script>
-<!-- 强制弹出可关闭的登录框 -->
 <!-- 智能弹出登录框：仅未登录时弹出 -->
 <script>
   (function() {
@@ -867,14 +902,13 @@
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        // 检查是否过期
         if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-          needLogin = true;   // 过期了需要重新登录
+          needLogin = true;
         } else {
-          needLogin = false;  // 有效 token，已登录
+          needLogin = false;
         }
       } catch (e) {
-        needLogin = true;     // token 格式错误，当未登录处理
+        needLogin = true;
       }
     }
 
