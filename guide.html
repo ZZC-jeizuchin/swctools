@@ -3,7 +3,8 @@
 <head>
   <script>
   if (!localStorage.getItem('swc_token')) {
-    alert('未登录!');
+    alert('未登录!因为保密原因你无法在未登录时查看此页');
+    location.href='index.html';
   }
   </script>
   <meta charset="UTF-8">
