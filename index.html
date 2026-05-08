@@ -219,25 +219,30 @@
     .loading-spinner { width: calc(var(--main-w) * 0.035); height: calc(var(--main-w) * 0.035); border: calc(var(--main-w) * 0.003) solid rgba(79, 127, 158, 0.2); border-top-color: #4f7f9e; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: calc(var(--main-w) * 0.018); }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* 修复 Base64 表格样式 */
     .base64-table {
       width: 100%;
       border-collapse: collapse;
       font-family: 'JetBrains Mono', monospace;
       font-size: calc(var(--main-h) * 0.026);
-      margin-top: calc(var(--main-h) * 0.02);
-      table-layout: fixed;
+      margin: calc(var(--main-h) * 0.02) 0;
+      min-width: 600px;
     }
     .base64-table th,
     .base64-table td {
       border: 1px solid var(--panel-border);
       padding: calc(var(--main-h) * 0.006) calc(var(--main-w) * 0.006);
       text-align: center;
-      word-break: break-all;
+      white-space: nowrap;
     }
     .base64-table th {
       background: var(--jump-row-bg);
       font-weight: 600;
       color: var(--title-color);
+    }
+    .table-wrapper {
+      overflow-x: auto;
+      width: 100%;
     }
 
     .perf-mode .cat-btn, .perf-mode .go-btn, .perf-mode .tool-btn, .perf-mode .nav-btn,
@@ -305,7 +310,6 @@
   window.addEventListener('orientationchange', updatePanelScale);
   updatePanelScale();
 
-  // 深色模式
   const themeToggle = document.getElementById('themeToggle');
   const currentTheme = localStorage.getItem('swc_theme') || 'light';
   document.documentElement.setAttribute('data-theme', currentTheme);
@@ -317,7 +321,6 @@
     themeToggle.textContent = newTheme === 'light' ? '深色' : '亮色';
   });
 
-  // 性能模式
   const perfToggle = document.getElementById('perfToggle');
   if (localStorage.getItem('swc_perf') === 'true') document.body.classList.add('perf-mode');
   perfToggle.textContent = document.body.classList.contains('perf-mode') ? '性能 ✓' : '性能';
@@ -327,7 +330,6 @@
     perfToggle.textContent = enabled ? '性能 ✓' : '性能';
   });
 
-  // 帧率
   const fpsDisplay = document.getElementById('fpsDisplay');
   let frameCount = 0, lastFpsUpdate = performance.now(), rafId = null;
   function fpsLoop() {
@@ -344,7 +346,6 @@
   document.addEventListener('visibilitychange', () => document.hidden ? stopFPS() : startFPS());
   startFPS();
 
-  // 链接库
   const linkDB = {
     ai: [{ name: 'DeepSeek', url: 'https://chat.deepseek.com' },{ name: 'Doubao', url: 'https://www.doubao.com' },{ name: 'Qwen', url: 'https://qianwen.aliyun.com' },{ name: 'Kimi', url: 'https://kimi.moonshot.cn' }],
     search: [{ name: 'Google', url: 'https://www.google.com' },{ name: 'Bing (国内)', url: 'https://cn.bing.com' },{ name: 'Bing (国际)', url: 'https://www.bing.com' },{ name: 'MSN', url: 'https://www.msn.com' },{ name: 'DuckDuckGo', url: 'https://duckduckgo.com' },{ name: 'Baidu', url: 'https://baidu.com' },{ name: 'Yandex', url: 'https://yandex.com' },{ name: 'Yandex RU', url: 'https://yandex.ru' },{ name: 'Bilibili', url: 'https://bilibili.com' }],
@@ -375,7 +376,6 @@
   });
   document.getElementById('searchKeywordInput').addEventListener('keydown', e=> { if(e.key==='Enter') document.getElementById('searchEngineBtn').click(); });
 
-  // ========== 登录系统 ==========
   const loginBtn = document.getElementById('loginBtn');
   let currentUser = null;
 
@@ -400,10 +400,8 @@
     }
     loginBtn.style.display = 'inline-block';
   }
-
   updateLoginButton();
 
-  // ========== 模态框系统 ==========
   const modalOverlay = document.getElementById('modalOverlay'), modalSlides = document.getElementById('modalSlides');
   let currentCatIndex = 0, modalStartX = 0, modalCurrentX = 0, isModalDragging = false;
   let cachedModalSlideWidth = 0, modalCenteringOffset = 0;
@@ -674,11 +672,11 @@
     openModalAt(5);
   });
 
-  // ========== 抽屉系统（下滑关闭，左右滑动切换带动态模糊） ==========
+  // ========== 抽屉系统 ==========
   const drawerOverlay = document.getElementById('drawerOverlay'), drawerSlides = document.getElementById('drawerSlides');
   let currentDrawerIndex = 0, drawerStartX = 0, drawerCurrentX = 0, drawerStartY = 0, drawerCurrentY = 0, isDrawerDragging = false;
   let cachedDrawerPanelWidth = 0;
-  let isVerticalDrag = false;   // 新增：标记主拖拽方向
+  let isVerticalDrag = false;
   const drawerTitles = { device: '设备信息', ide: 'SwCIDE', stress: '压力测试', base64: 'Base64编译' };
   const drawerRendered = { device: false, ide: false, stress: false, base64: false };
 
@@ -731,14 +729,12 @@
     for (let p of drawerSlides.children) { p.style.transform = ''; p.style.filter = ''; }
   }
 
-  // 新的事件处理：支持垂直下滑关闭 + 水平滑动切换（带模糊/缩放）
   drawerOverlay.addEventListener('touchstart', (e) => {
     drawerStartX = e.touches[0].clientX; drawerStartY = e.touches[0].clientY;
     drawerCurrentX = drawerStartX; drawerCurrentY = drawerStartY;
     isDrawerDragging = true;
     isVerticalDrag = false;
     drawerSlides.style.transition = 'none';
-    // 清除当前面板的内联样式预备
     const panel = drawerSlides.children[currentDrawerIndex];
     if (panel) {
       panel.style.transform = '';
@@ -754,28 +750,26 @@
     const distanceX = Math.abs(deltaX);
     const distanceY = Math.abs(deltaY);
 
-    // 判断主方向（只在滑动初期决定，避免中途切换）
-    if (!isDrawerDragging) return;
     if (distanceY > distanceX) {
-      // 垂直滑动为主：面板跟随手指向下移动，禁止水平移动，清除模糊/缩放
-      isVerticalDrag = true;
-      const panel = drawerSlides.children[currentDrawerIndex];
-      if (panel) {
-        panel.style.transform = `translateY(${deltaY}px) scale(1)`;
-        panel.style.filter = 'blur(0)';
+      if (deltaY > 0) {
+        isVerticalDrag = true;
+        const panel = drawerSlides.children[currentDrawerIndex];
+        if (panel) {
+          panel.style.transform = `translateY(${deltaY}px) scale(1)`;
+          panel.style.filter = 'blur(0)';
+        }
+      } else {
+        isVerticalDrag = false;
       }
     } else {
-      // 水平滑动为主：恢复垂直方向，执行左右切换逻辑和模糊/缩放
       isVerticalDrag = false;
       const panel = drawerSlides.children[currentDrawerIndex];
       if (panel) {
         panel.style.transform = 'translateY(0) scale(1)';
         panel.style.filter = 'blur(0)';
       }
-      // 更新容器的水平位移
       updateDrawerSlidePosition(-currentDrawerIndex * cachedDrawerPanelWidth + deltaX);
       drawerCurrentX = currentX;
-      // 应用动态模糊/缩放（仅水平）
       if (panel) {
         const scale = Math.max(0.8, 1 - Math.min(distanceX / 150, 1) * 0.2);
         panel.style.transform = `translateY(0) scale(${scale})`;
@@ -793,7 +787,6 @@
     const panel = drawerSlides.children[currentDrawerIndex];
 
     if (isVerticalDrag) {
-      // 垂直滑动松手：如果下滑距离超过阈值，关闭抽屉；否则弹回原位
       if (deltaY > threshold) {
         closeDrawer();
         return;
@@ -808,7 +801,6 @@
       return;
     }
 
-    // 水平滑动松手：原有切换逻辑，并检查是否通过下拉关闭（兼容原逻辑）
     if (Math.abs(deltaY) > Math.abs(deltaX) && deltaY > threshold) {
       const contentEl = document.getElementById('drawer-' + drawerTypes[currentDrawerIndex]);
       if (!contentEl || contentEl.scrollTop <= 0) {
@@ -870,15 +862,14 @@
   function singleByteBase64(byte) { const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"; return chars[(byte >> 2) & 0x3F] + chars[((byte & 0x03) << 4) & 0x3F] + "=="; }
   function charToDisplay(code) { if (code >= 32 && code <= 126) return String.fromCharCode(code); switch (code) { case 0: return '\\0'; case 8: return '\\b'; case 9: return '\\t'; case 10: return '\\n'; case 11: return '\\v'; case 12: return '\\f'; case 13: return '\\r'; default: return '\\x' + code.toString(16).toUpperCase().padStart(2, '0'); } }
   function buildBase64Table() {
-    let html = '<table class="base64-table"><thead><tr>';
+    let html = '<div class="table-wrapper"><table class="base64-table"><thead><tr>';
     for (let c = 0; c < 4; c++) html += `<th>Chr ${c*32}-${c*32+31}</th><th>Base64</th>`;
     html += '</tr></thead><tbody>';
     for (let row = 0; row < 32; row++) { html += '<tr>'; for (let col = 0; col < 4; col++) { const code = col * 32 + row; html += `<td>${charToDisplay(code)}</td><td>${singleByteBase64(code)}</td>`; } html += '</tr>'; }
-    html += '</tbody></table>'; return html;
+    html += '</tbody></table></div>'; return html;
   }
-  function renderBase64() { document.getElementById('drawer-base64').innerHTML = `<button class="nav-btn" onclick="location.href='tb64.html'">完整Base64编译</button><div style="overflow-x:auto; padding-bottom:60px;">${buildBase64Table()}</div>`; }
+  function renderBase64() { document.getElementById('drawer-base64').innerHTML = `<button class="nav-btn" onclick="location.href='tb64.html'">完整Base64编译</button>${buildBase64Table()}`; }
 
-  // 隐藏开发者指南
   (function() {
     const titleH1 = document.querySelector('.title-section h1'), badgeEl = document.querySelector('.badge');
     let clickCount = 0, unlocked = false;
@@ -893,25 +884,17 @@
   buildModalSlides();
 })();
 </script>
-<!-- 智能弹出登录框：仅未登录时弹出 -->
 <script>
   (function() {
     const token = localStorage.getItem('swc_token');
     let needLogin = true;
-
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-          needLogin = true;
-        } else {
-          needLogin = false;
-        }
-      } catch (e) {
-        needLogin = true;
-      }
+        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) needLogin = true;
+        else needLogin = false;
+      } catch (e) { needLogin = true; }
     }
-
     if (needLogin) {
       const loginBtn = document.getElementById('loginBtn');
       if (loginBtn) loginBtn.click();
