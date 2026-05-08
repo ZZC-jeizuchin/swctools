@@ -27,21 +27,29 @@ export async function onRequest(context) {
   const username = tokenPayload.sub;
   const items = [];
 
-  // 1. 读取用户账户信息
-  const userKey = `user:${username}`;
-  const userData = await env.AUTH_KV.get(userKey);
-  if (userData) {
-    items.push({ key: userKey, value: userData });
+  // 1. 从 AUTH_KV 读取用户账户信息
+  try {
+    const userKey = `user:${username}`;
+    const userData = await env.AUTH_KV.get(userKey);
+    if (userData) {
+      items.push({ key: userKey, value: userData });
+    }
+  } catch (e) {
+    // AUTH_KV 读取失败不影响后续
   }
 
-  // 2. 列出所有以 code:<用户名>: 开头的键
+  // 2. 从 CODE_KV 列出并读取所有以 code:<用户名>: 开头的键
   const codePrefix = `code:${username}:`;
-  const codeList = await env.AUTH_KV.list({ prefix: codePrefix });
-  for (const key of codeList.keys) {
-    const value = await env.AUTH_KV.get(key.name);
-    if (value !== null) {
-      items.push({ key: key.name, value });
+  try {
+    const codeList = await env.CODE_KV.list({ prefix: codePrefix });
+    for (const key of codeList.keys) {
+      const value = await env.CODE_KV.get(key.name);
+      if (value !== null) {
+        items.push({ key: key.name, value });
+      }
     }
+  } catch (e) {
+    // CODE_KV 未绑定或读取失败时，忽略错误并继续返回已有数据
   }
 
   return new Response(JSON.stringify({ username, items }), {
@@ -50,7 +58,7 @@ export async function onRequest(context) {
   });
 }
 
-// 内联签名验证（与 verify.js 相同）
+// ========== 内联签名验证函数 ==========
 async function verifyToken(token, secret) {
   try {
     const parts = token.split('.');
