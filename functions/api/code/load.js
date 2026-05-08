@@ -1,4 +1,3 @@
-// functions/api/code/load.js
 export async function onRequest(context) {
   const { request, env } = context;
 
@@ -30,30 +29,50 @@ export async function onRequest(context) {
     });
   }
 
-  // 3. 从 KV 读取
-  const key = `code:${user}:${type}`;
-  const raw = await env.CODE_KV.get(key);
-  if (!raw) {
-    return new Response(JSON.stringify({ found: false }), {
+  const prefix = `code:${user}:${type}`;
+  const indexKey = `${prefix}:files`;
+
+  // 3. 读取文件列表
+  const rawIndex = await env.CODE_KV.get(indexKey);
+  if (!rawIndex) {
+    return new Response(JSON.stringify({ files: {}, updatedAt: null }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
   }
 
-  let data;
-  try { data = JSON.parse(raw); } catch { data = { content: '' }; }
+  let fileList = [];
+  try { fileList = JSON.parse(rawIndex); } catch {}
+
+  // 4. 读取所有文件内容
+  const files = {};
+  let latestUpdate = 0;
+  const readPromises = fileList.map(async (fname) => {
+    const fileKey = `${prefix}:${fname}`;
+    const raw = await env.CODE_KV.get(fileKey);
+    if (raw) {
+      try {
+        const data = JSON.parse(raw);
+        files[fname] = data.content || '';
+        if (data.updatedAt > latestUpdate) latestUpdate = data.updatedAt;
+      } catch {
+        files[fname] = '';
+      }
+    }
+  });
+
+  await Promise.all(readPromises);
 
   return new Response(JSON.stringify({
-    found: true,
-    content: data.content || '',
-    updatedAt: data.updatedAt || null
+    files,
+    updatedAt: latestUpdate || null
   }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' }
   });
 }
 
-// ---------- 与 save.js 完全相同的签名/验证函数 ----------
+// ---------- 签名与验证 ----------
 async function sign(data, secret) {
   const key = await crypto.subtle.importKey(
     'raw',
