@@ -1,4 +1,3 @@
-// functions/api/code/save.js
 export async function onRequest(context) {
   const { request, env } = context;
 
@@ -23,8 +22,8 @@ export async function onRequest(context) {
   // 2. 解析请求体
   let body;
   try { body = await request.json(); } catch { body = {}; }
-  const { type, content } = body;
-  if (!type || !content || typeof content !== 'string') {
+  const { type, files } = body;
+  if (!type || !files || typeof files !== 'object') {
     return new Response(JSON.stringify({ error: '参数错误' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' }
@@ -39,21 +38,51 @@ export async function onRequest(context) {
     });
   }
 
-  // 3. 存入 KV
-  const key = `code:${user}:${type}`;
-  const value = JSON.stringify({
-    content,
-    updatedAt: Date.now()
-  });
-  await env.CODE_KV.put(key, value);
+  const prefix = `code:${user}:${type}`;
+  const indexKey = `${prefix}:files`;
 
-  return new Response(JSON.stringify({ success: true }), {
+  // 3. 获取旧文件列表
+  const oldRaw = await env.CODE_KV.get(indexKey);
+  let oldFiles = [];
+  if (oldRaw) {
+    try { oldFiles = JSON.parse(oldRaw); } catch {}
+  }
+
+  // 4. 写入新文件，删除不再需要的旧文件
+  const newFiles = Object.keys(files);
+  const now = Date.now();
+  const writePromises = [];
+
+  // 写入索引
+  writePromises.push(env.CODE_KV.put(indexKey, JSON.stringify(newFiles)));
+
+  // 写入每个文件内容
+  for (const fname of newFiles) {
+    const content = files[fname];
+    if (typeof content === 'string') {
+      const fileKey = `${prefix}:${fname}`;
+      const value = JSON.stringify({ content, updatedAt: now });
+      writePromises.push(env.CODE_KV.put(fileKey, value));
+    }
+  }
+
+  // 删除不再存在的旧文件
+  for (const oldFile of oldFiles) {
+    if (!newFiles.includes(oldFile)) {
+      const fileKey = `${prefix}:${oldFile}`;
+      writePromises.push(env.CODE_KV.delete(fileKey));
+    }
+  }
+
+  await Promise.all(writePromises);
+
+  return new Response(JSON.stringify({ success: true, count: newFiles.length }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' }
   });
 }
 
-// ---------- 以下函数与 verify.js 完全相同，确保签名一致 ----------
+// ---------- 签名与验证（与 verify.js 完全一致） ----------
 async function sign(data, secret) {
   const key = await crypto.subtle.importKey(
     'raw',
