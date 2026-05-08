@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LocalStorage 查看器 - SwCTools</title>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #e8edf2;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      color: #1e4b6e;
+      margin-bottom: 20px;
+    }
+    .container {
+      width: 100%;
+      max-width: 1000px;
+      background: white;
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: #4f7f9e;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.15s;
+    }
+    button:hover {
+      background: #3a6b8c;
+    }
+    button.danger {
+      background: #c0392b;
+    }
+    button.danger:hover {
+      background: #e74c3c;
+    }
+    button.delete-item {
+      background: #e74c3c;
+      padding: 4px 12px;
+      font-size: 0.8rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+      word-break: break-all;
+      font-size: 0.9rem;
+    }
+    th {
+      background: #e7f0f9;
+      color: #1e4b6e;
+      font-weight: 600;
+    }
+    .value-cell {
+      max-width: 400px;
+      overflow-y: auto;
+      max-height: 80px;
+      display: block;
+      white-space: pre-wrap;
+      font-family: monospace;
+    }
+    .empty {
+      color: #666;
+      font-style: italic;
+      padding: 20px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>LocalStorage 查看器</h1>
+    <div class="btn-group">
+      <button onclick="loadData()">刷新</button>
+      <button class="danger" onclick="deleteAll()">删除全部数据</button>
+    </div>
+    <table id="lsTable">
+      <thead>
+        <tr>
+          <th style="width: 20%;">键 (Key)</th>
+          <th style="width: 60%;">值 (Value)</th>
+          <th style="width: 20%;">操作</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="3" class="empty">正在加载...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    function loadData() {
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = '';
+      const keys = Object.keys(localStorage).sort();
+      if (keys.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="empty">当前站点没有存储任何数据。</td></tr>';
+        return;
+      }
+      keys.forEach(key => {
+        const raw = localStorage.getItem(key);
+        const value = raw === null ? '(null)' : raw;
+        const row = tbody.insertRow();
+        
+        const keyCell = row.insertCell();
+        keyCell.textContent = key;
+
+        const valCell = row.insertCell();
+        valCell.innerHTML = `<span class="value-cell">${escapeHTML(value)}</span>`;
+
+        const actionCell = row.insertCell();
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '删除';
+        delBtn.className = 'delete-item';
+        delBtn.onclick = () => {
+          if (confirm(`确定要删除键 "${key}" 吗？`)) {
+            localStorage.removeItem(key);
+            loadData();  // 刷新表格
+          }
+        };
+        actionCell.appendChild(delBtn);
+      });
+    }
+
+    function deleteAll() {
+      if (Object.keys(localStorage).length === 0) {
+        alert('当前没有数据，无需删除。');
+        return;
+      }
+      if (confirm('确定要删除所有本地存储数据吗？此操作不可恢复！')) {
+        localStorage.clear();
+        loadData();
+      }
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
