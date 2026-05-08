@@ -1,11 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <script>
-  if (!localStorage.getItem('swc_token')) {
-    alert('未登录!');
-  }
-  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>我的 KV 数据 - SwCTools</title>
@@ -85,7 +80,6 @@
 </head>
 <body>
   <div class="container">
-    <h3><a href="index.html">返回主站</a></h3>
     <h1>我的 KV 数据</h1>
     <button onclick="loadKV()">刷新数据</button>
     <table id="kvTable">
@@ -119,7 +113,7 @@
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          tbody.innerHTML = `<tr><td colspan="2" class="message error">请求失败：${err.error || res.status}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="2" class="message error">请求失败：${escapeHTML(err.error || res.status)}</td></tr>`;
           return;
         }
 
@@ -136,7 +130,13 @@
           const valCell = row.insertCell();
 
           keyCell.textContent = item.key;
-          valCell.innerHTML = `<span class="value-cell">${escapeHTML(item.value)}</span>`;
+
+          // 先转义 HTML 特殊字符，再将字面的 \n 替换为真正换行符
+          let escaped = escapeHTML(item.value);
+          escaped = escaped.replace(/\\n/g, '\n');   // 支持 \n 换行
+          escaped = escaped.replace(/\\r/g, '');     // 移除独立的 \r
+          escaped = escaped.replace(/\\t/g, '\t');   // 可选：将 \t 转为制表符
+          valCell.innerHTML = `<span class="value-cell">${escaped}</span>`;
         });
       } catch (e) {
         tbody.innerHTML = '<tr><td colspan="2" class="message error">网络错误，请重试。</td></tr>';
@@ -144,7 +144,11 @@
     }
 
     function escapeHTML(str) {
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+      return str.replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
     }
   </script>
 </body>
