@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的 KV 数据 - SwCTools</title>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #e8edf2;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      color: #1e4b6e;
+      margin-bottom: 20px;
+    }
+    .container {
+      width: 100%;
+      max-width: 900px;
+      background: white;
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    button {
+      background: #4f7f9e;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 600;
+      margin-bottom: 15px;
+      transition: background 0.15s;
+    }
+    button:hover {
+      background: #3a6b8c;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+      word-break: break-all;
+      font-size: 0.9rem;
+    }
+    th {
+      background: #e7f0f9;
+      color: #1e4b6e;
+      font-weight: 600;
+    }
+    .value-cell {
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      font-family: monospace;
+      display: block;
+    }
+    .message {
+      color: #666;
+      font-style: italic;
+      text-align: center;
+      padding: 20px;
+    }
+    .error {
+      color: #c0392b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h3><a href="index.html">返回主站</a></h3>
+    <h1>我的 KV 数据</h1>
+    <button onclick="loadKV()">刷新数据</button>
+    <table id="kvTable">
+      <thead>
+        <tr>
+          <th style="width: 30%;">键 (Key)</th>
+          <th style="width: 70%;">值 (Value)</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="2" class="message">点击“刷新数据”查看</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    async function loadKV() {
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = '<tr><td colspan="2" class="message">加载中...</td></tr>';
+
+      const token = localStorage.getItem('swc_token');
+      if (!token) {
+        tbody.innerHTML = '<tr><td colspan="2" class="message error">未登录，请先登录。</td></tr>';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/check-kv', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          tbody.innerHTML = `<tr><td colspan="2" class="message error">请求失败：${err.error || res.status}</td></tr>`;
+          return;
+        }
+
+        const data = await res.json();
+        if (!data.items || data.items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="2" class="message">没有属于你的 KV 数据。</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = '';
+        data.items.forEach(item => {
+          const row = tbody.insertRow();
+          const keyCell = row.insertCell();
+          const valCell = row.insertCell();
+
+          keyCell.textContent = item.key;
+          valCell.innerHTML = `<span class="value-cell">${escapeHTML(item.value)}</span>`;
+        });
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="2" class="message error">网络错误，请重试。</td></tr>';
+      }
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
