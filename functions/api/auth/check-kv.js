@@ -1,7 +1,6 @@
 export async function onRequest(context) {
   const { request, env } = context;
 
-  // 只允许 GET 请求
   if (request.method !== 'GET') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
@@ -9,7 +8,6 @@ export async function onRequest(context) {
     });
   }
 
-  // 验证 JWT
   const authHeader = request.headers.get('Authorization')?.split('Bearer ')[1];
   if (!authHeader) {
     return new Response(JSON.stringify({ error: '未登录' }), {
@@ -27,27 +25,26 @@ export async function onRequest(context) {
   }
 
   const username = tokenPayload.sub;
-
-  // 读取该用户的账户信息
-  const userKey = `user:${username}`;
-  const userData = await env.AUTH_KV.get(userKey);
-
   const items = [];
 
+  // 1. 读取用户账户信息
+  const userKey = `user:${username}`;
+  const userData = await env.AUTH_KV.get(userKey);
   if (userData) {
-    items.push({
-      key: userKey,
-      value: userData
-    });
+    items.push({ key: userKey, value: userData });
   }
 
-  // 未来可以扩展读取其他前缀的数据（例如 code:用户名:*）
-  // 但目前仅展示账号相关的核心信息
+  // 2. 列出所有以 code:<用户名>: 开头的键
+  const codePrefix = `code:${username}:`;
+  const codeList = await env.AUTH_KV.list({ prefix: codePrefix });
+  for (const key of codeList.keys) {
+    const value = await env.AUTH_KV.get(key.name);
+    if (value !== null) {
+      items.push({ key: key.name, value });
+    }
+  }
 
-  return new Response(JSON.stringify({
-    username,
-    items
-  }), {
+  return new Response(JSON.stringify({ username, items }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' }
   });
