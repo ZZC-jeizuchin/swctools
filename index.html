@@ -353,7 +353,7 @@
     dev: [{ name: 'GitHub', url: 'https://github.com' },{ name: 'IP.SB', url: 'https://www.ip.sb' },{ name: 'Intel', url: 'https://www.intel.com' },{ name: 'AMD', url: 'https://www.amd.com' },{ name: 'NVIDIA', url: 'https://www.nvidia.com' },{ name: 'Lenovo', url: 'https://www.lenovo.com' },{ name: 'Huawei', url: 'https://www.huawei.com' },{ name: 'Apple', url: 'https://www.apple.com' },{ name: 'Microsoft', url: 'https://www.microsoft.com' },{ name: 'cpp.sh', url: 'https://cpp.sh' },{ name: 'Python (官网)', url: 'https://www.python.org' },{ name: 'Python IDE', url: 'https://www.programiz.com/python-programming/online-compiler/' },{ name: 'Cloudflare', url: 'https://www.cloudflare.com' }],
     other: [{ name: 'MMPan.top', url: 'https://mmpan.top' },{ name: 'CNN Edition', url: 'https://edition.cnn.com' },{ name: 'Poki', url: 'https://poki.com' },{ name: 'Steam', url: 'https://store.steampowered.com' },{ name: 'Slow Roads', url: 'https://slowroads.io' },{ name: 'CopyOS', url: 'https://copy.sh/v86' },{ name: 'GitHub同项目', url: 'https://zzc-jeizuchin.github.io' },{ name: '作者主页', url: 'https://github.com/ZZC-jeizuchin' }]
   };
-  const catNames = { ai:'AI工具', search:'搜索引擎', media:'通信音乐', dev:'开发', other:'其他', login:'登录' };
+  const catNames = { ai:'AI工具', search:'搜索引擎', media:'通信音乐', dev:'开发', other:'其他', login:'未登录' };
   const categories = ['ai','search','media','dev','other','login'];
   const drawerTypes = ['device','ide','stress','base64'];
 
@@ -396,7 +396,7 @@
       loginBtn.textContent = username;
     } else {
       currentUser = null;
-      loginBtn.textContent = '登录';
+      loginBtn.textContent = '未登录';
     }
     loginBtn.style.display = 'inline-block';
   }
@@ -883,23 +883,6 @@
 
   buildModalSlides();
 })();
-</script>
-<script>
-  (function() {
-    const token = localStorage.getItem('swc_token');
-    let needLogin = true;
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) needLogin = true;
-        else needLogin = false;
-      } catch (e) { needLogin = true; }
-    }
-    if (needLogin) {
-      const loginBtn = document.getElementById('loginBtn');
-      if (loginBtn) loginBtn.click();
-    }
-  })();
 </script>
 </body>
 </html>
