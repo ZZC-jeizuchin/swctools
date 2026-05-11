@@ -26,13 +26,13 @@
     }
     [data-theme="dark"] {
       --bg-body: #0a0f14;
-      --text-color: #c0d8f0;
+      --text-color: #d0d8e0;          /* 主文字调亮 */
       --btn-bg: #1e3a5a;
       --btn-border: #2a5a8a;
       --btn-color: #c0d8f0;
       --btn-hover-bg: #2a5a8a;
       --editor-bg: #0d1b2a;
-      --corner-text-color: #7a9ab0;
+      --corner-text-color: #a0b8d0;
       --select-bg: #1e3a5a;
       --panel-border: #1e3a5a;
     }
@@ -58,6 +58,20 @@
       flex-wrap: wrap;
       flex-shrink: 0;
     }
+    .back-btn {
+      text-decoration: none;
+      background: var(--btn-bg);
+      border: 1px solid var(--btn-border);
+      color: var(--btn-color);
+      padding: 3px 12px;
+      border-radius: 14px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      transition: 0.15s;
+      white-space: nowrap;
+      margin-right: 4px;
+    }
+    .back-btn:hover { background: var(--btn-hover-bg); }
     .file-select {
       background: var(--select-bg);
       border: 1px solid var(--btn-border);
@@ -123,32 +137,54 @@
     }
     .CodeMirror-scroll { overflow: auto !important; }
     .CodeMirror-cursor { display: none !important; }
-    [data-theme="dark"] .CodeMirror-linenumber { color: #5c6370; }
+
+    /* 深色主题定制代码高亮（覆盖默认 cm-s-default） */
+    [data-theme="dark"] .cm-s-default .cm-keyword { color: #c89bff; }      /* 浅紫，原来是 #c39bdb */
+    [data-theme="dark"] .cm-s-default .cm-builtin { color: #ff7b7b; }      /* 亮红 */
+    [data-theme="dark"] .cm-s-default .cm-string { color: #a5d6a7; }       /* 浅绿 */
+    [data-theme="dark"] .cm-s-default .cm-number { color: #ffb74d; }       /* 橙 */
+    [data-theme="dark"] .cm-s-default .cm-comment { color: #7a8a9a; }      /* 灰蓝 */
+    [data-theme="dark"] .cm-s-default .cm-variable { color: #d0d8e0; }     /* 亮白 */
+    [data-theme="dark"] .cm-s-default .cm-def { color: #bb86fc; }          /* 函数定义 */
+    [data-theme="dark"] .cm-s-default .cm-operator { color: #89ddff; }     /* 运算符 */
+    [data-theme="dark"] .cm-s-default .cm-meta { color: #f48fb1; }
+    [data-theme="dark"] .cm-s-default .cm-qualifier { color: #bb86fc; }
+    [data-theme="dark"] .cm-s-default .cm-atom { color: #ffb74d; }
+    [data-theme="dark"] .cm-s-default .cm-bracket { color: #89ddff; }
+    [data-theme="dark"] .cm-s-default .cm-tag { color: #ff7b7b; }
+    [data-theme="dark"] .cm-s-default .cm-attribute { color: #ffcb6b; }
+    [data-theme="dark"] .cm-s-default .cm-hr { color: #7a8a9a; }
+    [data-theme="dark"] .cm-s-default .cm-link { color: #82b1ff; }
+    [data-theme="dark"] .cm-s-default .cm-header { color: #82b1ff; }
+
+    [data-theme="dark"] .CodeMirror-linenumber { color: #6a7a8a; }
     [data-theme="dark"] .CodeMirror-gutters {
       background: transparent !important;
       border-right: 1px solid #1e3a5a;
     }
 
+    /* 临时选中行 */
     .temp-active-line {
       background-color: rgba(33, 150, 243, 0.12) !important;
     }
     [data-theme="dark"] .temp-active-line {
-      background-color: rgba(66, 165, 245, 0.15) !important;
+      background-color: rgba(66, 165, 245, 0.18) !important;
     }
 
+    /* 标记行：金黄色背景 + 左侧粗边框 */
     .marked-line {
       background-color: rgba(255, 193, 7, 0.22) !important;
       border-left: 4px solid #ff9800;
     }
     [data-theme="dark"] .marked-line {
-      background-color: rgba(255, 193, 7, 0.18) !important;
+      background-color: rgba(255, 193, 7, 0.2) !important;
       border-left: 4px solid #ffb74d;
     }
     .marked-line.temp-active-line {
       background-color: rgba(255, 152, 0, 0.28) !important;
     }
     [data-theme="dark"] .marked-line.temp-active-line {
-      background-color: rgba(255, 183, 77, 0.25) !important;
+      background-color: rgba(255, 183, 77, 0.3) !important;
     }
 
     .empty-message {
@@ -176,6 +212,7 @@
 <body>
 
 <div class="top-bar">
+  <a href="index.html" class="back-btn">← 返回主站</a>
   <select class="file-select" id="fileSelect">
     <option value="">-- 选择文件 --</option>
   </select>
@@ -197,7 +234,7 @@
 
 <script>
   (function() {
-    // ======================== 主题 ========================
+    // 主题
     const themeToggle = document.getElementById('themeToggle');
     const currentTheme = localStorage.getItem('swc_theme') || 'light';
     document.documentElement.setAttribute('data-theme', currentTheme);
@@ -212,7 +249,7 @@
       applyTempLine();
     });
 
-    // ======================== 编辑器 (nocursor 彻底无光标) ========================
+    // 编辑器 (nocursor)
     const textarea = document.getElementById('codeView');
     const readerContainer = document.getElementById('readerContainer');
     const emptyMsg = document.getElementById('emptyMessage');
@@ -235,7 +272,7 @@
     window.addEventListener('resize', resizeEditor);
     setTimeout(resizeEditor, 50);
 
-    // ======================== 字号 ========================
+    // 字号
     const fontSizeLabel = document.getElementById('fontSizeLabel');
     let currentFontSize = 15;
     function updateFontSize(delta) {
@@ -247,19 +284,14 @@
     document.getElementById('increaseFont').addEventListener('click', () => updateFontSize(1));
     document.getElementById('decreaseFont').addEventListener('click', () => updateFontSize(-1));
 
-    // ======================== 行标记 (持久化) ========================
+    // 标记功能 (持久化)
     const MARKED_CLASS = 'marked-line';
     const TEMP_CLASS = 'temp-active-line';
     const markedLines = new Set();
     let currentLine = null;
-    let currentFileKey = null; // 用于标记存储的键
+    let currentFileKey = null;
 
-    // 获取当前文件的标记存储键
-    function getMarksKey(filename) {
-      return `swc_read_marks_${filename}`;
-    }
-
-    // 从 localStorage 加载标记行
+    function getMarksKey(filename) { return `swc_read_marks_${filename}`; }
     function loadMarks(filename) {
       const key = getMarksKey(filename);
       const raw = localStorage.getItem(key);
@@ -270,8 +302,6 @@
         } catch (e) {}
       }
     }
-
-    // 保存当前文件的标记行到 localStorage
     function saveMarks() {
       if (!currentFileKey) return;
       const key = getMarksKey(currentFileKey);
@@ -279,90 +309,64 @@
       localStorage.setItem(key, JSON.stringify(arr));
     }
 
-    // 标记/取消标记当前行
     function markLine(line) {
       if (markedLines.has(line)) {
         markedLines.delete(line);
         editor.removeLineClass(line, 'background', MARKED_CLASS);
-        updateMarkIndicator();
-        saveMarks();
       } else {
         markedLines.add(line);
         editor.addLineClass(line, 'background', MARKED_CLASS);
-        updateMarkIndicator();
-        saveMarks();
       }
+      updateMarkIndicator();
+      saveMarks();
     }
 
     function applyAllMarks() {
-      markedLines.forEach(line => {
-        editor.addLineClass(line, 'background', MARKED_CLASS);
-      });
+      markedLines.forEach(line => editor.addLineClass(line, 'background', MARKED_CLASS));
     }
-
     function applyTempLine() {
       if (currentLine !== null && currentLine >= 0 && currentLine < editor.lineCount()) {
         editor.addLineClass(currentLine, 'background', TEMP_CLASS);
       }
     }
-
     function setTempLine(line) {
-      if (currentLine !== null && currentLine >= 0) {
-        editor.removeLineClass(currentLine, 'background', TEMP_CLASS);
-      }
+      if (currentLine !== null && currentLine >= 0) editor.removeLineClass(currentLine, 'background', TEMP_CLASS);
       currentLine = line;
-      if (line >= 0 && line < editor.lineCount()) {
-        editor.addLineClass(line, 'background', TEMP_CLASS);
-      }
+      if (line >= 0 && line < editor.lineCount()) editor.addLineClass(line, 'background', TEMP_CLASS);
     }
-
     function clearAllTemp() {
-      if (currentLine !== null && currentLine >= 0) {
-        editor.removeLineClass(currentLine, 'background', TEMP_CLASS);
-      }
+      if (currentLine !== null && currentLine >= 0) editor.removeLineClass(currentLine, 'background', TEMP_CLASS);
       currentLine = null;
     }
-
     function updateMarkIndicator() {
       const el = document.getElementById('markIndicator');
       const count = markedLines.size;
       el.textContent = count > 0 ? `已标记 ${count} 行` : '';
     }
 
-    // 点击代码区域 → 选中行（临时高亮）
     editor.on('mousedown', (cm, e) => {
       if (e.target && e.target.closest('.CodeMirror-gutter')) return;
       const pos = cm.coordsChar({ left: e.clientX, top: e.clientY });
-      if (pos && pos.line >= 0) {
-        setTempLine(pos.line);
-      }
+      if (pos && pos.line >= 0) setTempLine(pos.line);
     });
-
     editor.on('touchstart', (cm, e) => {
       if (e.target && e.target.closest('.CodeMirror-gutter')) return;
       const touch = e.touches[0];
       if (!touch) return;
       const pos = cm.coordsChar({ left: touch.clientX, top: touch.clientY });
-      if (pos && pos.line >= 0) {
-        setTempLine(pos.line);
-      }
+      if (pos && pos.line >= 0) setTempLine(pos.line);
     });
-
-    // 点击行号 → 直接标记
     editor.on('gutterClick', (cm, line) => {
       if (line >= 0) {
         setTempLine(line);
         markLine(line);
       }
     });
-
     document.getElementById('markLineBtn').addEventListener('click', () => {
-      if (currentLine !== null && currentLine >= 0) {
-        markLine(currentLine);
-      }
+      if (currentLine !== null && currentLine >= 0) markLine(currentLine);
     });
 
-    // ======================== 文件列表与持久化打开 ========================
+    // 文件列表与持久化
     const FILE_LISTS = { cpp: 'swc_filelist_cpp', py: 'swc_filelist_py' };
     const FILE_PREFIXES = { cpp: 'swc_file_cpp_', py: 'swc_file_py_' };
     const LAST_FILE_KEY = 'swc_read_lastfile';
@@ -400,27 +404,18 @@
 
     function loadFile(prefix, name, lang) {
       const content = localStorage.getItem(prefix + name) || '';
-      // 保存当前文件的标记（如果之前有文件）
-      if (currentFileKey) {
-        saveMarks();
-      }
+      if (currentFileKey) saveMarks();
       clearAllState();
       editor.setValue(content);
       editor.setOption('mode', (lang === 'py') ? 'python' : 'text/x-c++src');
       currentFileName.textContent = name;
       emptyMsg.style.display = 'none';
-
-      // 设置当前文件标识
       currentFileKey = name;
-      // 加载该文件的标记
       loadMarks(name);
       applyAllMarks();
       updateMarkIndicator();
       resizeEditor();
-
-      // 保存最后打开的文件
-      const fileInfo = { prefix, name, lang };
-      localStorage.setItem(LAST_FILE_KEY, JSON.stringify(fileInfo));
+      localStorage.setItem(LAST_FILE_KEY, JSON.stringify({ prefix, name, lang }));
     }
 
     fileSelect.addEventListener('change', (e) => {
@@ -438,22 +433,17 @@
       try {
         const { prefix, name, lang } = JSON.parse(val);
         loadFile(prefix, name, lang);
-      } catch (err) {
-        console.error(err);
-      }
+      } catch (err) { console.error(err); }
     });
 
-    // 尝试恢复上次打开的文件
     function restoreLastFile() {
       const raw = localStorage.getItem(LAST_FILE_KEY);
       if (!raw) return;
       try {
         const fileInfo = JSON.parse(raw);
         const { prefix, name, lang } = fileInfo;
-        // 检查文件是否还存在
         const content = localStorage.getItem(prefix + name);
         if (content !== null) {
-          // 设置下拉框选中项
           const optionValue = JSON.stringify({ prefix, name, lang });
           for (let i = 0; i < fileSelect.options.length; i++) {
             if (fileSelect.options[i].value === optionValue) {
@@ -461,7 +451,6 @@
               break;
             }
           }
-          // 直接加载内容
           loadFile(prefix, name, lang);
         } else {
           localStorage.removeItem(LAST_FILE_KEY);
@@ -472,7 +461,6 @@
     refreshFileList();
     restoreLastFile();
 
-    // 页面关闭前保存标记（虽然已经在操作时保存，再保一次）
     window.addEventListener('beforeunload', () => {
       if (currentFileKey) saveMarks();
     });
