@@ -11,6 +11,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
   <link rel="stylesheet" href="swc-ide.css">
+  <style>
+    /* 文件管理专用样式已包含在 swc-ide.css 中，无需额外添加 */
+  </style>
 </head>
 <body>
 <div class="corner-tl">不自由毋宁死 · 不自由毋寧死 · Give me liberty or give me death · 自由か、死か</div>
@@ -29,9 +32,9 @@
     <button class="file-btn" id="saveAsBtn">另存为…</button>
     <button class="file-btn" id="saveCurrentBtn">保存当前</button>
     <input type="file" id="diskFileInput" accept=".cpp,.h,.hpp,.c,.txt" style="display:none;">
-    <button class="file-btn" id="diskOpenBtn">📂 打开本地文件</button>
-    <button class="file-btn" id="uploadCloudBtn" title="需先登录">☁️ 上传所有本地文件</button>
-    <button class="file-btn" id="downloadCloudBtn" title="需先登录">⬇️ 下载云端文件</button>
+    <button class="file-btn" id="diskOpenBtn">打开本地文件</button>
+    <button class="file-btn" id="uploadCloudBtn" title="需先登录">上传所有本地文件</button>
+    <button class="file-btn" id="downloadCloudBtn" title="需先登录">下载云端文件</button>
     <span class="current-file" id="currentFileName">未命名</span>
   </div>
 
@@ -68,6 +71,7 @@
   <div class="action-bar">
     <button class="nav-btn" id="compileBtn" disabled>编译代码</button>
     <button class="nav-btn" id="runBtn" disabled>运行</button>
+    <button class="nav-btn secondary" id="copyOutputBtn" title="复制全部输出内容">复制输出</button>
     <button class="nav-btn secondary" id="saveBtn">保存当前代码</button>
     <button class="nav-btn secondary" id="resetBtn">重置为默认</button>
     <button class="nav-btn danger" id="stopBtn" style="display:none;">终止运行</button>
@@ -204,6 +208,7 @@ int main() {
     const stdinContainer = document.getElementById('stdinContainer');
     const stdinData = document.getElementById('stdinData');
     const optLevelSelect = document.getElementById('optLevel');
+    const copyOutputBtn = document.getElementById('copyOutputBtn');
 
     document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
       const target = t.dataset.tab;
@@ -455,6 +460,28 @@ int main() {
       isProgrammaticScroll = false;
     }
 
+    // ======================== 复制全部输出 ========================
+    function copyAllOutput() {
+      if (outputLines.length === 0) {
+        log('输出区没有内容可复制', true);
+        return;
+      }
+      const text = outputLines.join('\n');
+      navigator.clipboard.writeText(text).then(() => {
+        log('✅ 已复制全部输出到剪贴板');
+      }).catch(() => {
+        // 降级方案：创建临时textarea
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        log('✅ 已复制全部输出（降级方式）');
+      });
+    }
+    copyOutputBtn.addEventListener('click', copyAllOutput);
+
     logReady = true; flushLogs();
 
     // ======================== Service Worker ========================
@@ -637,7 +664,7 @@ int main() {
     saveBtn.addEventListener('click', saveCode);
     resetBtn.addEventListener('click', resetCode);
 
-    // ======================== 云端全量同步 ========================
+    // ======================== 云端同步（无表情版本） ========================
     const CODE_TYPE = 'cpp';
     const UPLOAD_BTN = document.getElementById('uploadCloudBtn');
     const DOWNLOAD_BTN = document.getElementById('downloadCloudBtn');
