@@ -276,7 +276,7 @@
     const fontSizeLabel = document.getElementById('fontSizeLabel');
     let currentFontSize = 15;
     function updateFontSize(delta) {
-      currentFontSize = Math.max(10, Math.min(24, currentFontSize + delta));
+      currentFontSize = Math.max(6, Math.min(24, currentFontSize + delta));
       document.querySelector('.CodeMirror').style.fontSize = currentFontSize + 'px';
       fontSizeLabel.textContent = currentFontSize;
       resizeEditor();
