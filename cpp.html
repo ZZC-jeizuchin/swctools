@@ -12,7 +12,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
   <link rel="stylesheet" href="swc-ide.css">
   <style>
-    /* 文件管理专用样式已包含在 swc-ide.css 中，此处无需额外添加 */
+    /* 确保编辑器最小高度为 400px */
+    .editor-container { min-height: 400px !important; }
   </style>
 </head>
 <body>
@@ -24,7 +25,7 @@
 <div class="main-panel">
   <div class="header"><h1>SwC IDE · C++ 版</h1><a href="index.html" class="back-btn">← 返回主站</a></div>
 
-  <!-- 文件管理 + 云端同步工具栏 -->
+  <!-- 文件管理 + 云端同步工具栏（无表情符号） -->
   <div class="file-area" id="fileArea">
     <select class="file-select" id="localFileSelect"><option value="">-- 本地存储文件 --</option></select>
     <button class="file-btn" id="localOpenBtn" disabled>打开</button>
@@ -73,6 +74,7 @@
     <button class="nav-btn" id="runBtn" disabled>运行</button>
     <button class="nav-btn secondary" id="copyOutputBtn" title="仅复制程序输出，不含系统信息">复制输出</button>
     <button class="nav-btn secondary" id="saveBtn">保存当前代码</button>
+    <!-- 重置为默认按钮已被安全移除，下方无实际按钮，但 JS 会安全检查 -->
     <button class="nav-btn danger" id="stopBtn" style="display:none;">终止运行</button>
     <span class="status" id="statusMsg">准备中…</span>
   </div>
@@ -201,7 +203,7 @@ int main() {
     const compileBtn = document.getElementById('compileBtn');
     const runBtn = document.getElementById('runBtn');
     const saveBtn = document.getElementById('saveBtn');
-    const resetBtn = document.getElementById('resetBtn');
+    const resetBtn = document.getElementById('resetBtn'); // 可能不存在，后续需安全处理
     const stopBtn = document.getElementById('stopBtn');
     const statusMsg = document.getElementById('statusMsg');
     const stdinContainer = document.getElementById('stdinContainer');
@@ -385,11 +387,17 @@ int main() {
         setTimeout(() => { statusMsg.textContent = workerReady ? `C++ (Clang -${currentOptLevel.value})` : '准备中…'; }, 1500); }
       catch { statusMsg.textContent = '保存失败'; }
     }
+    // 重置功能保留但安全绑定
     function resetCode() {
       editor.setValue(DEFAULT_CODE); resetOutput();
       compileBtn.disabled = !workerReady; runBtn.disabled = true; saveCode(); statusMsg.textContent = '已重置';
       setTimeout(() => { statusMsg.textContent = workerReady ? `C++ (Clang -${currentOptLevel.value})` : '准备中…'; }, 1500);
     }
+    // 安全绑定 resetBtn
+    if (resetBtn) {
+      resetBtn.addEventListener('click', resetCode);
+    }
+
     editor.on('change', () => {
       clearTimeout(window._saveTimer);
       window._saveTimer = setTimeout(saveCode, 800);
@@ -405,7 +413,7 @@ int main() {
     // ======================== 虚拟滚动 + 用户输出分离 ========================
     const LINE_HEIGHT = 21;
     const outputLines = [];
-    const userOutputLines = [];   // 仅存储程序 stdout/stderr 的内容
+    const userOutputLines = [];
     let userScrolledUp = false, needsRender = false, pendingScrollBottom = false, renderRaf = null, isProgrammaticScroll = false;
 
     function appendOutput(line) {
@@ -415,7 +423,6 @@ int main() {
       scheduleRender();
     }
     function appendUserOutput(line) {
-      // 同时添加到总输出和用户输出
       outputLines.push(line);
       userOutputLines.push(line);
       outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
@@ -470,7 +477,7 @@ int main() {
       isProgrammaticScroll = false;
     }
 
-    // ======================== 复制输出（仅程序输出） ========================
+    // 复制程序输出
     function copyAllOutput() {
       if (userOutputLines.length === 0) {
         log('输出区没有程序输出可复制', true);
@@ -478,7 +485,7 @@ int main() {
       }
       const text = userOutputLines.join('\n');
       navigator.clipboard.writeText(text).then(() => {
-        log('✅ 已复制程序输出到剪贴板');
+        log('已复制程序输出到剪贴板');
       }).catch(() => {
         const ta = document.createElement('textarea');
         ta.value = text;
@@ -486,7 +493,7 @@ int main() {
         ta.select();
         document.execCommand('copy');
         document.body.removeChild(ta);
-        log('✅ 已复制程序输出（降级方式）');
+        log('已复制程序输出（降级方式）');
       });
     }
     copyOutputBtn.addEventListener('click', copyAllOutput);
@@ -571,7 +578,7 @@ int main() {
           workerReady = true; isInitializing = false;
           compileBtn.disabled = false; runBtn.disabled = true;
           statusMsg.textContent = `C++ (Clang -${currentOptLevel.value})`;
-          log('✅ 编译器就绪，可以编译和运行 C++ 代码');
+          log('编译器就绪，支持 C++11/14/17/20 及优化级别选择');
           break;
         case 'status': resetOutput(); appendOutput(msg.text); break;
         case 'compileDone':
@@ -583,12 +590,8 @@ int main() {
           statusMsg.textContent = `C++ (Clang -${currentOptLevel.value}) - 已编译`;
           break;
         case 'compileError': appendOutput('编译失败，请检查代码。'); compileBtn.disabled = false; runBtn.disabled = true; compiling = false; statusMsg.textContent = `C++ (Clang -${currentOptLevel.value}) - 编译失败`; break;
-        case 'stdout':
-          appendUserOutput(msg.text);   // 程序输出
-          break;
-        case 'stderr':
-          appendUserOutput(msg.text);   // 程序错误输出也视为程序输出
-          break;
+        case 'stdout': appendUserOutput(msg.text); break;
+        case 'stderr': appendUserOutput(msg.text); break;
         case 'runDone': {
           const { exitCode, instantiateTime, execTime, totalRunTime, memDelta } = msg;
           const perceived = performance.now() - runStartTime;
@@ -681,9 +684,9 @@ int main() {
       requestAnimationFrame(() => worker.postMessage({ type: 'run', code, stdinStr: stdinData.value, optLevel: currentOptLevel.value }));
     });
     saveBtn.addEventListener('click', saveCode);
-    resetBtn.addEventListener('click', resetCode);
+    // resetBtn 的绑定已在前面安全处理，此处不再单独调用
 
-    // ======================== 云端同步（无表情版本） ========================
+    // ======================== 云端同步 ========================
     const CODE_TYPE = 'cpp';
     const UPLOAD_BTN = document.getElementById('uploadCloudBtn');
     const DOWNLOAD_BTN = document.getElementById('downloadCloudBtn');
@@ -718,12 +721,12 @@ int main() {
 
     UPLOAD_BTN.addEventListener('click', async () => {
       const token = getToken();
-      if (!token) { log('❌ 请先登录', true); return; }
+      if (!token) { log('请先登录', true); return; }
 
       const files = {};
       const fileList = getFileList();
       if (fileList.length === 0) {
-        log('❌ 本地没有可上传的文件', true);
+        log('本地没有可上传的文件', true);
         return;
       }
       for (const fname of fileList) {
@@ -736,7 +739,7 @@ int main() {
       try {
         UPLOAD_BTN.disabled = true;
         DOWNLOAD_BTN.disabled = true;
-        log(`☁️ 正在上传 ${fileList.length} 个文件...`);
+        log(`正在上传 ${fileList.length} 个文件...`);
         const resp = await fetch('/api/code/save', {
           method: 'POST',
           headers: {
@@ -748,18 +751,18 @@ int main() {
         if (resp.status === 401) {
           localStorage.removeItem('swc_token');
           updateCloudButtons();
-          log('❌ 登录已过期，请重新登录', true);
+          log('登录已过期，请重新登录', true);
           return;
         }
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
-          log(`❌ 上传失败: ${err.error || resp.statusText}`, true);
+          log(`上传失败: ${err.error || resp.statusText}`, true);
           return;
         }
         const result = await resp.json();
-        log(`✅ 已上传 ${result.count} 个文件至云端`);
+        log(`已上传 ${result.count} 个文件至云端`);
       } catch (e) {
-        log('❌ 网络错误，上传失败', true);
+        log('网络错误，上传失败', true);
       } finally {
         updateCloudButtons();
       }
@@ -767,24 +770,24 @@ int main() {
 
     DOWNLOAD_BTN.addEventListener('click', async () => {
       const token = getToken();
-      if (!token) { log('❌ 请先登录', true); return; }
+      if (!token) { log('请先登录', true); return; }
 
       try {
         UPLOAD_BTN.disabled = true;
         DOWNLOAD_BTN.disabled = true;
-        log('⬇️ 正在获取云端文件列表...');
+        log('正在获取云端文件列表...');
         const resp = await fetch(`/api/code/load?type=${CODE_TYPE}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.status === 401) {
           localStorage.removeItem('swc_token');
           updateCloudButtons();
-          log('❌ 登录已过期，请重新登录', true);
+          log('登录已过期，请重新登录', true);
           return;
         }
         const data = await resp.json();
         if (!data.files || Object.keys(data.files).length === 0) {
-          log('📭 云端暂无文件');
+          log('云端暂无文件');
           return;
         }
         const cloudFiles = data.files;
@@ -793,7 +796,7 @@ int main() {
           log('已取消下载');
           return;
         }
-        log(`⬇️ 正在同步 ${cloudCount} 个文件...`);
+        log(`正在同步 ${cloudCount} 个文件...`);
         const existingFiles = getFileList();
         for (const fname of Object.keys(cloudFiles)) {
           localStorage.setItem(FILE_PREFIX + fname, cloudFiles[fname]);
@@ -803,9 +806,9 @@ int main() {
         }
         saveFileList(existingFiles);
         refreshFileSelect();
-        log(`✅ 云端 ${cloudCount} 个文件已同步到本地`);
+        log(`云端 ${cloudCount} 个文件已同步到本地`);
       } catch (e) {
-        log('❌ 网络错误，下载失败', true);
+        log('网络错误，下载失败', true);
       } finally {
         updateCloudButtons();
       }
