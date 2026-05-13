@@ -11,6 +11,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
   <link rel="stylesheet" href="swc-ide.css">
+  <style>
+    .editor-container { min-height: 400px !important; }
+  </style>
 </head>
 <body>
 <div class="corner-tl">不自由毋宁死 · 不自由毋寧死 · Give me liberty or give me death · 自由か、死か</div>
@@ -21,7 +24,6 @@
 <div class="main-panel">
   <div class="header"><h1>SwC IDE · Python 版</h1><a href="index.html" class="back-btn">← 返回主站</a></div>
 
-  <!-- 文件管理 + 云端同步工具栏 -->
   <div class="file-area" id="fileArea">
     <select class="file-select" id="localFileSelect"><option value="">-- 本地存储文件 --</option></select>
     <button class="file-btn" id="localOpenBtn" disabled>打开</button>
@@ -59,6 +61,7 @@
   <div class="action-bar">
     <button class="nav-btn" id="runBtn" disabled>运行代码</button>
     <button class="nav-btn secondary" id="saveBtn">保存当前代码</button>
+    <!-- 重置为默认按钮已安全移除 -->
     <button class="nav-btn danger" id="stopBtn" style="display:none;">终止运行</button>
     <span class="status" id="statusMsg">准备中…</span>
   </div>
@@ -189,7 +192,7 @@ print("Done.")
   const outputContainer = document.getElementById('outputContainer');
   const runBtn = document.getElementById('runBtn');
   const saveBtn = document.getElementById('saveBtn');
-  const resetBtn = document.getElementById('resetBtn');
+  const resetBtn = document.getElementById('resetBtn'); // 可能不存在
   const stopBtn = document.getElementById('stopBtn');
   const statusMsg = document.getElementById('statusMsg');
   const stdinContainer = document.getElementById('stdinContainer');
@@ -376,6 +379,11 @@ print("Done.")
     saveCode(); statusMsg.textContent = '已重置';
     setTimeout(() => { statusMsg.textContent = workerReady ? 'Python 就绪' : '准备中…'; }, 1500);
   }
+  // 安全绑定重置按钮
+  if (resetBtn) {
+    resetBtn.addEventListener('click', resetCode);
+  }
+
   editor.on('change', () => {
     clearTimeout(window._saveTimer);
     window._saveTimer = setTimeout(saveCode, 800);
@@ -485,7 +493,7 @@ print("Done.")
     } catch (err) { log(`清除缓存失败: ${err.message}`, true); }
   }
 
-  // Worker 管理 (关键修改)
+  // Worker 管理 (含自动加载第三方库)
   let worker = null, workerReady = false, running = false, runStartTime = 0;
   let initTimer = null, isInitializing = false;
 
@@ -511,7 +519,7 @@ print("Done.")
         inputIndex = 0;
         await self.pyodide.runPythonAsync('import builtins\\nkeep = {"__builtins__","__name__","__doc__","__package__","__loader__","__spec__"}\\nfor key in list(globals().keys()):\\n    if key not in keep and not key.startswith("_"):\\n        try: del globals()[key]\\n        except: pass');
         try {
-          // ★ 关键：自动加载代码中 import 的第三方库
+          // 自动加载第三方库
           await self.pyodide.loadPackagesFromImports(code);
           await self.pyodide.runPythonAsync(code);
           self.postMessage({ type:'done' });
@@ -537,7 +545,7 @@ print("Done.")
       case 'ready':
         workerReady = true; isInitializing = false;
         runBtn.disabled = false; statusMsg.textContent = 'Python 就绪';
-        log('✅ Python 环境就绪');
+        log('Python 环境就绪');
         break;
       case 'stdout': case 'stderr': feedOutput(msg.text); break;
       case 'done':
@@ -622,17 +630,14 @@ print("Done.")
   });
 
   saveBtn.addEventListener('click', saveCode);
-  resetBtn.addEventListener('click', resetCode);
+  // 重置按钮已安全处理，不再额外调用
 
-  // 云端同步（保持不变）
+  // 云端同步 (无表情)
   const CODE_TYPE = 'py';
   const UPLOAD_BTN = document.getElementById('uploadCloudBtn');
   const DOWNLOAD_BTN = document.getElementById('downloadCloudBtn');
 
-  function getToken() {
-    return localStorage.getItem('swc_token') || '';
-  }
-
+  function getToken() { return localStorage.getItem('swc_token') || ''; }
   function tokenIsValid() {
     const token = getToken();
     if (!token) return false;
@@ -641,7 +646,6 @@ print("Done.")
       return payload.exp * 1000 > Date.now();
     } catch { return false; }
   }
-
   function updateCloudButtons() {
     const loggedIn = tokenIsValid();
     UPLOAD_BTN.disabled = !loggedIn;
@@ -654,102 +658,57 @@ print("Done.")
       DOWNLOAD_BTN.title = '从云端下载并覆盖/创建本地文件';
     }
   }
-
   updateCloudButtons();
 
   UPLOAD_BTN.addEventListener('click', async () => {
     const token = getToken();
-    if (!token) { log('❌ 请先登录', true); return; }
-
+    if (!token) { log('请先登录', true); return; }
     const files = {};
     const fileList = getFileList();
-    if (fileList.length === 0) {
-      log('❌ 本地没有可上传的文件', true);
-      return;
-    }
+    if (fileList.length === 0) { log('本地没有可上传的文件', true); return; }
     for (const fname of fileList) {
       const content = localStorage.getItem(FILE_PREFIX + fname);
-      if (typeof content === 'string') {
-        files[fname] = content;
-      }
+      if (typeof content === 'string') files[fname] = content;
     }
-
     try {
-      UPLOAD_BTN.disabled = true;
-      DOWNLOAD_BTN.disabled = true;
-      log(`☁️ 正在上传 ${fileList.length} 个文件...`);
+      UPLOAD_BTN.disabled = true; DOWNLOAD_BTN.disabled = true;
+      log(`正在上传 ${fileList.length} 个文件...`);
       const resp = await fetch('/api/code/save', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ type: CODE_TYPE, files })
       });
-      if (resp.status === 401) {
-        localStorage.removeItem('swc_token');
-        updateCloudButtons();
-        log('❌ 登录已过期，请重新登录', true);
-        return;
-      }
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        log(`❌ 上传失败: ${err.error || resp.statusText}`, true);
-        return;
-      }
+      if (resp.status === 401) { localStorage.removeItem('swc_token'); updateCloudButtons(); log('登录已过期，请重新登录', true); return; }
+      if (!resp.ok) { const err = await resp.json().catch(() => ({})); log(`上传失败: ${err.error || resp.statusText}`, true); return; }
       const result = await resp.json();
-      log(`✅ 已上传 ${result.count} 个文件至云端`);
-    } catch (e) {
-      log('❌ 网络错误，上传失败', true);
-    } finally {
-      updateCloudButtons();
-    }
+      log(`已上传 ${result.count} 个文件至云端`);
+    } catch (e) { log('网络错误，上传失败', true); }
+    finally { updateCloudButtons(); }
   });
 
   DOWNLOAD_BTN.addEventListener('click', async () => {
     const token = getToken();
-    if (!token) { log('❌ 请先登录', true); return; }
-
+    if (!token) { log('请先登录', true); return; }
     try {
-      UPLOAD_BTN.disabled = true;
-      DOWNLOAD_BTN.disabled = true;
-      log('⬇️ 正在获取云端文件列表...');
-      const resp = await fetch(`/api/code/load?type=${CODE_TYPE}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (resp.status === 401) {
-        localStorage.removeItem('swc_token');
-        updateCloudButtons();
-        log('❌ 登录已过期，请重新登录', true);
-        return;
-      }
+      UPLOAD_BTN.disabled = true; DOWNLOAD_BTN.disabled = true;
+      log('正在获取云端文件列表...');
+      const resp = await fetch(`/api/code/load?type=${CODE_TYPE}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (resp.status === 401) { localStorage.removeItem('swc_token'); updateCloudButtons(); log('登录已过期，请重新登录', true); return; }
       const data = await resp.json();
-      if (!data.files || Object.keys(data.files).length === 0) {
-        log('📭 云端暂无文件');
-        return;
-      }
+      if (!data.files || Object.keys(data.files).length === 0) { log('云端暂无文件'); return; }
       const cloudFiles = data.files;
       const cloudCount = Object.keys(cloudFiles).length;
-      if (!confirm(`云端包含 ${cloudCount} 个文件，下载将覆盖本地同名文件并创建新文件，继续？`)) {
-        log('已取消下载');
-        return;
-      }
-      log(`⬇️ 正在同步 ${cloudCount} 个文件...`);
+      if (!confirm(`云端包含 ${cloudCount} 个文件，下载将覆盖本地同名文件并创建新文件，继续？`)) { log('已取消下载'); return; }
+      log(`正在同步 ${cloudCount} 个文件...`);
       const existingFiles = getFileList();
       for (const fname of Object.keys(cloudFiles)) {
         localStorage.setItem(FILE_PREFIX + fname, cloudFiles[fname]);
-        if (!existingFiles.includes(fname)) {
-          existingFiles.push(fname);
-        }
+        if (!existingFiles.includes(fname)) existingFiles.push(fname);
       }
-      saveFileList(existingFiles);
-      refreshFileSelect();
-      log(`✅ 云端 ${cloudCount} 个文件已同步到本地`);
-    } catch (e) {
-      log('❌ 网络错误，下载失败', true);
-    } finally {
-      updateCloudButtons();
-    }
+      saveFileList(existingFiles); refreshFileSelect();
+      log(`云端 ${cloudCount} 个文件已同步到本地`);
+    } catch (e) { log('网络错误，下载失败', true); }
+    finally { updateCloudButtons(); }
   });
 
   window.addEventListener('storage', updateCloudButtons);
