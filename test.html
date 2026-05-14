@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>打开系统默认浏览器</title>
+    <style>
+        button { font-size: 20px; padding: 12px 24px; }
+        #status { margin-top: 16px; color: #555; }
+    </style>
+</head>
+<body>
+
+<button id="openBtn">在系统默认浏览器中打开 www.seewo.com</button>
+<p id="status"></p>
+
+<script>
+    const TARGET_URL = 'https://www.seewo.com';
+    const openBtn = document.getElementById('openBtn');
+    const statusDiv = document.getElementById('status');
+
+    openBtn.addEventListener('click', function() {
+        statusDiv.innerText = '尝试启动系统浏览器...';
+
+        // 1. 构造 intent URL（不指定 package，让系统选择默认浏览器）
+        // 格式：intent://host#Intent;scheme=https;S.browser_fallback_url=...;end
+        const host = TARGET_URL.replace(/^https?:\/\//, '');
+        const fallback = encodeURIComponent(TARGET_URL);
+        const intentUrl = `intent://${host}#Intent;scheme=https;S.browser_fallback_url=${fallback};end`;
+
+        // 2. 设置降级：2.5秒后如果还停留在此页面，则直接在当前浏览器打开
+        let hasLeft = false;
+        const timeoutId = setTimeout(() => {
+            if (!hasLeft) {
+                statusDiv.innerText = 'intent 未生效，已在当前浏览器打开';
+                window.location.href = TARGET_URL;
+            }
+        }, 2500);
+
+        // 3. 监听窗口失焦（切换到其他应用则说明 intent 成功）
+        const onBlur = () => {
+            hasLeft = true;
+            clearTimeout(timeoutId);
+            statusDiv.innerText = '已成功切换到系统浏览器';
+            window.removeEventListener('blur', onBlur);
+            window.removeEventListener('pagehide', onBlur);
+        };
+        window.addEventListener('blur', onBlur);
+        window.addEventListener('pagehide', onBlur);
+
+        // 4. 执行跳转
+        window.location.href = intentUrl;
+    });
+</script>
+
+</body>
+</html>
