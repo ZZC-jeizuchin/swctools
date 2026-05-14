@@ -677,7 +677,7 @@
   let currentDrawerIndex = 0, drawerStartX = 0, drawerCurrentX = 0, drawerStartY = 0, drawerCurrentY = 0, isDrawerDragging = false;
   let cachedDrawerPanelWidth = 0;
   let isVerticalDrag = false;
-  const drawerTitles = { device: '设备信息', ide: 'SwCIDE', stress: '压力测试', base64: 'Base64编译' };
+  const drawerTitles = { device: '设备信息', ide: 'SwCIDE', stress: '压力测试', base64: '翻译&编译' };
   const drawerRendered = { device: false, ide: false, stress: false, base64: false };
 
   function closeDrawer() { drawerOverlay.classList.remove('show'); document.body.style.overflow = ''; }
@@ -870,7 +870,7 @@
     for (let row = 0; row < 32; row++) { html += '<tr>'; for (let col = 0; col < 4; col++) { const code = col * 32 + row; html += `<td>${charToDisplay(code)}</td><td>${singleByteBase64(code)}</td>`; } html += '</tr>'; }
     html += '</tbody></table></div>'; return html;
   }
-  function renderBase64() { document.getElementById('drawer-base64').innerHTML = `<button class="nav-btn" onclick="location.href='tb64.html'">完整Base64编译</button>${buildBase64Table()}`; }
+  function renderBase64() { document.getElementById('drawer-base64').innerHTML = `<button class="nav-btn" onclick="location.href='translation.html'">文本翻译</button><button class="nav-btn" onclick="location.href='tb64.html'">完整Base64编译</button>${buildBase64Table()}`; }
 
   (function() {
     const titleH1 = document.querySelector('.title-section h1'), badgeEl = document.querySelector('.badge');
