@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <title>在线翻译 - SwCTools</title>
   <style>
-    /* 亮色主题变量 */
     :root {
       --bg-body: #e8edf2;
       --panel-bg: rgba(255, 255, 255, 0.9);
@@ -19,9 +18,10 @@
       --theme-btn-bg: #d9e8f4;
       --theme-btn-border: #adc7e0;
       --theme-btn-text: #1a4059;
+      --clear-btn-bg: #e0e7ef;
+      --clear-btn-hover: #c8d4e2;
     }
 
-    /* 暗色主题变量 */
     [data-theme="dark"] {
       --bg-body: #0a0f14;
       --panel-bg: rgba(13, 27, 42, 0.9);
@@ -35,6 +35,8 @@
       --theme-btn-bg: #1e3a5a;
       --theme-btn-border: #2a5a8a;
       --theme-btn-text: #c0d8f0;
+      --clear-btn-bg: #1a2a3a;
+      --clear-btn-hover: #253545;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; }
@@ -124,9 +126,7 @@
       transition: transform 0.15s;
     }
 
-    .swap-btn:hover {
-      transform: scale(1.2);
-    }
+    .swap-btn:hover { transform: scale(1.2); }
 
     .translation-boxes {
       display: flex;
@@ -168,10 +168,6 @@
       box-shadow: 0 0 0 3px rgba(79, 127, 163, 0.2);
     }
 
-    #outputText {
-      background: var(--panel-bg);
-    }
-
     .action-row {
       display: flex;
       align-items: center;
@@ -180,7 +176,7 @@
       flex-wrap: wrap;
     }
 
-    .translate-btn, .back-btn {
+    .translate-btn, .back-btn, .clear-btn {
       padding: 12px 28px;
       border-radius: 48px;
       font-weight: 600;
@@ -195,21 +191,21 @@
       background: var(--btn-bg);
       color: white;
     }
-
-    .translate-btn:hover {
-      background: var(--btn-hover);
-    }
+    .translate-btn:hover { background: var(--btn-hover); }
 
     .back-btn {
       background: transparent;
       color: var(--btn-bg);
       border: 1.5px solid var(--btn-bg);
     }
+    .back-btn:hover { background: var(--btn-bg); color: white; }
 
-    .back-btn:hover {
-      background: var(--btn-bg);
-      color: white;
+    .clear-btn {
+      background: var(--clear-btn-bg);
+      color: var(--text-color);
+      border: 1px solid var(--input-border);
     }
+    .clear-btn:hover { background: var(--clear-btn-hover); }
 
     .status-msg {
       text-align: center;
@@ -221,29 +217,18 @@
     }
 
     @media (max-width: 600px) {
-      .translator-container {
-        padding: 20px;
-      }
-      .lang-selectors {
-        flex-direction: column;
-      }
-      .action-row {
-        flex-direction: column;
-        gap: 8px;
-      }
-      .translate-btn, .back-btn {
-        width: 100%;
-        text-align: center;
-      }
+      .translator-container { padding: 20px; }
+      .lang-selectors { flex-direction: column; }
+      .action-row { flex-direction: column; gap: 8px; }
+      .translate-btn, .back-btn, .clear-btn { width: 100%; text-align: center; }
     }
   </style>
 </head>
 <body>
-  <!-- 深色模式切换按钮 -->
   <button class="theme-toggle" id="themeToggle" aria-label="切换深色模式">深色</button>
 
   <div class="translator-container">
-    <h1>Swctoolsの在线Translation工具</h1>
+    <h1>在线翻译</h1>
 
     <div class="lang-selectors">
       <select id="sourceLang">
@@ -279,6 +264,7 @@
 
     <div class="action-row">
       <button class="back-btn" onclick="window.location.href='index.html'">← 返回主站</button>
+      <button class="clear-btn" id="clearBtn">清空内容</button>
       <button class="translate-btn" id="translateBtn">翻译</button>
     </div>
     <div class="status-msg" id="statusMsg"></div>
@@ -287,12 +273,11 @@
   <script type="module">
     import { toHiragana } from "https://esm.sh/wanakana@5.3.1";
 
-    // ================= 深色模式切换 =================
+    // ================= 深色模式 =================
     const themeToggle = document.getElementById('themeToggle');
     const currentTheme = localStorage.getItem('translator_theme') || 'light';
     document.documentElement.setAttribute('data-theme', currentTheme);
     themeToggle.textContent = currentTheme === 'light' ? '深色' : '亮色';
-
     themeToggle.addEventListener('click', () => {
       const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', newTheme);
@@ -307,16 +292,64 @@
     const inputTextarea = document.getElementById('inputText');
     const outputTextarea = document.getElementById('outputText');
     const translateBtn = document.getElementById('translateBtn');
+    const clearBtn = document.getElementById('clearBtn');
     const statusMsg = document.getElementById('statusMsg');
 
-    sourceLangSelect.value = 'zh';
-    targetLangSelect.value = 'en';
+    // 保存当前状态到 localStorage
+    function saveTranslationCache() {
+      const cache = {
+        inputText: inputTextarea.value,
+        outputText: outputTextarea.value,
+        sourceLang: sourceLangSelect.value,
+        targetLang: targetLangSelect.value,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('translator_cache', JSON.stringify(cache));
+    }
 
+    // 从 localStorage 恢复状态
+    function loadTranslationCache() {
+      try {
+        const raw = localStorage.getItem('translator_cache');
+        if (!raw) return;
+        const cache = JSON.parse(raw);
+        if (cache.inputText !== undefined) inputTextarea.value = cache.inputText;
+        if (cache.outputText !== undefined) outputTextarea.value = cache.outputText;
+        if (cache.sourceLang) sourceLangSelect.value = cache.sourceLang;
+        if (cache.targetLang) targetLangSelect.value = cache.targetLang;
+      } catch (e) {
+        // 缓存数据损坏则忽略
+      }
+    }
+
+    // 清空所有内容及缓存
+    function clearAll() {
+      inputTextarea.value = '';
+      outputTextarea.value = '';
+      statusMsg.textContent = '';
+      localStorage.removeItem('translator_cache');
+    }
+
+    // 页面初始化：恢复缓存
+    loadTranslationCache();
+
+    // 自动保存：输入框内容变化时
+    inputTextarea.addEventListener('input', saveTranslationCache);
+    // 语言选择变化时也保存
     sourceLangSelect.addEventListener('change', () => {
       if (sourceLangSelect.value === 'ja-romaji') {
         inputTextarea.placeholder = '请输入日语罗马音，例如：ohayou gozaimasu';
       } else {
         inputTextarea.placeholder = '请输入要翻译的文字...';
+      }
+      saveTranslationCache();
+    });
+    targetLangSelect.addEventListener('change', saveTranslationCache);
+
+    // 清空按钮
+    clearBtn.addEventListener('click', () => {
+      if (confirm('确定要清空所有翻译内容吗？此操作不可恢复。')) {
+        clearAll();
       }
     });
 
@@ -332,11 +365,24 @@
         inputTextarea.value = outputText;
         outputTextarea.value = '';
       }
+      saveTranslationCache();
     });
 
+    // 翻译单段文本
+    async function translateChunk(text, src, tgt) {
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${src}|${tgt}&de=zzc540147@gmail.com`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.responseStatus === 200) {
+        return data.responseData.translatedText;
+      } else {
+        throw new Error(data.responseDetails || '翻译失败');
+      }
+    }
+
     async function performTranslation() {
-      let text = inputTextarea.value.trim();
-      if (!text) {
+      let rawText = inputTextarea.value;
+      if (!rawText.trim()) {
         statusMsg.textContent = '请输入要翻译的文字';
         return;
       }
@@ -345,17 +391,16 @@
       outputTextarea.value = '';
       statusMsg.textContent = '';
 
-      // 罗马音 → 假名
+      // 处理罗马音
       if (src === 'ja-romaji') {
         try {
-          const hiragana = toHiragana(text, { IMEMode: true });
-          if (!hiragana || hiragana === text || hiragana.replace(/\s/g, '') === text.replace(/\s/g, '')) {
+          const hiragana = toHiragana(rawText, { IMEMode: true });
+          if (!hiragana || hiragana === rawText || hiragana.replace(/\s/g, '') === rawText.replace(/\s/g, '')) {
             statusMsg.textContent = '罗马音转换失败，请检查拼写（例如：ohayou, teishishin 应写作 te i shi shi n）';
             return;
           }
           statusMsg.textContent = `已识别罗马音：${hiragana}`;
-          inputTextarea.value = hiragana;
-          text = hiragana;
+          rawText = hiragana;
           src = 'ja';
         } catch (err) {
           statusMsg.textContent = '罗马音转换出错：' + err.message;
@@ -364,19 +409,36 @@
       }
 
       const tgt = targetLangSelect.value;
-      // 添加邮箱参数以提高免费额度
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${src}|${tgt}&de=zzc540147@gmail.com`;
+
+      const paragraphs = rawText.split('\n').filter(p => p.trim() !== '');
+      if (paragraphs.length === 0) {
+        statusMsg.textContent = '没有可翻译的内容';
+        return;
+      }
+
+      const results = [];
+      let completed = 0;
+      statusMsg.textContent = `正在逐段翻译 (0 / ${paragraphs.length})...`;
 
       try {
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.responseStatus === 200) {
-          outputTextarea.value = data.responseData.translatedText;
-        } else {
-          statusMsg.textContent = '翻译失败：' + (data.responseDetails || '未知错误');
+        for (let i = 0; i < paragraphs.length; i++) {
+          try {
+            const translated = await translateChunk(paragraphs[i], src, tgt);
+            results.push(translated);
+          } catch (err) {
+            results.push(`[翻译失败] ${paragraphs[i]}`);
+            console.error(`段落 ${i+1} 翻译失败:`, err);
+          }
+          completed++;
+          statusMsg.textContent = `正在逐段翻译 (${completed} / ${paragraphs.length})...`;
         }
+
+        outputTextarea.value = results.join('\n');
+        statusMsg.textContent = `翻译完成，共处理 ${paragraphs.length} 个段落。`;
+        // 翻译完成后保存
+        saveTranslationCache();
       } catch (err) {
-        statusMsg.textContent = '网络请求失败，请检查网络连接';
+        statusMsg.textContent = '翻译过程中出现严重错误，请重试。';
         console.error(err);
       }
     }
