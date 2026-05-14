@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <title>在线翻译 - SwCTools</title>
   <style>
+    /* 亮色主题变量 */
     :root {
       --bg-body: #e8edf2;
       --panel-bg: rgba(255, 255, 255, 0.9);
@@ -15,6 +16,25 @@
       --btn-hover: #3a6b8c;
       --input-border: #b3cce2;
       --input-focus-border: #4f7fa3;
+      --theme-btn-bg: #d9e8f4;
+      --theme-btn-border: #adc7e0;
+      --theme-btn-text: #1a4059;
+    }
+
+    /* 暗色主题变量 */
+    [data-theme="dark"] {
+      --bg-body: #0a0f14;
+      --panel-bg: rgba(13, 27, 42, 0.9);
+      --panel-border: #1e3a5a;
+      --title-color: #a0c4e8;
+      --text-color: #c0d8f0;
+      --btn-bg: #2a6a9e;
+      --btn-hover: #1a4a7a;
+      --input-border: #2a5a8a;
+      --input-focus-border: #5a9ac0;
+      --theme-btn-bg: #1e3a5a;
+      --theme-btn-border: #2a5a8a;
+      --theme-btn-text: #c0d8f0;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; }
@@ -26,6 +46,8 @@
       align-items: center;
       justify-content: center;
       padding: 20px;
+      transition: background 0.3s;
+      position: relative;
     }
 
     .translator-container {
@@ -36,6 +58,7 @@
       box-shadow: 0 16px 30px -8px rgba(30, 65, 90, 0.18);
       border: 1px solid var(--panel-border);
       padding: 28px;
+      transition: background 0.3s, border-color 0.3s;
     }
 
     h1 {
@@ -45,6 +68,26 @@
       margin-bottom: 24px;
       text-align: center;
     }
+
+    .theme-toggle {
+      position: fixed;
+      bottom: 12px;
+      right: 16px;
+      font-size: 0.9rem;
+      background: var(--theme-btn-bg);
+      border: 1px solid var(--theme-btn-border);
+      color: var(--theme-btn-text);
+      padding: 5px 14px;
+      border-radius: 32px;
+      cursor: pointer;
+      opacity: 0.85;
+      transition: 0.2s;
+      z-index: 3000;
+      font-weight: 500;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .theme-toggle:hover { opacity: 1; }
 
     .lang-selectors {
       display: flex;
@@ -59,10 +102,11 @@
       padding: 10px 16px;
       border: 1.5px solid var(--input-border);
       border-radius: 40px;
-      background: white;
+      background: var(--panel-bg);
       font-size: 0.95rem;
       outline: none;
       color: var(--text-color);
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
 
     .lang-selectors select:focus {
@@ -108,7 +152,7 @@
       padding: 16px;
       border: 1.5px solid var(--input-border);
       border-radius: 20px;
-      background: white;
+      background: var(--panel-bg);
       font-size: 1rem;
       line-height: 1.5;
       outline: none;
@@ -116,6 +160,7 @@
       resize: vertical;
       min-height: 15em;
       font-family: 'Inter', system-ui, sans-serif;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
 
     .text-area-group textarea:focus {
@@ -124,7 +169,7 @@
     }
 
     #outputText {
-      background: #f8fafd;
+      background: var(--panel-bg);
     }
 
     .action-row {
@@ -132,22 +177,38 @@
       align-items: center;
       justify-content: center;
       gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .translate-btn, .back-btn {
+      padding: 12px 28px;
+      border-radius: 48px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      border: none;
+      white-space: nowrap;
     }
 
     .translate-btn {
       background: var(--btn-bg);
-      border: none;
       color: white;
-      padding: 14px 36px;
-      border-radius: 48px;
-      font-weight: 600;
-      font-size: 1.1rem;
-      cursor: pointer;
-      transition: background 0.15s;
     }
 
     .translate-btn:hover {
       background: var(--btn-hover);
+    }
+
+    .back-btn {
+      background: transparent;
+      color: var(--btn-bg);
+      border: 1.5px solid var(--btn-bg);
+    }
+
+    .back-btn:hover {
+      background: var(--btn-bg);
+      color: white;
     }
 
     .status-msg {
@@ -156,6 +217,7 @@
       color: var(--text-color);
       font-size: 0.9rem;
       min-height: 1.2em;
+      transition: color 0.2s;
     }
 
     @media (max-width: 600px) {
@@ -165,12 +227,23 @@
       .lang-selectors {
         flex-direction: column;
       }
+      .action-row {
+        flex-direction: column;
+        gap: 8px;
+      }
+      .translate-btn, .back-btn {
+        width: 100%;
+        text-align: center;
+      }
     }
   </style>
 </head>
 <body>
+  <!-- 深色模式切换按钮 -->
+  <button class="theme-toggle" id="themeToggle" aria-label="切换深色模式">深色</button>
+
   <div class="translator-container">
-    <h1>在线翻译</h1>
+    <h1>Swctoolsの在线Translation工具</h1>
 
     <div class="lang-selectors">
       <select id="sourceLang">
@@ -205,6 +278,7 @@
     </div>
 
     <div class="action-row">
+      <button class="back-btn" onclick="window.location.href='index.html'">← 返回主站</button>
       <button class="translate-btn" id="translateBtn">翻译</button>
     </div>
     <div class="status-msg" id="statusMsg"></div>
@@ -213,6 +287,20 @@
   <script type="module">
     import { toHiragana } from "https://esm.sh/wanakana@5.3.1";
 
+    // ================= 深色模式切换 =================
+    const themeToggle = document.getElementById('themeToggle');
+    const currentTheme = localStorage.getItem('translator_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    themeToggle.textContent = currentTheme === 'light' ? '深色' : '亮色';
+
+    themeToggle.addEventListener('click', () => {
+      const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      localStorage.setItem('translator_theme', newTheme);
+      themeToggle.textContent = newTheme === 'light' ? '深色' : '亮色';
+    });
+
+    // ================= 翻译逻辑 =================
     const sourceLangSelect = document.getElementById('sourceLang');
     const targetLangSelect = document.getElementById('targetLang');
     const swapBtn = document.getElementById('swapLangBtn');
@@ -224,7 +312,6 @@
     sourceLangSelect.value = 'zh';
     targetLangSelect.value = 'en';
 
-    // 动态修改输入框提示
     sourceLangSelect.addEventListener('change', () => {
       if (sourceLangSelect.value === 'ja-romaji') {
         inputTextarea.placeholder = '请输入日语罗马音，例如：ohayou gozaimasu';
@@ -236,7 +323,6 @@
     swapBtn.addEventListener('click', () => {
       const sourceVal = sourceLangSelect.value;
       const targetVal = targetLangSelect.value;
-      // 罗马音不参与交换
       if (sourceVal === 'ja-romaji' || targetVal === 'ja-romaji') return;
       sourceLangSelect.value = targetVal;
       targetLangSelect.value = sourceVal;
@@ -262,15 +348,13 @@
       // 罗马音 → 假名
       if (src === 'ja-romaji') {
         try {
-          const hiragana = toHiragana(text, { IMEMode: true }); // 使用 IME 模式提高准确率
-          // 如果转换结果与原文几乎一致，说明可能包含无法识别的组合
+          const hiragana = toHiragana(text, { IMEMode: true });
           if (!hiragana || hiragana === text || hiragana.replace(/\s/g, '') === text.replace(/\s/g, '')) {
             statusMsg.textContent = '罗马音转换失败，请检查拼写（例如：ohayou, teishishin 应写作 te i shi shi n）';
             return;
           }
-          // 展示转换结果，并将输入框内容替换为假名，以便用户确认
           statusMsg.textContent = `已识别罗马音：${hiragana}`;
-          inputTextarea.value = hiragana;  // 让用户看到转换后的假名
+          inputTextarea.value = hiragana;
           text = hiragana;
           src = 'ja';
         } catch (err) {
@@ -280,8 +364,8 @@
       }
 
       const tgt = targetLangSelect.value;
-
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${src}|${tgt}`;
+      // 添加邮箱参数以提高免费额度
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${src}|${tgt}&de=zzc540147@gmail.com`;
 
       try {
         const res = await fetch(url);
