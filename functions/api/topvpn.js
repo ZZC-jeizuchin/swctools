@@ -3,6 +3,7 @@ export async function onRequest(context) {
   const urlParam = new URL(request.url).searchParams.get('url');
   const myOrigin = new URL(request.url).origin;
 
+  // 缺少参数 → 输入页面
   if (!urlParam) {
     const inputPage = `<!DOCTYPE html>
 <html lang="zh">
@@ -96,10 +97,9 @@ export async function onRequest(context) {
       } catch { return url; }
     };
 
-    // 重写所有链接（href, action, formaction）
+    // 重写所有链接和资源
     html = html.replace(/(\shref)\s*=\s*["']([^"'\s>]+)["']/gi, (_, attr, url) => `${attr}="${toProxy(url)}"`);
     html = html.replace(/(\saction|\sformaction)\s*=\s*["']([^"'\s>]+)["']/gi, (_, attr, url) => `${attr}="${toProxy(url)}"`);
-    // 重写资源
     html = html.replace(/(\ssrc|\ssrcset)\s*=\s*["']([^"']+)["']/gi, (_, attr, url) => {
       if (/^(javascript:|data:)/i.test(url)) return _;
       if (attr.endsWith('srcset')) {
@@ -113,7 +113,6 @@ export async function onRequest(context) {
       }
       return `${attr}="${toProxy(url)}"`;
     });
-    // 处理 meta refresh
     html = html.replace(/<meta\s+http-equiv\s*=\s*["']?refresh["']?([^>]*?)>/gi, (_, attrs) => {
       const cm = attrs.match(/content\s*=\s*["']([^"']*)["']/i);
       if (cm) {
@@ -128,20 +127,16 @@ export async function onRequest(context) {
       return _;
     });
 
-    // ---------- 前端拦截脚本（硬编码原始URL，多重防护）----------
+    // ---------- 前端拦截脚本（双重拦截 location.href）----------
     const injectScript = `
 <script>
 (function() {
-  // 硬编码的关键数据，绝对不被覆盖
   var PROXY_BASE = ${JSON.stringify(proxyBase)};
   var ORIGIN_URL = ${JSON.stringify(finalUrl.href)};
 
-  // 工具函数：将任何URL转换为代理链接
   function toProxyUrl(rawUrl) {
     if (!rawUrl) return rawUrl;
-    // 已经是代理链接，不处理
     if (rawUrl.indexOf(PROXY_BASE) === 0 || rawUrl.indexOf('/api/topvpn?url=') === 0) return rawUrl;
-    // 特殊协议跳过
     if (/^(javascript:|mailto:|data:|#|about:)/i.test(rawUrl)) return rawUrl;
     try {
       var absolute = new URL(rawUrl, ORIGIN_URL).href;
@@ -151,74 +146,51 @@ export async function onRequest(context) {
     }
   }
 
-  // 保存原始函数
+  // 保存原始方法
   var _assign = window.location.assign.bind(window.location);
   var _replace = window.location.replace.bind(window.location);
   var _push = history.pushState.bind(history);
   var _replaceState = history.replaceState.bind(history);
   var _open = window.open.bind(window);
 
-  // 锁定 location.assign
-  try {
-    Object.defineProperty(window.location, 'assign', {
-      value: function(url) { return _assign(toProxyUrl(url)); },
-      writable: false, configurable: false
-    });
-  } catch(e) {}
-
-  // 锁定 location.replace
-  try {
-    Object.defineProperty(window.location, 'replace', {
-      value: function(url) { return _replace(toProxyUrl(url)); },
-      writable: false, configurable: false
-    });
-  } catch(e) {}
-
-  // 锁定 history.pushState
-  try {
-    Object.defineProperty(history, 'pushState', {
-      value: function(state, title, url) {
-        if (url) arguments[2] = toProxyUrl(url);
-        return _push.apply(history, arguments);
-      },
-      writable: false, configurable: false
-    });
-  } catch(e) {}
-
-  // 锁定 history.replaceState
-  try {
-    Object.defineProperty(history, 'replaceState', {
-      value: function(state, title, url) {
-        if (url) arguments[2] = toProxyUrl(url);
-        return _replaceState.apply(history, arguments);
-      },
-      writable: false, configurable: false
-    });
-  } catch(e) {}
-
+  // 锁定 assign
+  try { Object.defineProperty(window.location, 'assign', { value: function(url) { return _assign(toProxyUrl(url)); }, writable: false, configurable: false }); } catch(e) {}
+  // 锁定 replace
+  try { Object.defineProperty(window.location, 'replace', { value: function(url) { return _replace(toProxyUrl(url)); }, writable: false, configurable: false }); } catch(e) {}
+  // 锁定 pushState
+  try { Object.defineProperty(history, 'pushState', { value: function(state, title, url) { if (url) arguments[2] = toProxyUrl(url); return _push.apply(history, arguments); }, writable: false, configurable: false }); } catch(e) {}
+  // 锁定 replaceState
+  try { Object.defineProperty(history, 'replaceState', { value: function(state, title, url) { if (url) arguments[2] = toProxyUrl(url); return _replaceState.apply(history, arguments); }, writable: false, configurable: false }); } catch(e) {}
   // 拦截 window.open
-  try {
-    window.open = function(url, target, features) {
-      if (url && typeof url === 'string') url = toProxyUrl(url);
-      return _open(url, target, features);
-    };
-  } catch(e) {}
+  try { window.open = function(url, target, features) { if (url && typeof url === 'string') url = toProxyUrl(url); return _open(url, target, features); }; } catch(e) {}
 
-  // 拦截 location.href 赋值（最核心的拦截）
+  // ★ 拦截 location.href 赋值（双重保险）
+  var hrefIntercepted = false;
+  // 方法一：Object.defineProperty (标准)
   try {
     var hrefDesc = Object.getOwnPropertyDescriptor(Location.prototype, 'href');
     if (hrefDesc && hrefDesc.set) {
       Object.defineProperty(Location.prototype, 'href', {
         get: hrefDesc.get,
-        set: function(url) {
-          _assign(toProxyUrl(url));
-        },
-        configurable: false
+        set: function(url) { _assign(toProxyUrl(url)); },
+        configurable: true
       });
+      hrefIntercepted = true;
     }
   } catch(e) {}
+  // 方法二：__defineSetter__ 后备 (兼容旧浏览器)
+  if (!hrefIntercepted) {
+    try {
+      if (window.location.__defineSetter__) {
+        window.location.__defineSetter__('href', function(url) {
+          _assign(toProxyUrl(url));
+        });
+        hrefIntercepted = true;
+      }
+    } catch(e) {}
+  }
 
-  // 全局拦截所有链接点击（捕获阶段，处理动态生成的链接）
+  // 全局拦截 <a> 点击（捕获阶段）
   document.addEventListener('click', function(e) {
     var link = e.target.closest('a');
     if (link && link.href) {
@@ -231,7 +203,7 @@ export async function onRequest(context) {
     }
   }, true);
 
-  // 拦截表单提交（防止绕过）
+  // 拦截表单提交（捕获阶段）
   document.addEventListener('submit', function(e) {
     var form = e.target;
     if (form.tagName !== 'FORM') return;
@@ -255,7 +227,7 @@ export async function onRequest(context) {
 })();
 </script>`;
 
-    // 控制栏（纯HTML，不依赖脚本）
+    // 控制栏（纯 HTML 内联）
     const controlBar = `
 <div id="__topvpn_bar__" style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#1e293b;color:white;display:flex;align-items:center;padding:8px 12px;gap:10px;font-family:system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.3);">
   <span style="font-weight:600;">🌐 代理</span>
@@ -265,7 +237,6 @@ export async function onRequest(context) {
   <button onclick="location.href='/topvpn.html'" style="background:#475569;border:none;color:white;padding:6px 14px;border-radius:20px;cursor:pointer;">返回</button>
 </div>`;
 
-    // 组装HTML：脚本最先，然后是原页面内容，控制栏插入body
     html = injectScript + html;
     html = html.replace(/<body\b[^>]*>/i, `<body>${controlBar}`);
     html = `<style>html{margin-top:52px;}</style>` + html;
