@@ -127,13 +127,14 @@ export async function onRequest(context) {
       return _;
     });
 
-    // ---------- 前端拦截脚本（双重拦截 location.href）----------
+    // ---------- 极简前端拦截脚本 ----------
     const injectScript = `
 <script>
 (function() {
   var PROXY_BASE = ${JSON.stringify(proxyBase)};
   var ORIGIN_URL = ${JSON.stringify(finalUrl.href)};
 
+  // 转换为代理 URL
   function toProxyUrl(rawUrl) {
     if (!rawUrl) return rawUrl;
     if (rawUrl.indexOf(PROXY_BASE) === 0 || rawUrl.indexOf('/api/topvpn?url=') === 0) return rawUrl;
@@ -146,51 +147,46 @@ export async function onRequest(context) {
     }
   }
 
-  // 保存原始方法
+  // 保存原始导航方法
   var _assign = window.location.assign.bind(window.location);
   var _replace = window.location.replace.bind(window.location);
   var _push = history.pushState.bind(history);
   var _replaceState = history.replaceState.bind(history);
   var _open = window.open.bind(window);
 
-  // 锁定 assign
+  // 锁定 location.assign
   try { Object.defineProperty(window.location, 'assign', { value: function(url) { return _assign(toProxyUrl(url)); }, writable: false, configurable: false }); } catch(e) {}
-  // 锁定 replace
+  // 锁定 location.replace
   try { Object.defineProperty(window.location, 'replace', { value: function(url) { return _replace(toProxyUrl(url)); }, writable: false, configurable: false }); } catch(e) {}
-  // 锁定 pushState
+  // 锁定 history.pushState
   try { Object.defineProperty(history, 'pushState', { value: function(state, title, url) { if (url) arguments[2] = toProxyUrl(url); return _push.apply(history, arguments); }, writable: false, configurable: false }); } catch(e) {}
-  // 锁定 replaceState
+  // 锁定 history.replaceState
   try { Object.defineProperty(history, 'replaceState', { value: function(state, title, url) { if (url) arguments[2] = toProxyUrl(url); return _replaceState.apply(history, arguments); }, writable: false, configurable: false }); } catch(e) {}
   // 拦截 window.open
   try { window.open = function(url, target, features) { if (url && typeof url === 'string') url = toProxyUrl(url); return _open(url, target, features); }; } catch(e) {}
 
-  // ★ 拦截 location.href 赋值（双重保险）
+  // ★ 拦截 location.href 赋值（最核心）
   var hrefIntercepted = false;
-  // 方法一：Object.defineProperty (标准)
   try {
     var hrefDesc = Object.getOwnPropertyDescriptor(Location.prototype, 'href');
     if (hrefDesc && hrefDesc.set) {
       Object.defineProperty(Location.prototype, 'href', {
         get: hrefDesc.get,
         set: function(url) { _assign(toProxyUrl(url)); },
-        configurable: true
+        configurable: false
       });
       hrefIntercepted = true;
     }
   } catch(e) {}
-  // 方法二：__defineSetter__ 后备 (兼容旧浏览器)
   if (!hrefIntercepted) {
     try {
       if (window.location.__defineSetter__) {
-        window.location.__defineSetter__('href', function(url) {
-          _assign(toProxyUrl(url));
-        });
-        hrefIntercepted = true;
+        window.location.__defineSetter__('href', function(url) { _assign(toProxyUrl(url)); });
       }
     } catch(e) {}
   }
 
-  // 全局拦截 <a> 点击（捕获阶段）
+  // ★ 拦截所有 <a> 点击（动态链接也不会逃逸）
   document.addEventListener('click', function(e) {
     var link = e.target.closest('a');
     if (link && link.href) {
@@ -202,32 +198,10 @@ export async function onRequest(context) {
       }
     }
   }, true);
-
-  // 拦截表单提交（捕获阶段）
-  document.addEventListener('submit', function(e) {
-    var form = e.target;
-    if (form.tagName !== 'FORM') return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    var action = form.getAttribute('action') || ORIGIN_URL;
-    var method = (form.method || 'get').toLowerCase();
-    var formData = new FormData(form);
-    var params = new URLSearchParams(formData).toString();
-    var actionUrl;
-    try {
-      actionUrl = new URL(action, ORIGIN_URL);
-    } catch (ex) {
-      actionUrl = new URL(ORIGIN_URL);
-    }
-    if (method === 'get') {
-      actionUrl.search = params;
-    }
-    _assign(toProxyUrl(actionUrl.href));
-  }, true);
 })();
 </script>`;
 
-    // 控制栏（纯 HTML 内联）
+    // 控制栏（纯 HTML，高度 48px）
     const controlBar = `
 <div id="__topvpn_bar__" style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#1e293b;color:white;display:flex;align-items:center;padding:8px 12px;gap:10px;font-family:system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.3);">
   <span style="font-weight:600;">🌐 代理</span>
@@ -237,9 +211,10 @@ export async function onRequest(context) {
   <button onclick="location.href='/topvpn.html'" style="background:#475569;border:none;color:white;padding:6px 14px;border-radius:20px;cursor:pointer;">返回</button>
 </div>`;
 
+    // 组装：脚本最先，控制栏插入 body，页面整体下移 48px
     html = injectScript + html;
     html = html.replace(/<body\b[^>]*>/i, `<body>${controlBar}`);
-    html = `<style>html{margin-top:52px;}</style>` + html;
+    html = `<style>html{margin-top:48px;}</style>` + html;
 
     return new Response(html, { status: response.status, headers: safeHeaders });
   } catch (err) {
