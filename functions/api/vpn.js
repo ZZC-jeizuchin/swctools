@@ -21,7 +21,7 @@ export async function onRequest(context) {
 
   try {
     const response = await fetch(targetUrl.toString(), {
-      redirect: 'follow',
+      redirect: 'follow',          // 跟随重定向拿到最终页面
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -29,30 +29,40 @@ export async function onRequest(context) {
       }
     });
 
+    // 获取最终响应的 URL（重定向后的真实地址）
+    const finalUrl = new URL(response.url);
     const contentType = response.headers.get('Content-Type') || '';
     const isHTML = contentType.includes('text/html');
 
-    // 创建一个新 Headers，从原响应中复制，然后移除限制性头部
-    const newHeaders = new Headers(response.headers);
-    // 必须删除以下头部，否则浏览器会阻止显示
-    newHeaders.delete('x-frame-options');
-    newHeaders.delete('content-security-policy');
-    newHeaders.delete('x-content-type-options');
-    newHeaders.delete('strict-transport-security');
-    // 允许被任意页面嵌入
-    newHeaders.set('access-control-allow-origin', '*');
+    // 1. 构建安全、干净的响应头（剔除所有可能阻止嵌入的头部）
+    const safeHeaders = new Headers();
+
+    // 只复制必要的头部，其余一概丢弃
+    const headersToKeep = ['content-type', 'content-encoding', 'content-language', 'cache-control', 'expires', 'last-modified', 'etag'];
+    for (const header of headersToKeep) {
+      const value = response.headers.get(header);
+      if (value) safeHeaders.set(header, value);
+    }
+
+    // 显式允许任何来源的嵌套
+    safeHeaders.set('Access-Control-Allow-Origin', '*');
+    safeHeaders.delete('X-Frame-Options');
+    safeHeaders.delete('Content-Security-Policy');
+    safeHeaders.delete('X-Content-Type-Options');
+    safeHeaders.delete('Strict-Transport-Security');
+    safeHeaders.delete('Set-Cookie');   // 避免 Cookie 干扰
 
     if (isHTML) {
       let html = await response.text();
       const proxyBase = '/api/vpn?url=';
 
-      // 重写静态资源路径
+      // 2. 重写 HTML 中的相对资源路径（基于最终响应地址，而非原始请求地址）
       html = html.replace(/(href|src|action|srcset)\s*=\s*["'](?!https?:\/\/|\/\/|#|javascript:|mailto:|data:)([^"'\s>]+)["']/gi, (match, attr, path) => {
-        const fullUrl = new URL(path, targetUrl.origin).href;
+        const fullUrl = new URL(path, finalUrl.origin).href;
         return `${attr}="${proxyBase}${encodeURIComponent(fullUrl)}"`;
       });
 
-      // 注入全局请求拦截脚本
+      // 3. 注入网络拦截脚本（让所有动态请求也走代理）
       const interceptorScript = `
         <script>
           (function() {
@@ -71,7 +81,6 @@ export async function onRequest(context) {
               }
               return originalFetch(url, init);
             };
-
             const OriginalXHR = window.XMLHttpRequest;
             window.XMLHttpRequest = function() {
               const xhr = new OriginalXHR();
@@ -85,21 +94,20 @@ export async function onRequest(context) {
           })();
         </script>
       `;
-
       html = html.replace(/<head\b[^>]*>/i, '<head>' + interceptorScript);
-      newHeaders.set('content-type', 'text/html; charset=utf-8');
 
       return new Response(html, {
         status: response.status,
-        headers: newHeaders
+        headers: safeHeaders
       });
     }
 
-    // 非 HTML 内容直接使用清理后的头部
+    // 非 HTML 资源同样使用清理后的头部
     return new Response(response.body, {
       status: response.status,
-      headers: newHeaders
+      headers: safeHeaders
     });
+
   } catch (err) {
     return new Response(JSON.stringify({ error: '代理请求失败: ' + err.message }), {
       status: 502,
