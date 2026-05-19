@@ -160,7 +160,7 @@
       </div>
     </div>
     <div class="iframe-wrapper">
-      <iframe id="proxyFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+      <iframe id="proxyFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation allow-popups-to-escape-sandbox"></iframe>
     </div>
   </div>
 
@@ -171,7 +171,6 @@
     const searchBtn = document.getElementById('searchBtn');
     const proxyFrame = document.getElementById('proxyFrame');
 
-    // 搜索引擎 URL 模板
     const searchEngines = {
       baidu: 'https://www.baidu.com/s?wd=',
       google: 'https://www.google.com/search?q=',
@@ -179,44 +178,32 @@
       duckduckgo: 'https://duckduckgo.com/?q='
     };
 
-    // 加载指定 URL 到 iframe（通过我们的代理）
     function loadUrl(rawUrl) {
       let finalUrl = rawUrl.trim();
       if (!finalUrl) return;
-
-      // 自动补全协议
       if (!/^https?:\/\//i.test(finalUrl)) {
         finalUrl = 'https://' + finalUrl;
       }
-
-      // 更新输入框（让用户看到完整地址）
       urlInput.value = finalUrl;
-
-      // 通过代理加载
       proxyFrame.src = '/api/vpn?url=' + encodeURIComponent(finalUrl);
     }
 
-    // 直接打开（将输入视为网址）
     goBtn.addEventListener('click', () => {
       loadUrl(urlInput.value);
     });
 
     urlInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
-        // 如果按了回车，默认当作网址打开（和“打开”按钮一样）
         loadUrl(urlInput.value);
       }
     });
 
-    // 搜索：用关键词拼接搜索引擎 URL
     searchBtn.addEventListener('click', () => {
       const keyword = urlInput.value.trim();
       if (!keyword) return;
-
       const engine = engineSelect.value;
       const baseUrl = searchEngines[engine];
       const searchUrl = baseUrl + encodeURIComponent(keyword);
-
       loadUrl(searchUrl);
     });
   </script>
