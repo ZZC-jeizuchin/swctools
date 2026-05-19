@@ -55,22 +55,21 @@ export async function onRequest(context) {
       let html = await response.text();
       const proxyBase = '/api/vpn?url=';
 
-      // 移除 <base> 标签避免干扰
+      // 移除 <base> 标签
       html = html.replace(/<base\b[^>]*>/gi, '');
 
-      // 重写链接属性
+      // 重写资源链接
       html = html.replace(/(href|src|action)\s*=\s*["']([^"'\s>]+)["']/gi, (match, attr, url) => {
         if (/^(javascript:|mailto:|data:|#)/i.test(url)) return match;
-        let fullUrl;
         try {
-          fullUrl = new URL(url, finalUrl.href).href;
+          const fullUrl = new URL(url, finalUrl.href).href;
+          return `${attr}="${proxyBase}${encodeURIComponent(fullUrl)}"`;
         } catch {
           return match;
         }
-        return `${attr}="${proxyBase}${encodeURIComponent(fullUrl)}"`;
       });
 
-      // 处理 srcset
+      // 重写 srcset
       html = html.replace(/srcset\s*=\s*["']([^"']+)["']/gi, (match, srcsetValue) => {
         const urls = srcsetValue.split(',').map(part => {
           const trimmed = part.trim();
@@ -86,32 +85,36 @@ export async function onRequest(context) {
         return `srcset="${urls.join(', ')}"`;
       });
 
-      // 注入脚本 —— 关键修正在此
+      // 注入前端拦截脚本 — 关键修复
       const interceptorScript = `
         <script>
           (function() {
             const proxyBase = '/api/vpn?url=';
 
-            // ★ 从当前代理地址中提取原始目标网站 URL
+            // 从当前代理地址提取原始站点 URL
             const urlParams = new URLSearchParams(location.search);
             const rawUrl = urlParams.get('url');
             if (!rawUrl) return;
-            const originalUrl = decodeURIComponent(rawUrl); // 例如 https://www.google.com/
+            const originalUrl = decodeURIComponent(rawUrl);
 
-            // 将任意 URL 转为代理链接，使用 originalUrl 作为相对路径基准
+            // 容错代理函数
             function proxyUrl(inputUrl) {
-              if (inputUrl.startsWith(proxyBase)) return inputUrl; // 已经代理过的，不再重复代理
-              let absolute;
-              if (inputUrl.startsWith('http://') || inputUrl.startsWith('https://') || inputUrl.startsWith('//')) {
-                absolute = new URL(inputUrl, originalUrl).href; // 协议相对或绝对路径，用 originalUrl 做基准保证完整
-              } else {
-                // 纯相对路径，基于 originalUrl 解析
-                absolute = new URL(inputUrl, originalUrl).href;
+              if (!inputUrl) return inputUrl;
+              if (inputUrl.startsWith(proxyBase)) return inputUrl;
+              try {
+                let absolute;
+                if (inputUrl.startsWith('http://') || inputUrl.startsWith('https://') || inputUrl.startsWith('//')) {
+                  absolute = new URL(inputUrl, originalUrl).href;
+                } else {
+                  absolute = new URL(inputUrl, originalUrl).href;
+                }
+                return proxyBase + encodeURIComponent(absolute);
+              } catch (e) {
+                return inputUrl;
               }
-              return proxyBase + encodeURIComponent(absolute);
             }
 
-            // 拦截 fetch
+            // 拦截 fetch（修正 Request 处理）
             const originalFetch = window.fetch;
             window.fetch = function(input, init) {
               let url;
@@ -119,7 +122,10 @@ export async function onRequest(context) {
                 url = proxyUrl(input);
               } else if (input instanceof Request) {
                 url = proxyUrl(input.url);
-                init = Object.assign({}, input, init);
+                // 创建新 Request 保留原始属性，init 覆盖
+                return originalFetch(new Request(url, input), init);
+              } else {
+                url = proxyUrl(input);
               }
               return originalFetch(url, init);
             };
@@ -136,7 +142,7 @@ export async function onRequest(context) {
               return xhr;
             };
 
-            // 安全拦截 location 赋值
+            // 安全拦截 location 方法
             const originalAssign = window.location.assign.bind(window.location);
             const originalReplace = window.location.replace.bind(window.location);
             window.location.assign = function(url) {
@@ -146,7 +152,7 @@ export async function onRequest(context) {
               return originalReplace(proxyUrl(url));
             };
 
-            // 拦截 history.pushState / replaceState
+            // 拦截 history 路由
             const originalPushState = history.pushState;
             const originalReplaceState = history.replaceState;
             history.pushState = function(state, title, url) {
@@ -158,16 +164,37 @@ export async function onRequest(context) {
               return originalReplaceState.apply(history, arguments);
             };
 
-            // 监听所有 a 标签点击（防止动态生成的链接直接跳转）
+            // 全局拦截 a 标签点击
             document.addEventListener('click', function(e) {
               const target = e.target.closest('a');
               if (target && target.href) {
                 const rawHref = target.getAttribute('href');
                 if (rawHref && !/^(javascript:|mailto:|#)/i.test(rawHref)) {
                   e.preventDefault();
-                  window.location.assign(rawHref); // proxyUrl 会自动处理相对路径
+                  window.location.assign(rawHref);
                 }
               }
+            }, true);
+
+            // 全局拦截表单提交（防止搜索表单绕过）
+            document.addEventListener('submit', function(e) {
+              const form = e.target;
+              if (form.tagName !== 'FORM') return;
+              const target = form.getAttribute('target') || '_self';
+              if (target !== '_self' && target !== '' && target !== '_parent' && target !== '_top') return;
+              e.preventDefault();
+              let action = form.getAttribute('action') || window.location.href;
+              const method = (form.method || 'get').toLowerCase();
+              const formData = new FormData(form);
+              const queryString = new URLSearchParams(formData).toString();
+              let finalAction;
+              if (method === 'get') {
+                finalAction = action + (action.includes('?') ? '&' : '?') + queryString;
+              } else {
+                // POST 表单转为 GET 并用代理加载（通常搜索为 GET）
+                finalAction = action + (action.includes('?') ? '&' : '?') + queryString;
+              }
+              window.location.assign(finalAction);
             }, true);
           })();
         </script>
