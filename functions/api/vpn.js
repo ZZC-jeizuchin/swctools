@@ -85,49 +85,43 @@ export async function onRequest(context) {
         return `srcset="${urls.join(', ')}"`;
       });
 
-      // 注入前端拦截脚本 — 关键修复
+      // 注入前端拦截脚本 —— 最终修复版
       const interceptorScript = `
         <script>
           (function() {
             const proxyBase = '/api/vpn?url=';
 
-            // 从当前代理地址提取原始站点 URL
+            // 从当前代理地址提取原始目标网站 URL
             const urlParams = new URLSearchParams(location.search);
             const rawUrl = urlParams.get('url');
             if (!rawUrl) return;
             const originalUrl = decodeURIComponent(rawUrl);
 
-            // 容错代理函数
+            // 将 URL 转为代理链接（基于 originalUrl 解析相对路径）
             function proxyUrl(inputUrl) {
               if (!inputUrl) return inputUrl;
               if (inputUrl.startsWith(proxyBase)) return inputUrl;
               try {
-                let absolute;
-                if (inputUrl.startsWith('http://') || inputUrl.startsWith('https://') || inputUrl.startsWith('//')) {
-                  absolute = new URL(inputUrl, originalUrl).href;
-                } else {
-                  absolute = new URL(inputUrl, originalUrl).href;
-                }
+                const absolute = new URL(inputUrl, originalUrl).href;
                 return proxyBase + encodeURIComponent(absolute);
               } catch (e) {
                 return inputUrl;
               }
             }
 
-            // 拦截 fetch（修正 Request 处理）
+            // 拦截 fetch（正确保留 Request 对象）
             const originalFetch = window.fetch;
             window.fetch = function(input, init) {
-              let url;
               if (typeof input === 'string') {
-                url = proxyUrl(input);
-              } else if (input instanceof Request) {
-                url = proxyUrl(input.url);
-                // 创建新 Request 保留原始属性，init 覆盖
-                return originalFetch(new Request(url, input), init);
-              } else {
-                url = proxyUrl(input);
+                return originalFetch(proxyUrl(input), init);
               }
-              return originalFetch(url, init);
+              if (input instanceof Request) {
+                const newUrl = proxyUrl(input.url);
+                // 创建新 Request，完整复制属性，init 可覆盖
+                return originalFetch(new Request(newUrl, input), init);
+              }
+              // 其他情况（如 URL 对象）
+              return originalFetch(proxyUrl(input.toString()), init);
             };
 
             // 拦截 XMLHttpRequest
@@ -176,25 +170,34 @@ export async function onRequest(context) {
               }
             }, true);
 
-            // 全局拦截表单提交（防止搜索表单绕过）
+            // ★ 全局拦截表单提交（彻底避免使用代理页 URL）
             document.addEventListener('submit', function(e) {
               const form = e.target;
               if (form.tagName !== 'FORM') return;
               const target = form.getAttribute('target') || '_self';
+              // 只拦截在当前窗口提交的表单
               if (target !== '_self' && target !== '' && target !== '_parent' && target !== '_top') return;
               e.preventDefault();
-              let action = form.getAttribute('action') || window.location.href;
-              const method = (form.method || 'get').toLowerCase();
+
               const formData = new FormData(form);
-              const queryString = new URLSearchParams(formData).toString();
-              let finalAction;
-              if (method === 'get') {
-                finalAction = action + (action.includes('?') ? '&' : '?') + queryString;
-              } else {
-                // POST 表单转为 GET 并用代理加载（通常搜索为 GET）
-                finalAction = action + (action.includes('?') ? '&' : '?') + queryString;
+              const params = new URLSearchParams(formData).toString();
+              let action = form.getAttribute('action') || originalUrl; // ★ 关键：用原始 URL 作后备
+              let actionUrl;
+              try {
+                actionUrl = new URL(action, originalUrl); // 解析为基于 originalUrl 的绝对 URL
+              } catch {
+                actionUrl = new URL(originalUrl); // 失败则直接使用原始 URL
               }
-              window.location.assign(finalAction);
+              const method = (form.method || 'get').toLowerCase();
+              if (method === 'get') {
+                // GET 表单：将参数合并进 URL
+                actionUrl.search = params;
+              } else {
+                // POST 表单也转成 GET（大部分搜索都是 GET 请求）
+                actionUrl.search = params;
+              }
+              // 通过代理跳转
+              window.location.assign(actionUrl.href);
             }, true);
           })();
         </script>
