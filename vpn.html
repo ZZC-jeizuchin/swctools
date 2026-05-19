@@ -15,96 +15,117 @@
       --btn-hover: #3a6b8c;
       --input-border: #b3cce2;
       --input-focus-border: #4f7fa3;
+      --selector-bg: #ffffff;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; }
 
     body {
       background: var(--bg-body);
-      min-height: 100vh;
-      padding: 20px;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      align-items: center;
+      padding: 12px;
     }
 
     .container {
       width: 100%;
-      max-width: 960px;
+      max-width: 1200px;
+      margin: 0 auto;
       background: var(--panel-bg);
-      border-radius: 28px;
-      box-shadow: 0 16px 30px -8px rgba(30, 65, 90, 0.18);
+      border-radius: 24px;
+      box-shadow: 0 12px 28px -6px rgba(30, 65, 90, 0.15);
       border: 1px solid var(--panel-border);
-      padding: 24px;
       display: flex;
       flex-direction: column;
       flex: 1;
+      overflow: hidden;
     }
 
-    h1 {
-      color: var(--title-color);
-      font-weight: 550;
-      font-size: 2rem;
-      margin-bottom: 16px;
-      text-align: center;
-    }
-
-    .url-bar {
+    .header {
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--panel-border);
       display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
       flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
     }
 
-    .url-bar input {
+    .header h1 {
+      font-size: 1.6rem;
+      font-weight: 550;
+      color: var(--title-color);
+      white-space: nowrap;
+      margin-right: 10px;
+    }
+
+    .nav-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
       flex: 1;
-      padding: 12px 16px;
+    }
+
+    .nav-row input {
+      flex: 3 1 200px;
+      padding: 10px 16px;
       border: 1.5px solid var(--input-border);
-      border-radius: 40px;
+      border-radius: 36px;
       background: var(--panel-bg);
-      font-size: 1rem;
+      font-size: 0.95rem;
       outline: none;
       color: var(--text-color);
     }
 
-    .url-bar input:focus {
+    .nav-row input:focus {
       border-color: var(--input-focus-border);
       box-shadow: 0 0 0 3px rgba(79, 127, 163, 0.2);
     }
 
+    .nav-row select {
+      flex: 0 1 auto;
+      padding: 10px 12px;
+      border: 1.5px solid var(--input-border);
+      border-radius: 36px;
+      background: var(--selector-bg);
+      font-size: 0.9rem;
+      outline: none;
+      color: var(--text-color);
+      cursor: pointer;
+    }
+
     .btn {
-      padding: 12px 28px;
-      border-radius: 48px;
+      padding: 10px 20px;
+      border-radius: 36px;
       font-weight: 600;
-      font-size: 1rem;
+      font-size: 0.9rem;
       cursor: pointer;
       border: none;
       white-space: nowrap;
-      transition: background 0.15s;
-    }
-
-    .go-btn {
+      transition: background 0.15s, color 0.15s;
       background: var(--btn-bg);
       color: white;
     }
 
-    .go-btn:hover { background: var(--btn-hover); }
+    .btn:hover { background: var(--btn-hover); }
 
-    .back-btn {
+    .btn-outline {
       background: transparent;
       color: var(--btn-bg);
       border: 1.5px solid var(--btn-bg);
     }
 
-    .back-btn:hover { background: var(--btn-bg); color: white; }
+    .btn-outline:hover {
+      background: var(--btn-bg);
+      color: white;
+    }
 
-    .iframe-container {
+    .iframe-wrapper {
       flex: 1;
       width: 100%;
-      border: 1px solid var(--panel-border);
-      border-radius: 16px;
-      overflow: hidden;
       background: white;
+      position: relative;
     }
 
     iframe {
@@ -114,61 +135,89 @@
       display: block;
     }
 
-    .error-message {
-      color: #c0392b;
-      text-align: center;
-      padding: 20px;
-      font-size: 0.9rem;
-    }
-
-    @media (max-width: 600px) {
-      .container { padding: 16px; }
-      .url-bar { flex-direction: column; }
-      .btn { width: 100%; }
+    @media (max-width: 700px) {
+      .header { padding: 12px 14px 10px; }
+      .header h1 { font-size: 1.3rem; }
+      .btn { padding: 8px 14px; }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>网页代理</h1>
-
-    <div class="url-bar">
-      <input type="text" id="urlInput" placeholder="输入网址，例如 https://example.com" value="">
-      <button class="btn go-btn" id="goBtn">前往</button>
-      <button class="btn back-btn" onclick="window.location.href='index.html'">← 返回主站</button>
+    <div class="header">
+      <h1>🌐 网页代理</h1>
+      <div class="nav-row">
+        <input type="text" id="urlInput" placeholder="输入网址或搜索关键词">
+        <select id="engineSelect">
+          <option value="baidu">百度</option>
+          <option value="google">Google</option>
+          <option value="bing">Bing</option>
+          <option value="duckduckgo">DuckDuckGo</option>
+        </select>
+        <button class="btn" id="goBtn">打开</button>
+        <button class="btn" id="searchBtn">搜索</button>
+        <button class="btn btn-outline" onclick="window.location.href='index.html'">← 返回</button>
+      </div>
     </div>
-
-    <div class="iframe-container">
-      <iframe id="proxyFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" loading="lazy"></iframe>
+    <div class="iframe-wrapper">
+      <iframe id="proxyFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
     </div>
   </div>
 
   <script>
     const urlInput = document.getElementById('urlInput');
+    const engineSelect = document.getElementById('engineSelect');
     const goBtn = document.getElementById('goBtn');
+    const searchBtn = document.getElementById('searchBtn');
     const proxyFrame = document.getElementById('proxyFrame');
 
-    function navigate() {
-      let url = urlInput.value.trim();
-      if (!url) return;
-      // 自动补全 https:// 如果没写协议
-      if (!/^https?:\/\//i.test(url)) {
-        url = 'https://' + url;
-        urlInput.value = url;
+    // 搜索引擎 URL 模板
+    const searchEngines = {
+      baidu: 'https://www.baidu.com/s?wd=',
+      google: 'https://www.google.com/search?q=',
+      bing: 'https://www.bing.com/search?q=',
+      duckduckgo: 'https://duckduckgo.com/?q='
+    };
+
+    // 加载指定 URL 到 iframe（通过我们的代理）
+    function loadUrl(rawUrl) {
+      let finalUrl = rawUrl.trim();
+      if (!finalUrl) return;
+
+      // 自动补全协议
+      if (!/^https?:\/\//i.test(finalUrl)) {
+        finalUrl = 'https://' + finalUrl;
       }
-      // 通过我们的代理函数加载
-      const proxyUrl = '/api/vpn?url=' + encodeURIComponent(url);
-      proxyFrame.src = proxyUrl;
+
+      // 更新输入框（让用户看到完整地址）
+      urlInput.value = finalUrl;
+
+      // 通过代理加载
+      proxyFrame.src = '/api/vpn?url=' + encodeURIComponent(finalUrl);
     }
 
-    goBtn.addEventListener('click', navigate);
-    urlInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') navigate();
+    // 直接打开（将输入视为网址）
+    goBtn.addEventListener('click', () => {
+      loadUrl(urlInput.value);
     });
 
-    // 可选：监听 iframe 加载错误
-    proxyFrame.addEventListener('error', () => {
-      console.warn('iframe 加载失败');
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        // 如果按了回车，默认当作网址打开（和“打开”按钮一样）
+        loadUrl(urlInput.value);
+      }
+    });
+
+    // 搜索：用关键词拼接搜索引擎 URL
+    searchBtn.addEventListener('click', () => {
+      const keyword = urlInput.value.trim();
+      if (!keyword) return;
+
+      const engine = engineSelect.value;
+      const baseUrl = searchEngines[engine];
+      const searchUrl = baseUrl + encodeURIComponent(keyword);
+
+      loadUrl(searchUrl);
     });
   </script>
 </body>
