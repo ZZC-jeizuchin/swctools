@@ -107,30 +107,30 @@ export async function onRequest(context) {
     let html = await response.text();
     const proxyBase = myOrigin + '/api/topvpn?url=';
 
-    // 移除原有的 <base> 标签
+    // 移除原有 <base> 标签
     html = html.replace(/<base\b[^>]*>/gi, '');
 
-    // 辅助函数：智能编码，避免二次编码
+    // 辅助函数：转换为绝对代理链接（不编码，直接拼接）
     const toProxyUrl = (rawUrl) => {
-      if (!rawUrl || /^(javascript:|mailto:|data:|#|about:)/i.test(rawUrl)) return rawUrl;
+      if (!rawUrl) return rawUrl;
+      // 跳过特殊协议
+      if (/^(javascript:|mailto:|data:|#|about:)/i.test(rawUrl)) return rawUrl;
+      // 已经是代理链接，不再处理
+      if (rawUrl.startsWith(proxyBase) || rawUrl.startsWith('/api/topvpn?url=')) return rawUrl;
       try {
-        const absoluteUrl = new URL(rawUrl, finalUrl.href).href;
-        // 直接拼接代理前缀和完整目标URL，不再额外编码完整URL
-        return proxyBase + absoluteUrl;
+        const absolute = new URL(rawUrl, finalUrl.href).href;
+        return proxyBase + absolute;
       } catch {
         return rawUrl;
       }
     };
 
-    // 1. 处理静态HTML链接（仅处理原始相对路径，不处理已编码的URL）
+    // 1. 只重写静态链接（href），但跳过 form action
     html = html.replace(/(\shref)\s*=\s*["']([^"'\s>]+)["']/gi, (m, attr, url) => {
       return `${attr}="${toProxyUrl(url)}"`;
     });
-    html = html.replace(/(\saction|\sformaction)\s*=\s*["']([^"'\s>]+)["']/gi, (m, attr, url) => {
-      return `${attr}="${toProxyUrl(url)}"`;
-    });
 
-    // 2. 处理资源链接（src, srcset）
+    // 2. 资源链接（src, srcset）
     html = html.replace(/(\ssrc|\ssrcset)\s*=\s*["']([^"']+)["']/gi, (m, attr, url) => {
       if (/^(javascript:|data:)/i.test(url)) return m;
       if (attr.endsWith('srcset')) {
@@ -145,7 +145,7 @@ export async function onRequest(context) {
       return `${attr}="${toProxyUrl(url)}"`;
     });
 
-    // 3. 处理 meta refresh 重定向
+    // 3. 处理 meta refresh
     html = html.replace(/<meta\s+http-equiv\s*=\s*["']?refresh["']?([^>]*?)>/gi, (match, attrs) => {
       const contentMatch = attrs.match(/content\s*=\s*["']([^"']*)["']/i);
       if (contentMatch) {
@@ -160,7 +160,10 @@ export async function onRequest(context) {
       return match;
     });
 
-    // 注入前端防护脚本（修复后，确保持久生效）
+    // 4. ★ 不重写 form action 和 button formaction，留给前端拦截处理
+    // （因此正则里没有 action|formaction）
+
+    // 注入前端拦截脚本
     const interceptorScript = `
       <script>
         (function() {
@@ -192,21 +195,20 @@ export async function onRequest(context) {
           document.getElementById('__topvpn_refresh__').addEventListener('click', () => location.reload());
           document.getElementById('__topvpn_home__').addEventListener('click', () => { window.location.href = '/topvpn.html'; });
 
-          // 智能代理链接生成
+          // 智能代理链接生成（不重复处理）
           function proxyUrl(inputUrl) {
             if (!inputUrl && inputUrl !== 0) return inputUrl;
             if (inputUrl.startsWith(proxyBase) || inputUrl.startsWith('/api/topvpn?url=')) return inputUrl;
             if (/^(javascript:|mailto:|data:|#|about:)/i.test(inputUrl)) return inputUrl;
             try {
               const absolute = new URL(inputUrl, originalUrl).href;
-              // 避免二次编码
               return proxyBase + absolute;
             } catch (e) {
               return proxyBase + originalUrl;
             }
           }
 
-          // 导航锁定
+          // 锁定导航 API
           const originalAssign = window.location.assign.bind(window.location);
           const originalReplace = window.location.replace.bind(window.location);
           const originalPushState = history.pushState.bind(history);
@@ -235,24 +237,18 @@ export async function onRequest(context) {
             },
             writable: false, configurable: false
           });
-          
-          // 重写 window.open 以支持新窗口中的代理
           window.open = function(url, target, features) {
-            if (url && typeof url === 'string') {
-              url = proxyUrl(url);
-            }
+            if (url && typeof url === 'string') url = proxyUrl(url);
             return originalOpen(url, target, features);
           };
 
-          // 异步请求拦截
+          // 拦截 fetch 和 XHR
           const originalFetch = window.fetch;
           window.fetch = function(input, init) {
             if (typeof input === 'string') return originalFetch(proxyUrl(input), init);
             if (input instanceof Request) return originalFetch(new Request(proxyUrl(input.url), input), init);
             return originalFetch(proxyUrl(input.toString()), init);
           };
-          
-          // ... (其余代码不变)
           const OriginalXHR = window.XMLHttpRequest;
           window.XMLHttpRequest = function() {
             const xhr = new OriginalXHR();
@@ -264,61 +260,96 @@ export async function onRequest(context) {
             return xhr;
           };
 
-          // 动态DOM监控 (MutationObserver)
+          // 动态 DOM 监控（实时重写新出现的链接和表单）
           function rewriteElement(elem) {
             if (elem.nodeType !== 1) return;
-            // 处理 <a> 标签
+            // 重写 <a> 的 href
             if (elem.tagName === 'A' && elem.hasAttribute('href')) {
               const href = elem.getAttribute('href');
               if (href && !/^(javascript:|mailto:|data:|#|about:)/i.test(href) && !href.startsWith(proxyBase)) {
                 elem.setAttribute('href', proxyUrl(href));
               }
             }
-            // 处理 <form> 和 button 的 action/formaction
+            // ★ 表单 action 不在这里重写，保持原始，交给提交拦截
+            // 但为了安全，如果表单的 action 被脚本动态修改为绝对外站链接，我们也可以重写，但保留相对路径不变
             if (elem.tagName === 'FORM' && elem.hasAttribute('action')) {
-              elem.setAttribute('action', proxyUrl(elem.getAttribute('action')));
+              const action = elem.getAttribute('action');
+              // 只重写绝对外站链接，不重写相对路径和代理链接
+              if (action && !action.startsWith('/') && !action.startsWith(myOrigin) && !/^(https?:)?\/\//i.test(action)) {
+                // 相对路径不处理
+              } else if (action && /^https?:\/\//i.test(action) && !action.startsWith(myOrigin)) {
+                elem.setAttribute('action', proxyUrl(action));
+              }
             }
+            // 按钮的 formaction 同样处理
             if ((elem.tagName === 'BUTTON' || elem.tagName === 'INPUT') && elem.hasAttribute('formaction')) {
-              elem.setAttribute('formaction', proxyUrl(elem.getAttribute('formaction')));
+              const formaction = elem.getAttribute('formaction');
+              if (formaction && /^https?:\/\//i.test(formaction) && !formaction.startsWith(myOrigin)) {
+                elem.setAttribute('formaction', proxyUrl(formaction));
+              }
             }
-            // 递归处理子节点
-            for (const child of elem.children) {
-              rewriteElement(child);
+            // 处理 meta refresh
+            if (elem.tagName === 'META' && elem.getAttribute('http-equiv')?.toLowerCase() === 'refresh') {
+              let content = elem.getAttribute('content');
+              if (content) {
+                content = content.replace(/url\s*=\s*([^;]*)/i, (full, urlPart) => {
+                  let url = urlPart.trim().replace(/^['"]|['"]$/g, '');
+                  if (url) return 'url=' + proxyUrl(url);
+                  return full;
+                });
+                elem.setAttribute('content', content);
+              }
             }
+            for (const child of elem.children) rewriteElement(child);
           }
 
           if (document.body) rewriteElement(document.body);
 
           const observer = new MutationObserver(mutations => {
             for (const mutation of mutations) {
-              // 处理新增节点
               mutation.addedNodes.forEach(node => {
-                if (node.nodeType === 1) {
-                  rewriteElement(node);
-                }
+                if (node.nodeType === 1) rewriteElement(node);
               });
-              // 处理属性变化（动态修改 href）
               if (mutation.type === 'attributes' && mutation.target.nodeType === 1) {
                 const el = mutation.target;
                 const attr = mutation.attributeName;
-                if ((attr === 'href' || attr === 'action' || attr === 'formaction') && el.hasAttribute(attr)) {
-                  const val = el.getAttribute(attr);
-                  if (val && !/^(javascript:|mailto:|data:|#|about:)/i.test(val) && !val.startsWith(proxyBase)) {
-                    el.setAttribute(attr, proxyUrl(val));
+                if (attr === 'href' && el.tagName === 'A') {
+                  const href = el.getAttribute('href');
+                  if (href && !/^(javascript:|mailto:|data:|#|about:)/i.test(href) && !href.startsWith(proxyBase)) {
+                    el.setAttribute('href', proxyUrl(href));
+                  }
+                } else if (attr === 'action' && el.tagName === 'FORM') {
+                  const action = el.getAttribute('action');
+                  if (action && /^https?:\/\//i.test(action) && !action.startsWith(myOrigin)) {
+                    el.setAttribute('action', proxyUrl(action));
+                  }
+                } else if (attr === 'formaction') {
+                  const formaction = el.getAttribute('formaction');
+                  if (formaction && /^https?:\/\//i.test(formaction) && !formaction.startsWith(myOrigin)) {
+                    el.setAttribute('formaction', proxyUrl(formaction));
+                  }
+                } else if (attr === 'content' && el.tagName === 'META' && el.getAttribute('http-equiv')?.toLowerCase() === 'refresh') {
+                  let content = el.getAttribute('content');
+                  if (content) {
+                    content = content.replace(/url\s*=\s*([^;]*)/i, (full, urlPart) => {
+                      let url = urlPart.trim().replace(/^['"]|['"]$/g, '');
+                      if (url) return 'url=' + proxyUrl(url);
+                      return full;
+                    });
+                    el.setAttribute('content', content);
                   }
                 }
               }
             }
           });
-
           observer.observe(document.documentElement, {
             childList: true,
             subtree: true,
             attributes: true,
-            attributeFilter: ['href', 'action', 'formaction']
+            attributeFilter: ['href', 'action', 'formaction', 'content']
           });
 
-          // 全局事件拦截（兜底）
+          // 全局链接点击拦截
           document.addEventListener('click', function(e) {
             const link = e.target.closest('a');
             if (link && link.href) {
@@ -331,27 +362,27 @@ export async function onRequest(context) {
             }
           }, true);
 
-          // 表单提交拦截
+          // 表单提交拦截（核心）
           document.addEventListener('submit', function(e) {
             e.preventDefault();
+            e.stopImmediatePropagation();
             const form = e.target;
-            const action = form.getAttribute('action') || originalUrl;
-            const method = (form.method || 'get').toLowerCase();
             const formData = new FormData(form);
             const params = new URLSearchParams(formData).toString();
-            
-            let targetUrl;
+            // 获取原始 action（此时可能是相对路径，因为我们没有重写它）
+            let action = form.getAttribute('action') || originalUrl;
+            let actionUrl;
             try {
-              targetUrl = new URL(action, originalUrl);
+              actionUrl = new URL(action, originalUrl);
             } catch {
-              targetUrl = new URL(originalUrl);
+              actionUrl = new URL(originalUrl);
             }
-            
+            const method = (form.method || 'get').toLowerCase();
             if (method === 'get') {
-              targetUrl.search = params;
+              actionUrl.search = params;
             }
-            
-            window.location.assign(targetUrl.href);
+            // 通过 assign 走代理
+            window.location.assign(actionUrl.href);
           }, true);
 
           // 重写 form.submit()
@@ -359,36 +390,22 @@ export async function onRequest(context) {
             const event = new Event('submit', { cancelable: true });
             if (this.dispatchEvent(event)) {
               const form = this;
-              const action = form.getAttribute('action') || originalUrl;
-              const method = (form.method || 'get').toLowerCase();
               const formData = new FormData(form);
               const params = new URLSearchParams(formData).toString();
-              
-              let targetUrl;
-              try {
-                targetUrl = new URL(action, originalUrl);
-              } catch {
-                targetUrl = new URL(originalUrl);
-              }
-              
-              if (method === 'get') {
-                targetUrl.search = params;
-              }
-              
-              window.location.assign(targetUrl.href);
+              let action = form.getAttribute('action') || originalUrl;
+              let actionUrl;
+              try { actionUrl = new URL(action, originalUrl); } catch { actionUrl = new URL(originalUrl); }
+              if ((form.method || 'get').toLowerCase() === 'get') actionUrl.search = params;
+              window.location.assign(actionUrl.href);
             }
           };
         })();
       </script>
     `;
 
-    // 将拦截脚本放入 head 最前面（移除 <base> 标签的干扰）
     html = html.replace(/<head\b[^>]*>/i, '<head>' + interceptorScript);
 
-    return new Response(html, {
-      status: response.status,
-      headers: safeHeaders
-    });
+    return new Response(html, { status: response.status, headers: safeHeaders });
   } catch (err) {
     const errorHtml = `<!DOCTYPE html>
 <html>
