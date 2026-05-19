@@ -160,7 +160,7 @@
       </div>
     </div>
     <div class="iframe-wrapper">
-      <iframe id="proxyFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation allow-popups-to-escape-sandbox"></iframe>
+      <iframe id="proxyFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
     </div>
   </div>
 
@@ -188,23 +188,16 @@
       proxyFrame.src = '/api/vpn?url=' + encodeURIComponent(finalUrl);
     }
 
-    goBtn.addEventListener('click', () => {
-      loadUrl(urlInput.value);
-    });
-
+    goBtn.addEventListener('click', () => loadUrl(urlInput.value));
     urlInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        loadUrl(urlInput.value);
-      }
+      if (e.key === 'Enter') loadUrl(urlInput.value);
     });
-
     searchBtn.addEventListener('click', () => {
       const keyword = urlInput.value.trim();
       if (!keyword) return;
       const engine = engineSelect.value;
       const baseUrl = searchEngines[engine];
-      const searchUrl = baseUrl + encodeURIComponent(keyword);
-      loadUrl(searchUrl);
+      loadUrl(baseUrl + encodeURIComponent(keyword));
     });
   </script>
 </body>
