@@ -33,15 +33,26 @@ export async function onRequest(context) {
     const contentType = response.headers.get('Content-Type') || '';
     const isHTML = contentType.includes('text/html');
 
-    // 只保留最基础的头，彻底移除安全限制
+    // 安全的响应头（增加 content-length）
     const safeHeaders = new Headers();
-    const headersToKeep = ['content-type', 'content-encoding', 'content-language', 'cache-control', 'expires', 'last-modified', 'etag'];
+    const headersToKeep = [
+      'content-type',
+      'content-encoding',
+      'content-language',
+      'cache-control',
+      'expires',
+      'last-modified',
+      'etag',
+      'content-length'
+    ];
     for (const header of headersToKeep) {
       const value = response.headers.get(header);
-      if (value) safeHeaders.set(header, value);
+      if (value !== null && value !== undefined) {
+        safeHeaders.set(header, value);
+      }
     }
     safeHeaders.set('Access-Control-Allow-Origin', '*');
-    // 显式删除可能阻止嵌套的头
+    // 移除可能阻止嵌套或影响 Cookie 的头
     safeHeaders.delete('X-Frame-Options');
     safeHeaders.delete('Content-Security-Policy');
     safeHeaders.delete('X-Content-Type-Options');
@@ -52,65 +63,117 @@ export async function onRequest(context) {
       let html = await response.text();
       const proxyBase = '/api/vpn?url=';
 
-      // 重写所有链接和资源路径
-      html = html.replace(/(href|src|action|srcset)\s*=\s*["']([^"'\s>]+)["']/gi, (match, attr, url) => {
-        // 跳过 javascript:、mailto:、data: 和纯锚点
+      // 1. 处理 <base> 标签：重写其 href 为代理链接，或直接移除（这里选择移除，避免干扰）
+      html = html.replace(/<base\b[^>]*>/gi, '');
+
+      // 2. 重写所有资源链接
+      html = html.replace(/(href|src|action)\s*=\s*["']([^"'\s>]+)["']/gi, (match, attr, url) => {
+        // 跳过特殊协议
         if (/^(javascript:|mailto:|data:|#)/i.test(url)) return match;
         let fullUrl;
         try {
-          // 尝试解析为绝对URL（相对于最终页面地址）
-          fullUrl = new URL(url, finalUrl.origin).href;
+          // 使用 finalUrl.href 作为基准，保留路径信息
+          fullUrl = new URL(url, finalUrl.href).href;
         } catch {
-          return match; // 无效路径则保留原样
+          return match;
         }
-        // 无论原来是相对还是绝对，都重写为代理链接
         return `${attr}="${proxyBase}${encodeURIComponent(fullUrl)}"`;
       });
 
-      // 注入动态跳转拦截脚本
+      // 3. 单独处理 srcset 属性
+      html = html.replace(/srcset\s*=\s*["']([^"']+)["']/gi, (match, srcsetValue) => {
+        const urls = srcsetValue.split(',').map(part => {
+          const trimmed = part.trim();
+          const [url, ...rest] = trimmed.split(/\s+/);
+          if (!url || /^(javascript:|data:)/.test(url)) return trimmed;
+          try {
+            const fullUrl = new URL(url, finalUrl.href).href;
+            return `${proxyBase}${encodeURIComponent(fullUrl)} ${rest.join(' ')}`.trim();
+          } catch {
+            return trimmed;
+          }
+        });
+        return `srcset="${urls.join(', ')}"`;
+      });
+
+      // 4. 注入拦截脚本（修复相对路径、location、history）
       const interceptorScript = `
         <script>
           (function() {
             const proxyBase = '/api/vpn?url=';
+
+            // 将 URL 转为绝对路径再代理
+            function proxyUrl(url) {
+              try {
+                const absolute = new URL(url, location.href).href;
+                return proxyBase + encodeURIComponent(absolute);
+              } catch(e) {
+                return url;
+              }
+            }
+
             // 拦截 fetch
             const originalFetch = window.fetch;
             window.fetch = function(input, init) {
-              let url = input;
+              let url;
               if (typeof input === 'string') {
-                url = proxyBase + encodeURIComponent(input);
+                url = proxyUrl(input);
               } else if (input instanceof Request) {
-                url = proxyBase + encodeURIComponent(input.url);
-                init = init || {};
-                init.method = init.method || input.method;
-                init.headers = new Headers(input.headers);
-                init.body = input.body;
+                url = proxyUrl(input.url);
+                init = Object.assign({}, input, init);
               }
               return originalFetch(url, init);
             };
+
             // 拦截 XMLHttpRequest
             const OriginalXHR = window.XMLHttpRequest;
             window.XMLHttpRequest = function() {
               const xhr = new OriginalXHR();
               const originalOpen = xhr.open;
               xhr.open = function(method, url, async, user, password) {
-                const proxiedUrl = proxyBase + encodeURIComponent(url);
-                originalOpen.call(xhr, method, proxiedUrl, async, user, password);
+                arguments[1] = proxyUrl(url);
+                return originalOpen.apply(xhr, arguments);
               };
               return xhr;
             };
-            // 拦截 window.location 赋值，防止跳出iframe
-            const originalLocation = window.location;
-            Object.defineProperty(window, 'location', {
-              get: function() { return originalLocation; },
-              set: function(url) {
-                try {
-                  const newUrl = new URL(url, originalLocation.href);
-                  originalLocation.href = proxyBase + encodeURIComponent(newUrl.href);
-                } catch(e) {
-                  originalLocation.href = url;
+
+            // 安全地重写导航方法，避免定义 location 属性
+            const originalAssign = window.location.assign.bind(window.location);
+            const originalReplace = window.location.replace.bind(window.location);
+            window.location.assign = function(url) {
+              return originalAssign(proxyUrl(url));
+            };
+            window.location.replace = function(url) {
+              return originalReplace(proxyUrl(url));
+            };
+
+            // 拦截 history.pushState / replaceState（SPA 路由）
+            const originalPushState = history.pushState;
+            const originalReplaceState = history.replaceState;
+            history.pushState = function(state, title, url) {
+              if (url) {
+                arguments[2] = proxyUrl(url);
+              }
+              return originalPushState.apply(history, arguments);
+            };
+            history.replaceState = function(state, title, url) {
+              if (url) {
+                arguments[2] = proxyUrl(url);
+              }
+              return originalReplaceState.apply(history, arguments);
+            };
+
+            // 监听链接点击（备用，防止 a 标签直接跳转）
+            document.addEventListener('click', function(e) {
+              const target = e.target.closest('a');
+              if (target && target.href) {
+                const href = target.getAttribute('href');
+                if (href && !/^(javascript:|mailto:|#)/i.test(href)) {
+                  e.preventDefault();
+                  window.location.assign(href);
                 }
               }
-            });
+            }, true);
           })();
         </script>
       `;
@@ -122,15 +185,23 @@ export async function onRequest(context) {
       });
     }
 
-    // 非 HTML 资源同样使用安全的头
+    // 非 HTML 资源
     return new Response(response.body, {
       status: response.status,
       headers: safeHeaders
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: '代理请求失败: ' + err.message }), {
+    // 返回友好的 HTML 错误页，而不是 JSON
+    const errorHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>代理错误</title>
+<style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f5f5f5;}
+.error-box{background:white;padding:2rem;border-radius:1rem;box-shadow:0 4px 12px rgba(0,0,0,0.1);text-align:center;}
+h2{color:#c0392b;}p{color:#555;}</style></head>
+<body><div class="error-box"><h2>代理请求失败</h2><p>${err.message}</p></div></body></html>`;
+    return new Response(errorHtml, {
       status: 502,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'text/html; charset=utf-8' }
     });
   }
 }
