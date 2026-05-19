@@ -85,7 +85,7 @@ export async function onRequest(context) {
         return `srcset="${urls.join(', ')}"`;
       });
 
-      // 注入前端拦截脚本 —— 最终修复版
+      // 注入前端拦截脚本 —— 最终完整版
       const interceptorScript = `
         <script>
           (function() {
@@ -109,7 +109,26 @@ export async function onRequest(context) {
               }
             }
 
-            // 拦截 fetch（正确保留 Request 对象）
+            // ★ 核心：将表单转为代理跳转
+            function submitFormViaProxy(form) {
+              const target = form.getAttribute('target') || '_self';
+              if (target !== '_self' && target !== '' && target !== '_parent' && target !== '_top') return;
+
+              const formData = new FormData(form);
+              const params = new URLSearchParams(formData).toString();
+              let action = form.getAttribute('action') || originalUrl;
+              let actionUrl;
+              try {
+                actionUrl = new URL(action, originalUrl);
+              } catch {
+                actionUrl = new URL(originalUrl);
+              }
+              // 绝大多数搜索都是 GET 方式，统一按 GET 处理
+              actionUrl.search = params;
+              window.location.assign(actionUrl.href);  // 会被我们重写的 assign 拦截
+            }
+
+            // 拦截 fetch
             const originalFetch = window.fetch;
             window.fetch = function(input, init) {
               if (typeof input === 'string') {
@@ -117,10 +136,8 @@ export async function onRequest(context) {
               }
               if (input instanceof Request) {
                 const newUrl = proxyUrl(input.url);
-                // 创建新 Request，完整复制属性，init 可覆盖
                 return originalFetch(new Request(newUrl, input), init);
               }
-              // 其他情况（如 URL 对象）
               return originalFetch(proxyUrl(input.toString()), init);
             };
 
@@ -158,47 +175,43 @@ export async function onRequest(context) {
               return originalReplaceState.apply(history, arguments);
             };
 
-            // 全局拦截 a 标签点击
+            // ★ 全局拦截 a 标签点击（含搜索按钮等）
             document.addEventListener('click', function(e) {
-              const target = e.target.closest('a');
-              if (target && target.href) {
-                const rawHref = target.getAttribute('href');
+              // 处理 a 标签
+              const link = e.target.closest('a');
+              if (link && link.href) {
+                const rawHref = link.getAttribute('href');
                 if (rawHref && !/^(javascript:|mailto:|#)/i.test(rawHref)) {
                   e.preventDefault();
                   window.location.assign(rawHref);
+                  return;
+                }
+              }
+              // 处理提交按钮（防止百度式 form.submit() 绕过）
+              const submitButton = e.target.closest('button[type="submit"], input[type="submit"]');
+              if (submitButton) {
+                const form = submitButton.closest('form');
+                if (form) {
+                  e.preventDefault();
+                  submitFormViaProxy(form);
                 }
               }
             }, true);
 
-            // ★ 全局拦截表单提交（彻底避免使用代理页 URL）
+            // ★ 拦截 submit 事件（备用）
             document.addEventListener('submit', function(e) {
               const form = e.target;
               if (form.tagName !== 'FORM') return;
-              const target = form.getAttribute('target') || '_self';
-              // 只拦截在当前窗口提交的表单
-              if (target !== '_self' && target !== '' && target !== '_parent' && target !== '_top') return;
               e.preventDefault();
-
-              const formData = new FormData(form);
-              const params = new URLSearchParams(formData).toString();
-              let action = form.getAttribute('action') || originalUrl; // ★ 关键：用原始 URL 作后备
-              let actionUrl;
-              try {
-                actionUrl = new URL(action, originalUrl); // 解析为基于 originalUrl 的绝对 URL
-              } catch {
-                actionUrl = new URL(originalUrl); // 失败则直接使用原始 URL
-              }
-              const method = (form.method || 'get').toLowerCase();
-              if (method === 'get') {
-                // GET 表单：将参数合并进 URL
-                actionUrl.search = params;
-              } else {
-                // POST 表单也转成 GET（大部分搜索都是 GET 请求）
-                actionUrl.search = params;
-              }
-              // 通过代理跳转
-              window.location.assign(actionUrl.href);
+              submitFormViaProxy(form);
             }, true);
+
+            // ★★★ 最关键：重写 form.submit() 方法，彻底封死百度这类编程式提交
+            const originalFormSubmit = HTMLFormElement.prototype.submit;
+            HTMLFormElement.prototype.submit = function() {
+              // 调用我们的代理跳转，不再触发原生提交
+              submitFormViaProxy(this);
+            };
           })();
         </script>
       `;
