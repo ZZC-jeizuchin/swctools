@@ -1,6 +1,7 @@
 export async function onRequest(context) {
   const { request } = context;
   const urlParam = new URL(request.url).searchParams.get('url');
+  const myOrigin = new URL(request.url).origin;
 
   // 缺少参数 → 返回输入页面
   if (!urlParam) {
@@ -83,7 +84,7 @@ export async function onRequest(context) {
       }
     });
 
-    const finalUrl = new URL(response.url); // 最终重定向后的地址
+    const finalUrl = new URL(response.url);
     const contentType = response.headers.get('Content-Type') || '';
     const isHTML = contentType.includes('text/html');
 
@@ -104,19 +105,15 @@ export async function onRequest(context) {
     }
 
     let html = await response.text();
-    const proxyBase = '/api/topvpn?url=';
+    // 使用绝对路径的代理基路径，避免被相对解析到目标域名
+    const proxyBase = myOrigin + '/api/topvpn?url=';
 
-    // 1. 移除原有 <base> 标签
+    // 移除原有的 <base> 标签和 CSP meta
     html = html.replace(/<base\b[^>]*>/gi, '');
-
-    // 2. 移除 <meta> CSP 标签
     html = html.replace(/<meta\s+http-equiv\s*=\s*["']?content-security-policy["']?[^>]*\/?>/gi, '');
     html = html.replace(/<meta\b[^>]*\bcontent-security-policy[^>]*\/?>/gi, '');
 
-    // 3. 插入正确的 <base> 标签（让相对路径基于目标网站解析）
-    const baseTag = `<base href="${finalUrl.href}">`;
-
-    // 辅助函数：将 URL 转为代理链接
+    // 将任意 URL 转为绝对代理链接
     const toProxyUrl = (u) => {
       if (!u || /^(javascript:|mailto:|data:|#|about:)/i.test(u)) return u;
       try {
@@ -125,9 +122,11 @@ export async function onRequest(context) {
       } catch { return u; }
     };
 
-    // 4. 重写普通链接和资源链接
+    // 重写链接（href, action, formaction）
     html = html.replace(/(\shref)\s*=\s*["']([^"'\s>]+)["']/gi, (m, attr, url) => `${attr}="${toProxyUrl(url)}"`);
     html = html.replace(/(\saction|\sformaction)\s*=\s*["']([^"'\s>]+)["']/gi, (m, attr, url) => `${attr}="${toProxyUrl(url)}"`);
+
+    // 重写资源（src, srcset）
     html = html.replace(/(\ssrc|\ssrcset)\s*=\s*["']([^"']+)["']/gi, (m, attr, url) => {
       if (/^(javascript:|data:)/i.test(url)) return m;
       if (attr.endsWith('srcset')) {
@@ -142,33 +141,27 @@ export async function onRequest(context) {
       return `${attr}="${toProxyUrl(url)}"`;
     });
 
-    // ★ 5. 重写 <meta http-equiv="refresh"> 标签（防止自动跳转逃逸）
+    // 重写 <meta http-equiv="refresh"> 防止自动跳转逃逸
     html = html.replace(/<meta\s+http-equiv\s*=\s*["']?refresh["']?([^>]*?)>/gi, (match, attrs) => {
-      // 提取 content 属性中的 url=...
       const contentMatch = attrs.match(/content\s*=\s*["']([^"']*)["']/i);
       if (contentMatch) {
         let content = contentMatch[1];
-        // 匹配 url=... 或直接数字分号后跟 URL 的格式
         content = content.replace(/url\s*=\s*([^;]*)/i, (full, urlPart) => {
-          // urlPart 可能是相对路径，去除两端空白及引号
           let url = urlPart.trim().replace(/^['"]|['"]$/g, '');
-          if (url) {
-            const proxied = toProxyUrl(url);
-            return `url=${proxied}`;
-          }
+          if (url) return `url=${toProxyUrl(url)}`;
           return full;
         });
-        // 如果没有 url=，但整个 content 是数字；url=... 的格式，我们已经处理了
         return `<meta http-equiv="refresh" content="${content}">`;
       }
-      return match; // 无法识别则保留原样
+      return match;
     });
 
-    // 6. 注入前端拦截脚本（包含 MutationObserver 等所有防护）
+    // 注入前端拦截脚本（导航锁定 + MutationObserver + 控制栏）
     const interceptorScript = `
       <script>
         (function() {
-          const proxyBase = '/api/topvpn?url=';
+          const proxyBase = ${JSON.stringify(proxyBase)};
+          const myOrigin = ${JSON.stringify(myOrigin)};
           const originalUrl = ${JSON.stringify(finalUrl.href)};
 
           // 控制栏 UI
@@ -195,10 +188,11 @@ export async function onRequest(context) {
           document.getElementById('__topvpn_refresh__').addEventListener('click', () => location.reload());
           document.getElementById('__topvpn_home__').addEventListener('click', () => { window.location.href = '/topvpn.html'; });
 
-          // 代理 URL 转换
+          // 核心代理 URL 转换（生成绝对代理链接）
           function proxyUrl(inputUrl) {
             if (!inputUrl && inputUrl !== 0) return inputUrl;
-            if (inputUrl.startsWith(proxyBase)) return inputUrl;
+            // 已经是绝对代理链接或根相对代理链接，原样返回
+            if (inputUrl.startsWith(proxyBase) || inputUrl.startsWith('/api/topvpn?url=')) return inputUrl;
             if (/^(javascript:|mailto:|data:|#|about:)/i.test(inputUrl)) return inputUrl;
             try {
               const absolute = new URL(inputUrl, originalUrl).href;
@@ -208,7 +202,7 @@ export async function onRequest(context) {
             }
           }
 
-          // ---- 锁定导航 API ----
+          // ---- 锁定所有导航 API ----
           const originalAssign = window.location.assign.bind(window.location);
           const originalReplace = window.location.replace.bind(window.location);
           const originalOpen = window.open.bind(window);
@@ -268,7 +262,7 @@ export async function onRequest(context) {
             return xhr;
           };
 
-          // ---- MutationObserver 动态元素重写 ----
+          // ---- MutationObserver 动态重写 ----
           function rewriteElement(elem) {
             if (elem.nodeType !== 1) return;
             if (elem.tagName === 'A' && elem.hasAttribute('href')) {
@@ -283,7 +277,6 @@ export async function onRequest(context) {
             if ((elem.tagName === 'BUTTON' || elem.tagName === 'INPUT') && elem.hasAttribute('formaction')) {
               elem.setAttribute('formaction', proxyUrl(elem.getAttribute('formaction')));
             }
-            // 处理 meta refresh 动态添加
             if (elem.tagName === 'META' && elem.getAttribute('http-equiv')?.toLowerCase() === 'refresh') {
               let content = elem.getAttribute('content');
               if (content) {
@@ -295,27 +288,20 @@ export async function onRequest(context) {
                 elem.setAttribute('content', content);
               }
             }
-            // 递归子元素
-            for (const child of elem.children) {
-              rewriteElement(child);
-            }
+            for (const child of elem.children) rewriteElement(child);
           }
 
           if (document.body) rewriteElement(document.body);
 
           const observer = new MutationObserver(mutations => {
             for (const mutation of mutations) {
-              mutation.addedNodes.forEach(node => {
-                if (node.nodeType === 1) rewriteElement(node);
-              });
+              mutation.addedNodes.forEach(node => { if (node.nodeType === 1) rewriteElement(node); });
               if (mutation.type === 'attributes' && mutation.target.nodeType === 1) {
                 const el = mutation.target;
                 const attr = mutation.attributeName;
                 if (attr === 'href' && el.tagName === 'A') {
                   const href = el.getAttribute('href');
-                  if (href && !/^(javascript:|mailto:|data:|#|about:)/i.test(href)) {
-                    el.setAttribute('href', proxyUrl(href));
-                  }
+                  if (href && !/^(javascript:|mailto:|data:|#|about:)/i.test(href)) el.setAttribute('href', proxyUrl(href));
                 } else if (attr === 'action' && el.tagName === 'FORM') {
                   el.setAttribute('action', proxyUrl(el.getAttribute('action')));
                 } else if (attr === 'formaction') {
@@ -341,7 +327,7 @@ export async function onRequest(context) {
             attributeFilter: ['href', 'action', 'formaction', 'content']
           });
 
-          // ---- 全局事件拦截（兜底） ----
+          // 事件拦截（兜底）
           document.addEventListener('click', function(e) {
             const link = e.target.closest('a');
             if (!link || !link.href) return;
@@ -361,18 +347,11 @@ export async function onRequest(context) {
             const params = new URLSearchParams(formData).toString();
             let action = form.getAttribute('action') || originalUrl;
             let actionUrl;
-            try {
-              actionUrl = new URL(action, originalUrl);
-            } catch {
-              actionUrl = new URL(originalUrl);
-            }
-            if ((form.method || 'get').toLowerCase() === 'get') {
-              actionUrl.search = params;
-            }
+            try { actionUrl = new URL(action, originalUrl); } catch { actionUrl = new URL(originalUrl); }
+            if ((form.method || 'get').toLowerCase() === 'get') actionUrl.search = params;
             window.location.assign(actionUrl.href);
           }, true);
 
-          // 覆盖 form.submit()
           HTMLFormElement.prototype.submit = function() {
             const event = new Event('submit', { cancelable: true });
             if (this.dispatchEvent(event)) {
@@ -381,14 +360,8 @@ export async function onRequest(context) {
               const params = new URLSearchParams(formData).toString();
               let action = form.getAttribute('action') || originalUrl;
               let actionUrl;
-              try {
-                actionUrl = new URL(action, originalUrl);
-              } catch {
-                actionUrl = new URL(originalUrl);
-              }
-              if ((form.method || 'get').toLowerCase() === 'get') {
-                actionUrl.search = params;
-              }
+              try { actionUrl = new URL(action, originalUrl); } catch { actionUrl = new URL(originalUrl); }
+              if ((form.method || 'get').toLowerCase() === 'get') actionUrl.search = params;
               window.location.assign(actionUrl.href);
             }
           };
@@ -396,13 +369,9 @@ export async function onRequest(context) {
       </script>
     `;
 
-    // 将 <base> 和拦截脚本放入 <head> 最前面
-    html = html.replace(/<head\b[^>]*>/i, '<head>' + baseTag + interceptorScript);
+    html = html.replace(/<head\b[^>]*>/i, '<head>' + interceptorScript);
 
-    return new Response(html, {
-      status: response.status,
-      headers: safeHeaders
-    });
+    return new Response(html, { status: response.status, headers: safeHeaders });
   } catch (err) {
     const errorHtml = `<!DOCTYPE html>
 <html>
