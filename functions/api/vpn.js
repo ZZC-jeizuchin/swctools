@@ -33,17 +33,10 @@ export async function onRequest(context) {
     const contentType = response.headers.get('Content-Type') || '';
     const isHTML = contentType.includes('text/html');
 
-    // 安全的响应头（增加 content-length）
     const safeHeaders = new Headers();
     const headersToKeep = [
-      'content-type',
-      'content-encoding',
-      'content-language',
-      'cache-control',
-      'expires',
-      'last-modified',
-      'etag',
-      'content-length'
+      'content-type', 'content-encoding', 'content-language',
+      'cache-control', 'expires', 'last-modified', 'etag', 'content-length'
     ];
     for (const header of headersToKeep) {
       const value = response.headers.get(header);
@@ -52,7 +45,6 @@ export async function onRequest(context) {
       }
     }
     safeHeaders.set('Access-Control-Allow-Origin', '*');
-    // 移除可能阻止嵌套或影响 Cookie 的头
     safeHeaders.delete('X-Frame-Options');
     safeHeaders.delete('Content-Security-Policy');
     safeHeaders.delete('X-Content-Type-Options');
@@ -63,16 +55,14 @@ export async function onRequest(context) {
       let html = await response.text();
       const proxyBase = '/api/vpn?url=';
 
-      // 1. 处理 <base> 标签：重写其 href 为代理链接，或直接移除（这里选择移除，避免干扰）
+      // 移除 <base> 标签避免干扰
       html = html.replace(/<base\b[^>]*>/gi, '');
 
-      // 2. 重写所有资源链接
+      // 重写链接属性
       html = html.replace(/(href|src|action)\s*=\s*["']([^"'\s>]+)["']/gi, (match, attr, url) => {
-        // 跳过特殊协议
         if (/^(javascript:|mailto:|data:|#)/i.test(url)) return match;
         let fullUrl;
         try {
-          // 使用 finalUrl.href 作为基准，保留路径信息
           fullUrl = new URL(url, finalUrl.href).href;
         } catch {
           return match;
@@ -80,7 +70,7 @@ export async function onRequest(context) {
         return `${attr}="${proxyBase}${encodeURIComponent(fullUrl)}"`;
       });
 
-      // 3. 单独处理 srcset 属性
+      // 处理 srcset
       html = html.replace(/srcset\s*=\s*["']([^"']+)["']/gi, (match, srcsetValue) => {
         const urls = srcsetValue.split(',').map(part => {
           const trimmed = part.trim();
@@ -96,20 +86,29 @@ export async function onRequest(context) {
         return `srcset="${urls.join(', ')}"`;
       });
 
-      // 4. 注入拦截脚本（修复相对路径、location、history）
+      // 注入脚本 —— 关键修正在此
       const interceptorScript = `
         <script>
           (function() {
             const proxyBase = '/api/vpn?url=';
 
-            // 将 URL 转为绝对路径再代理
-            function proxyUrl(url) {
-              try {
-                const absolute = new URL(url, location.href).href;
-                return proxyBase + encodeURIComponent(absolute);
-              } catch(e) {
-                return url;
+            // ★ 从当前代理地址中提取原始目标网站 URL
+            const urlParams = new URLSearchParams(location.search);
+            const rawUrl = urlParams.get('url');
+            if (!rawUrl) return;
+            const originalUrl = decodeURIComponent(rawUrl); // 例如 https://www.google.com/
+
+            // 将任意 URL 转为代理链接，使用 originalUrl 作为相对路径基准
+            function proxyUrl(inputUrl) {
+              if (inputUrl.startsWith(proxyBase)) return inputUrl; // 已经代理过的，不再重复代理
+              let absolute;
+              if (inputUrl.startsWith('http://') || inputUrl.startsWith('https://') || inputUrl.startsWith('//')) {
+                absolute = new URL(inputUrl, originalUrl).href; // 协议相对或绝对路径，用 originalUrl 做基准保证完整
+              } else {
+                // 纯相对路径，基于 originalUrl 解析
+                absolute = new URL(inputUrl, originalUrl).href;
               }
+              return proxyBase + encodeURIComponent(absolute);
             }
 
             // 拦截 fetch
@@ -137,7 +136,7 @@ export async function onRequest(context) {
               return xhr;
             };
 
-            // 安全地重写导航方法，避免定义 location 属性
+            // 安全拦截 location 赋值
             const originalAssign = window.location.assign.bind(window.location);
             const originalReplace = window.location.replace.bind(window.location);
             window.location.assign = function(url) {
@@ -147,30 +146,26 @@ export async function onRequest(context) {
               return originalReplace(proxyUrl(url));
             };
 
-            // 拦截 history.pushState / replaceState（SPA 路由）
+            // 拦截 history.pushState / replaceState
             const originalPushState = history.pushState;
             const originalReplaceState = history.replaceState;
             history.pushState = function(state, title, url) {
-              if (url) {
-                arguments[2] = proxyUrl(url);
-              }
+              if (url) arguments[2] = proxyUrl(url);
               return originalPushState.apply(history, arguments);
             };
             history.replaceState = function(state, title, url) {
-              if (url) {
-                arguments[2] = proxyUrl(url);
-              }
+              if (url) arguments[2] = proxyUrl(url);
               return originalReplaceState.apply(history, arguments);
             };
 
-            // 监听链接点击（备用，防止 a 标签直接跳转）
+            // 监听所有 a 标签点击（防止动态生成的链接直接跳转）
             document.addEventListener('click', function(e) {
               const target = e.target.closest('a');
               if (target && target.href) {
-                const href = target.getAttribute('href');
-                if (href && !/^(javascript:|mailto:|#)/i.test(href)) {
+                const rawHref = target.getAttribute('href');
+                if (rawHref && !/^(javascript:|mailto:|#)/i.test(rawHref)) {
                   e.preventDefault();
-                  window.location.assign(href);
+                  window.location.assign(rawHref); // proxyUrl 会自动处理相对路径
                 }
               }
             }, true);
@@ -185,13 +180,11 @@ export async function onRequest(context) {
       });
     }
 
-    // 非 HTML 资源
     return new Response(response.body, {
       status: response.status,
       headers: safeHeaders
     });
   } catch (err) {
-    // 返回友好的 HTML 错误页，而不是 JSON
     const errorHtml = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>代理错误</title>
