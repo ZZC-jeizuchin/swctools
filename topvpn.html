@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>顶层代理 - SwCTools</title>
+  <style>
+    :root {
+      --bg-body: #e8edf2;
+      --panel-bg: rgba(255,255,255,0.9);
+      --panel-border: #bdd1e6;
+      --text-color: #173e58;
+      --btn-bg: #4f7f9e;
+      --btn-hover: #3a6b8c;
+      --input-border: #b3cce2;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; font-family:system-ui, sans-serif; }
+    body {
+      background: var(--bg-body);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .panel {
+      background: var(--panel-bg);
+      border-radius: 24px;
+      box-shadow: 0 12px 28px rgba(30,65,90,0.15);
+      border: 1px solid var(--panel-border);
+      padding: 32px 24px;
+      width: 100%;
+      max-width: 560px;
+    }
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: #1e4b6e;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    input, select {
+      flex: 1;
+      padding: 12px 18px;
+      border: 1.5px solid var(--input-border);
+      border-radius: 36px;
+      background: white;
+      font-size: 1rem;
+      outline: none;
+      color: var(--text-color);
+    }
+    input:focus, select:focus {
+      border-color: #4f7fa3;
+      box-shadow: 0 0 0 3px rgba(79,127,163,0.2);
+    }
+    button {
+      padding: 12px 24px;
+      border-radius: 36px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      border: none;
+      background: var(--btn-bg);
+      color: white;
+      transition: 0.15s;
+    }
+    button:hover { background: var(--btn-hover); }
+    button.outline {
+      background: transparent;
+      color: var(--btn-bg);
+      border: 1.5px solid var(--btn-bg);
+    }
+    button.outline:hover { background: var(--btn-bg); color: white; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h1>🌐 顶层代理</h1>
+    <div class="row">
+      <input type="text" id="urlInput" placeholder="输入网址或搜索词">
+      <select id="engineSelect">
+        <option value="">直接访问</option>
+        <option value="baidu">百度</option>
+        <option value="google">Google</option>
+        <option value="bing">Bing</option>
+        <option value="duckduckgo">DuckDuckGo</option>
+      </select>
+    </div>
+    <div class="row">
+      <button id="goBtn">🚀 打开</button>
+      <button id="searchBtn">🔍 搜索</button>
+      <button class="outline" onclick="window.location.href='index.html'">← 返回主页</button>
+    </div>
+    <p style="margin-top:16px; font-size:0.85rem; color:#4f7f9e; text-align:center;">
+      直接通过代理加载页面，不会被网站检测到嵌套
+    </p>
+  </div>
+
+  <script>
+    const engines = {
+      baidu: 'https://www.baidu.com/s?wd=',
+      google: 'https://www.google.com/search?q=',
+      bing: 'https://www.bing.com/search?q=',
+      duckduckgo: 'https://duckduckgo.com/?q='
+    };
+
+    function navigate(url) {
+      if (!url.trim()) return;
+      let final = url.trim();
+      if (!/^https?:\/\//i.test(final)) final = 'https://' + final;
+      // 跳转到代理页面（顶层）
+      window.location.href = '/api/topvpn?url=' + encodeURIComponent(final);
+    }
+
+    document.getElementById('goBtn').addEventListener('click', () => {
+      navigate(document.getElementById('urlInput').value);
+    });
+    document.getElementById('searchBtn').addEventListener('click', () => {
+      const keyword = document.getElementById('urlInput').value.trim();
+      if (!keyword) return;
+      const engine = document.getElementById('engineSelect').value;
+      if (engine && engines[engine]) {
+        navigate(engines[engine] + encodeURIComponent(keyword));
+      } else {
+        navigate(keyword); // 作为直接网址处理
+      }
+    });
+    document.getElementById('urlInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') navigate(document.getElementById('urlInput').value);
+    });
+  </script>
+</body>
+</html>
