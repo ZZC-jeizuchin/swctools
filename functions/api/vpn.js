@@ -3,41 +3,52 @@ export async function onRequest(context) {
   const urlParam = new URL(request.url).searchParams.get('url');
 
   if (!urlParam) {
-    return new Response(JSON.stringify({ error: '缺少 url 参数' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  // 只允许 http 和 https 协议
-  if (!/^https?:\/\//i.test(urlParam)) {
-    return new Response(JSON.stringify({ error: '仅支持 http 或 https 协议' }), {
+    return new Response(JSON.stringify({ error: 'Missing url parameter' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' }
     });
   }
 
   try {
-    const targetRes = await fetch(urlParam, {
+    const targetUrl = new URL(urlParam);
+    const response = await fetch(targetUrl.toString(), {
       redirect: 'manual',
       headers: {
-        'User-Agent': 'SwCTools-VPN/1.0',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
       }
     });
 
-    const responseHeaders = new Headers(targetRes.headers);
-    // 移除阻止在 iframe 中显示的头部
-    responseHeaders.delete('x-frame-options');
-    responseHeaders.delete('content-security-policy');
-    // 不把目标网站的 cookie 传给用户浏览器
-    responseHeaders.delete('set-cookie');
-    // 允许被任意页面嵌入
-    responseHeaders.set('Access-Control-Allow-Origin', '*');
+    const contentType = response.headers.get('Content-Type') || '';
+    const isHTML = contentType.includes('text/html');
 
-    return new Response(targetRes.body, {
-      status: targetRes.status,
-      headers: responseHeaders
+    if (isHTML) {
+      let html = await response.text();
+      const proxyBase = '/api/vpn?url=';
+
+      // 重写相对路径资源，使其指向代理
+      html = html.replace(/(href|src|action)\s*=\s*["'](?!https?:\/\/|\/\/|#|javascript:|mailto:|data:)([^"'\s>]+)["']/gi, (match, attr, path) => {
+        const fullUrl = new URL(path, targetUrl.origin).href;
+        return `${attr}="${proxyBase}${encodeURIComponent(fullUrl)}"`;
+      });
+
+      return new Response(html, {
+        status: response.status,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
+    // 非 HTML 内容直接返回
+    return new Response(response.body, {
+      status: response.status,
+      headers: {
+        'Content-Type': contentType,
+        'Access-Control-Allow-Origin': '*'
+      }
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: '代理请求失败: ' + err.message }), {
