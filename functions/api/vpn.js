@@ -32,23 +32,31 @@ export async function onRequest(context) {
     const contentType = response.headers.get('Content-Type') || '';
     const isHTML = contentType.includes('text/html');
 
+    // 创建一个新 Headers，从原响应中复制，然后移除限制性头部
+    const newHeaders = new Headers(response.headers);
+    // 必须删除以下头部，否则浏览器会阻止显示
+    newHeaders.delete('x-frame-options');
+    newHeaders.delete('content-security-policy');
+    newHeaders.delete('x-content-type-options');
+    newHeaders.delete('strict-transport-security');
+    // 允许被任意页面嵌入
+    newHeaders.set('access-control-allow-origin', '*');
+
     if (isHTML) {
       let html = await response.text();
       const proxyBase = '/api/vpn?url=';
 
-      // 1. 重写 HTML 中的静态资源路径（图片、CSS、JS 等）
-      html = html.replace(/(href|src|action)\s*=\s*["'](?!https?:\/\/|\/\/|#|javascript:|mailto:|data:)([^"'\s>]+)["']/gi, (match, attr, path) => {
+      // 重写静态资源路径
+      html = html.replace(/(href|src|action|srcset)\s*=\s*["'](?!https?:\/\/|\/\/|#|javascript:|mailto:|data:)([^"'\s>]+)["']/gi, (match, attr, path) => {
         const fullUrl = new URL(path, targetUrl.origin).href;
         return `${attr}="${proxyBase}${encodeURIComponent(fullUrl)}"`;
       });
 
-      // 2. 注入全局网络拦截脚本（覆盖 fetch、XMLHttpRequest、WebSocket）
+      // 注入全局请求拦截脚本
       const interceptorScript = `
         <script>
           (function() {
             const proxyBase = '/api/vpn?url=';
-
-            // 拦截 fetch
             const originalFetch = window.fetch;
             window.fetch = function(input, init) {
               let url = input;
@@ -64,7 +72,6 @@ export async function onRequest(context) {
               return originalFetch(url, init);
             };
 
-            // 拦截 XMLHttpRequest
             const OriginalXHR = window.XMLHttpRequest;
             window.XMLHttpRequest = function() {
               const xhr = new OriginalXHR();
@@ -75,37 +82,23 @@ export async function onRequest(context) {
               };
               return xhr;
             };
-
-            // 拦截 WebSocket（如果代理支持 WebSocket 转发，可启用）
-            // 此处暂不处理，因为 Cloudflare Functions 无法直接代理 WebSocket
           })();
         </script>
       `;
 
-      // 将拦截脚本插入到 head 最前面，确保最先执行
       html = html.replace(/<head\b[^>]*>/i, '<head>' + interceptorScript);
+      newHeaders.set('content-type', 'text/html; charset=utf-8');
 
-      // 3. 移除可能阻止脚本注入的响应头（在返回时清理）
       return new Response(html, {
         status: response.status,
-        headers: {
-          'Content-Type': 'text/html; charset=utf-8',
-          'Access-Control-Allow-Origin': '*',
-          // 强制移除目标网站的安全策略头
-          'X-Frame-Options': '',
-          'Content-Security-Policy': ''
-        }
+        headers: newHeaders
       });
     }
 
-    // 非 HTML 内容直接返回，同样移除限制头
-    const responseHeaders = new Headers(response.headers);
-    responseHeaders.delete('X-Frame-Options');
-    responseHeaders.delete('Content-Security-Policy');
-    responseHeaders.set('Access-Control-Allow-Origin', '*');
+    // 非 HTML 内容直接使用清理后的头部
     return new Response(response.body, {
       status: response.status,
-      headers: responseHeaders
+      headers: newHeaders
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: '代理请求失败: ' + err.message }), {
