@@ -213,18 +213,13 @@ h2{color:#c0392b;}a{color:#3b82f6;}</style></head>
       return `srcset="${urls.join(', ')}"`;
     });
 
-    // 注入脚本（增强空值防护）
+    // ★ 注入脚本（硬编码 originalUrl，彻底解决基准丢失问题）
     const interceptorScript = `
       <script>
         (function() {
           const proxyBase = '/api/topvpn?url=';
-          // 提取原始目标 URL（容错）
-          let originalUrl = '';
-          try {
-            const params = new URLSearchParams(location.search);
-            const raw = params.get('url');
-            originalUrl = raw ? decodeURIComponent(raw) : '';
-          } catch (e) {}
+          // 由后端直接注入原始目标站点 URL，不再依赖客户端解析
+          const originalUrl = ${JSON.stringify(finalUrl.href)};
 
           // 控制栏 UI
           const bar = document.createElement('div');
@@ -238,7 +233,7 @@ h2{color:#c0392b;}a{color:#3b82f6;}</style></head>
           document.documentElement.style.paddingTop = '48px';
 
           const urlInput = document.getElementById('__topvpn_url__');
-          urlInput.value = originalUrl || location.href;
+          urlInput.value = originalUrl;
           urlInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
               let val = this.value.trim();
@@ -252,21 +247,16 @@ h2{color:#c0392b;}a{color:#3b82f6;}</style></head>
             window.location.href = '/topvpn.html';
           });
 
-          // 工具函数：安全转换代理链接（★★★ 核心修复）
+          // 工具函数：安全转换代理链接
           function proxyUrl(inputUrl) {
-            // 空值或 undefined 直接拦截，返回无害空白页，防止发出缺参请求
             if (!inputUrl && inputUrl !== 0) {
               return proxyBase + encodeURIComponent('about:blank');
             }
-            // 已经是代理链接，不重复处理
             if (inputUrl.startsWith(proxyBase)) return inputUrl;
-            // 尝试解析为绝对 URL
-            const base = originalUrl || location.href;
             try {
-              const absolute = new URL(inputUrl, base).href;
+              const absolute = new URL(inputUrl, originalUrl).href;
               return proxyBase + encodeURIComponent(absolute);
             } catch (e) {
-              // 解析失败也返回空白页，绝不让空字符串溜过去
               return proxyBase + encodeURIComponent('about:blank');
             }
           }
@@ -317,7 +307,7 @@ h2{color:#c0392b;}a{color:#3b82f6;}</style></head>
             });
           }
 
-          // 拦截 fetch（安全处理）
+          // 拦截 fetch
           const originalFetch = window.fetch;
           window.fetch = function(input, init) {
             if (typeof input === 'string') {
@@ -327,7 +317,6 @@ h2{color:#c0392b;}a{color:#3b82f6;}</style></head>
               const newUrl = proxyUrl(input.url);
               return originalFetch(new Request(newUrl, input), init);
             }
-            // URL 对象或其他
             return originalFetch(proxyUrl(input.toString()), init);
           };
 
@@ -337,7 +326,7 @@ h2{color:#c0392b;}a{color:#3b82f6;}</style></head>
             const xhr = new OriginalXHR();
             const originalOpen = xhr.open;
             xhr.open = function(method, url, async, user, password) {
-              arguments[1] = proxyUrl(url); // 自动防护空值
+              arguments[1] = proxyUrl(url);
               return originalOpen.apply(xhr, arguments);
             };
             return xhr;
@@ -355,19 +344,22 @@ h2{color:#c0392b;}a{color:#3b82f6;}</style></head>
             }
           }, true);
 
-          // 表单提交处理
+          // ★ 表单提交处理（强制使用 originalUrl 作为基准）
           function submitFormViaProxy(form) {
             const target = form.getAttribute('target') || '_self';
             if (target !== '_self' && target !== '' && target !== '_parent' && target !== '_top') return;
             const formData = new FormData(form);
             const params = new URLSearchParams(formData).toString();
-            let action = form.getAttribute('action') || originalUrl || location.href;
+            // 获取 action，为空时直接使用 originalUrl
+            let action = form.getAttribute('action') || originalUrl;
             let actionUrl;
             try {
-              actionUrl = new URL(action, originalUrl || location.href);
+              // 基于 originalUrl 解析相对路径，绝不使用 location.href
+              actionUrl = new URL(action, originalUrl);
             } catch {
-              actionUrl = new URL(originalUrl || location.href);
+              actionUrl = new URL(originalUrl);
             }
+            // 搜索通常是 GET，将参数放入 search
             actionUrl.search = params;
             window.location.assign(actionUrl.href);
           }
