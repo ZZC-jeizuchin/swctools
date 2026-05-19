@@ -33,7 +33,6 @@ export async function onRequest(context) {
     const contentType = response.headers.get('Content-Type') || '';
     const isHTML = contentType.includes('text/html');
 
-    // 安全的响应头
     const safeHeaders = new Headers();
     const headersToKeep = [
       'content-type', 'content-encoding', 'content-language',
@@ -44,7 +43,6 @@ export async function onRequest(context) {
       if (value !== null && value !== undefined) safeHeaders.set(header, value);
     }
     safeHeaders.set('Access-Control-Allow-Origin', '*');
-    // 顶层窗口不需要移除 X-Frame-Options，但移除也没坏处
     safeHeaders.delete('X-Frame-Options');
     safeHeaders.delete('Content-Security-Policy');
     safeHeaders.delete('X-Content-Type-Options');
@@ -65,8 +63,8 @@ export async function onRequest(context) {
     // 移除 <base> 标签
     html = html.replace(/<base\b[^>]*>/gi, '');
 
-    // 重写链接属性
-    html = html.replace(/(href|src|action)\s*=\s*["']([^"'\s>]+)["']/gi, (match, attr, url) => {
+    // 只重写资源链接（src, action），不重写 href
+    html = html.replace(/(src|action)\s*=\s*["']([^"'\s>]+)["']/gi, (match, attr, url) => {
       if (/^(javascript:|mailto:|data:|#)/i.test(url)) return match;
       try {
         const fullUrl = new URL(url, finalUrl.href).href;
@@ -76,7 +74,7 @@ export async function onRequest(context) {
       }
     });
 
-    // 重写 srcset
+    // 处理 srcset
     html = html.replace(/srcset\s*=\s*["']([^"']+)["']/gi, (match, srcsetValue) => {
       const urls = srcsetValue.split(',').map(part => {
         const trimmed = part.trim();
@@ -92,40 +90,19 @@ export async function onRequest(context) {
       return `srcset="${urls.join(', ')}"`;
     });
 
-    // 注入控制栏 + 拦截脚本
-    const controlBarStyle = `
-      position:fixed; top:0; left:0; right:0; z-index:2147483647;
-      background:#1e293b; color:white; display:flex; align-items:center;
-      padding:8px 12px; gap:10px; font-family:system-ui,sans-serif;
-      box-shadow:0 2px 8px rgba(0,0,0,0.3);
-    `;
-    const inputStyle = `
-      flex:1; padding:6px 12px; border-radius:20px; border:none;
-      font-size:14px; background:#334155; color:white; outline:none;
-    `;
-    const btnStyle = `
-      background:#3b82f6; border:none; color:white; padding:6px 14px;
-      border-radius:20px; font-size:13px; cursor:pointer; white-space:nowrap;
-    `;
-
-    const controlBarHTML = `
-      <div id="__topvpn_bar__" style="${controlBarStyle}">
-        <span style="font-weight:600;">🌐 代理</span>
-        <input id="__topvpn_url__" type="text" style="${inputStyle}" placeholder="输入新网址并回车">
-        <button id="__topvpn_refresh__" style="${btnStyle}">刷新</button>
-        <button id="__topvpn_home__" style="background:#475569; ${btnStyle}">← 返回主页</button>
-      </div>
-    `;
-
+    // 注入脚本（关键：锁定导航方法）
     const interceptorScript = `
       <script>
         (function() {
           const proxyBase = '/api/topvpn?url=';
-          // 提取原始目标 URL
+          // 从当前地址参数提取原始目标 URL（不会因提取失败而退出）
           const urlParams = new URLSearchParams(location.search);
-          const originalUrl = decodeURIComponent(urlParams.get('url') || '');
+          let originalUrl = '';
+          try {
+            originalUrl = decodeURIComponent(urlParams.get('url') || '');
+          } catch (e) {}
 
-          // 创建控制栏（插入 body 最前面）
+          // 创建控制栏
           const bar = document.createElement('div');
           bar.id = '__topvpn_bar__';
           bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#1e293b;color:white;display:flex;align-items:center;padding:8px 12px;gap:10px;font-family:system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.3);';
@@ -133,13 +110,12 @@ export async function onRequest(context) {
             '<input id="__topvpn_url__" type="text" style="flex:1;padding:6px 12px;border-radius:20px;border:none;font-size:14px;background:#334155;color:white;outline:none;" placeholder="输入新网址并回车">' +
             '<button id="__topvpn_refresh__" style="background:#3b82f6;border:none;color:white;padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer;">刷新</button>' +
             '<button id="__topvpn_home__" style="background:#475569;border:none;color:white;padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer;">← 返回</button>';
-          document.documentElement.prepend(bar); // 放到最前面，避免影响 body 样式
-          // 页面顶部留出空间（可选）
+          document.documentElement.prepend(bar);
           document.documentElement.style.paddingTop = '48px';
 
           // 控制栏功能
           const urlInput = document.getElementById('__topvpn_url__');
-          urlInput.value = originalUrl;
+          urlInput.value = originalUrl || location.href;
           urlInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
               let val = this.value.trim();
@@ -159,15 +135,73 @@ export async function onRequest(context) {
           function proxyUrl(inputUrl) {
             if (!inputUrl) return inputUrl;
             if (inputUrl.startsWith(proxyBase)) return inputUrl;
+            const base = originalUrl || location.href;  // 基准回退
             try {
-              const absolute = new URL(inputUrl, originalUrl || location.href).href;
+              const absolute = new URL(inputUrl, base).href;
               return proxyBase + encodeURIComponent(absolute);
             } catch(e) {
               return inputUrl;
             }
           }
 
-          // 拦截 fetch（保留 Request 对象完整性）
+          // 保存原始方法
+          const originalAssign = window.location.assign.bind(window.location);
+          const originalReplace = window.location.replace.bind(window.location);
+          const originalPushState = history.pushState.bind(history);
+          const originalReplaceState = history.replaceState.bind(history);
+
+          // 重写并锁定 location.assign
+          Object.defineProperty(window.location, 'assign', {
+            value: function(url) {
+              return originalAssign(proxyUrl(url));
+            },
+            writable: false,
+            configurable: false
+          });
+
+          // 重写并锁定 location.replace
+          Object.defineProperty(window.location, 'replace', {
+            value: function(url) {
+              return originalReplace(proxyUrl(url));
+            },
+            writable: false,
+            configurable: false
+          });
+
+          // 重写并锁定 history.pushState
+          Object.defineProperty(history, 'pushState', {
+            value: function(state, title, url) {
+              if (url) arguments[2] = proxyUrl(url);
+              return originalPushState.apply(history, arguments);
+            },
+            writable: false,
+            configurable: false
+          });
+
+          // 重写并锁定 history.replaceState
+          Object.defineProperty(history, 'replaceState', {
+            value: function(state, title, url) {
+              if (url) arguments[2] = proxyUrl(url);
+              return originalReplaceState.apply(history, arguments);
+            },
+            writable: false,
+            configurable: false
+          });
+
+          // 拦截 Location.prototype.href 的 setter（防止直接赋值 href 绕过）
+          const originalHrefDescriptor = Object.getOwnPropertyDescriptor(Location.prototype, 'href');
+          if (originalHrefDescriptor && originalHrefDescriptor.set) {
+            Object.defineProperty(Location.prototype, 'href', {
+              get: originalHrefDescriptor.get,
+              set: function(url) {
+                // 直接调用我们锁定的 assign，从而走代理
+                window.location.assign(url);
+              },
+              configurable: false
+            });
+          }
+
+          // 拦截 fetch
           const originalFetch = window.fetch;
           window.fetch = function(input, init) {
             if (typeof input === 'string') {
@@ -192,28 +226,6 @@ export async function onRequest(context) {
             return xhr;
           };
 
-          // 拦截 location.assign / replace（顶层窗口同样需要，防止页面跳转到真实域）
-          const originalAssign = window.location.assign.bind(window.location);
-          const originalReplace = window.location.replace.bind(window.location);
-          window.location.assign = function(url) {
-            return originalAssign(proxyUrl(url));
-          };
-          window.location.replace = function(url) {
-            return originalReplace(proxyUrl(url));
-          };
-
-          // 拦截 history.pushState / replaceState（SPA 路由）
-          const originalPushState = history.pushState;
-          const originalReplaceState = history.replaceState;
-          history.pushState = function(state, title, url) {
-            if (url) arguments[2] = proxyUrl(url);
-            return originalPushState.apply(history, arguments);
-          };
-          history.replaceState = function(state, title, url) {
-            if (url) arguments[2] = proxyUrl(url);
-            return originalReplaceState.apply(history, arguments);
-          };
-
           // 全局拦截 <a> 标签点击
           document.addEventListener('click', function(e) {
             const link = e.target.closest('a');
@@ -226,7 +238,7 @@ export async function onRequest(context) {
             }
           }, true);
 
-          // 全局拦截表单提交（包括 form.submit() 编程式提交）
+          // 全局拦截表单提交（包含 form.submit()）
           function submitFormViaProxy(form) {
             const target = form.getAttribute('target') || '_self';
             if (target !== '_self' && target !== '' && target !== '_parent' && target !== '_top') return;
@@ -246,7 +258,6 @@ export async function onRequest(context) {
             e.preventDefault();
             submitFormViaProxy(e.target);
           }, true);
-          // 重写 form.submit 方法
           const originalFormSubmit = HTMLFormElement.prototype.submit;
           HTMLFormElement.prototype.submit = function() {
             submitFormViaProxy(this);
@@ -255,9 +266,7 @@ export async function onRequest(context) {
       </script>
     `;
 
-    // 注入脚本放到 head 最前面，控制栏也直接注入到 head 前，确保最先加载
     html = html.replace(/<head\b[^>]*>/i, '<head>' + interceptorScript);
-    // 控制栏通过脚本创建，不需要直接插入 HTML，这样更灵活
 
     return new Response(html, {
       status: response.status,
