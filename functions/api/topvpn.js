@@ -2,7 +2,6 @@ export async function onRequest(context) {
   const { request } = context;
   const urlParam = new URL(request.url).searchParams.get('url');
 
-  // 缺少参数 → 返回输入页面
   if (!urlParam) {
     const inputPage = `<!DOCTYPE html>
 <html lang="zh">
@@ -109,6 +108,10 @@ export async function onRequest(context) {
     // 移除 <base> 标签
     html = html.replace(/<base\b[^>]*>/gi, '');
 
+    // ★ 移除所有 meta 标签中的 CSP（关键修复）
+    html = html.replace(/<meta\s+http-equiv\s*=\s*["']?content-security-policy["']?[^>]*\/?>/gi, '');
+    html = html.replace(/<meta\b[^>]*\bcontent-security-policy[^>]*\/?>/gi, '');
+
     const toProxyUrl = (u) => {
       if (!u || /^(javascript:|mailto:|data:|#)/i.test(u)) return u;
       try {
@@ -117,10 +120,10 @@ export async function onRequest(context) {
       } catch { return u; }
     };
 
-    // 重写所有 href（a、link、area 等）
+    // 重写 href
     html = html.replace(/(\shref)\s*=\s*["']([^"'\s>]+)["']/gi, (m, attr, url) => `${attr}="${toProxyUrl(url)}"`);
 
-    // 重写 src / srcset（资源链接）
+    // 重写 src / srcset
     html = html.replace(/(\ssrc|\ssrcset)\s*=\s*["']([^"']+)["']/gi, (m, attr, url) => {
       if (/^(javascript:|data:)/i.test(url)) return m;
       if (attr.endsWith('srcset')) {
@@ -135,9 +138,7 @@ export async function onRequest(context) {
       return `${attr}="${toProxyUrl(url)}"`;
     });
 
-    // ★ 注意：不重写 action 和 formaction，留给前端拦截处理
-
-    // 注入前端拦截脚本（硬编码 finalUrl.href 作为基准）
+    // 注入脚本（锁定导航，加强错误回退）
     const interceptorScript = `
       <script>
         (function() {
@@ -168,24 +169,24 @@ export async function onRequest(context) {
           document.getElementById('__topvpn_refresh__').addEventListener('click', () => location.reload());
           document.getElementById('__topvpn_home__').addEventListener('click', () => { window.location.href = '/topvpn.html'; });
 
-          // 工具函数：转代理链接
           function proxyUrl(inputUrl) {
             if (!inputUrl && inputUrl !== 0) return inputUrl;
             if (inputUrl.startsWith(proxyBase)) return inputUrl;
             try {
               const absolute = new URL(inputUrl, originalUrl).href;
               return proxyBase + encodeURIComponent(absolute);
-            } catch (e) { return inputUrl; }
+            } catch (e) {
+              // 解析失败时，返回一个安全的空页面代理，而不是原始相对路径
+              return proxyBase + encodeURIComponent('about:blank');
+            }
           }
 
-          // 保存原始方法
           const originalAssign = window.location.assign.bind(window.location);
           const originalReplace = window.location.replace.bind(window.location);
           const originalPushState = history.pushState.bind(history);
           const originalReplaceState = history.replaceState.bind(history);
           const originalOpen = window.open.bind(window);
 
-          // 锁定 Location.prototype.href setter
           const hrefDesc = Object.getOwnPropertyDescriptor(Location.prototype, 'href');
           if (hrefDesc && hrefDesc.set) {
             Object.defineProperty(Location.prototype, 'href', {
@@ -195,7 +196,6 @@ export async function onRequest(context) {
             });
           }
 
-          // 锁定 assign / replace / pushState / replaceState
           Object.defineProperty(window.location, 'assign', {
             value: function(url) { return originalAssign(proxyUrl(url)); },
             writable: false, configurable: false
@@ -219,13 +219,11 @@ export async function onRequest(context) {
             writable: false, configurable: false
           });
 
-          // 拦截 window.open
           window.open = function(url, target, features) {
             if (url && typeof url === 'string') url = proxyUrl(url);
             return originalOpen(url, target, features);
           };
 
-          // 拦截 fetch / XHR
           const originalFetch = window.fetch;
           window.fetch = function(input, init) {
             if (typeof input === 'string') return originalFetch(proxyUrl(input), init);
@@ -235,33 +233,28 @@ export async function onRequest(context) {
           const OriginalXHR = window.XMLHttpRequest;
           window.XMLHttpRequest = function() {
             const xhr = new OriginalXHR();
-            const originalOpen = xhr.open;
+            const originalXHROpen = xhr.open;
             xhr.open = function(method, url, async, user, password) {
               arguments[1] = proxyUrl(url);
-              return originalOpen.apply(xhr, arguments);
+              return originalXHROpen.apply(xhr, arguments);
             };
             return xhr;
           };
 
-          // 全局 a 点击拦截（捕获阶段，动态链接防护）
           document.addEventListener('click', function(e) {
             const link = e.target.closest('a');
-            if (link && link.href) {
-              const rawHref = link.getAttribute('href');
-              if (rawHref && !/^(javascript:|mailto:|#)/i.test(rawHref)) {
-                e.preventDefault();
-                window.location.assign(rawHref);
-              }
-            }
+            if (!link) return;
+            const rawHref = link.getAttribute('href');
+            if (!rawHref || /^(javascript:|mailto:|#)/i.test(rawHref)) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            window.location.assign(rawHref);
           }, true);
 
-          // 表单提交拦截（核心修复：基于 originalUrl 构建目标地址）
           function handleFormSubmit(form, submitter) {
-            const target = form.getAttribute('target') || '_self';
-            if (target !== '_self' && target !== '' && target !== '_parent' && target !== '_top') return;
+            const method = (form.method || 'get').toLowerCase();
             const formData = new FormData(form);
             const params = new URLSearchParams(formData).toString();
-            // 获取 action：优先按钮的 formaction，其次 form 的 action，最后使用 originalUrl
             let action = (submitter && submitter.getAttribute('formaction')) || form.getAttribute('action') || originalUrl;
             let actionUrl;
             try {
@@ -269,23 +262,20 @@ export async function onRequest(context) {
             } catch {
               actionUrl = new URL(originalUrl);
             }
-            // 只对 GET 方式将参数放入 URL
-            const method = (form.method || 'get').toLowerCase();
             if (method === 'get') {
               actionUrl.search = params;
+            } else {
+              actionUrl.search = params;
             }
-            // 通过被代理的 assign 跳转
             window.location.assign(actionUrl.href);
           }
 
-          // submit 事件捕获阶段拦截
           document.addEventListener('submit', function(e) {
             e.preventDefault();
+            e.stopImmediatePropagation();
             handleFormSubmit(e.target, e.submitter);
           }, true);
 
-          // 重写 form.submit 方法
-          const originalFormSubmit = HTMLFormElement.prototype.submit;
           HTMLFormElement.prototype.submit = function() {
             handleFormSubmit(this, null);
           };
