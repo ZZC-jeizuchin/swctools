@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Turnstile 验证测试</title>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 30px 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .message {
+            margin-top: 20px;
+            font-size: 16px;
+            color: #333;
+            display: none;
+        }
+        .success { color: #2e7d32; }
+        .error { color: #c62828; }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h2>🤖 Turnstile 人机验证测试</h2>
+        <p>点击下方复选框，验证你是不是机器人</p>
+        
+        <!-- Turnstile 小组件，使用你的 Site Key -->
+        <div class="cf-turnstile" 
+             data-sitekey="0x4AAAAAADTIOg1WHw9YWQcn"
+             data-callback="onSuccess"
+             data-error-callback="onError">
+        </div>
+        
+        <div id="resultMessage" class="message"></div>
+    </div>
+
+    <script>
+        function onSuccess(token) {
+            const msg = document.getElementById('resultMessage');
+            msg.className = 'message success';
+            msg.textContent = '✅ 验证成功！你是人类！';
+            msg.style.display = 'block';
+            // Token 会过期，但这里只是测试，可以忽略
+        }
+
+        function onError(errorCode) {
+            const msg = document.getElementById('resultMessage');
+            msg.className = 'message error';
+            msg.textContent = '❌ 验证失败，错误代码：' + errorCode;
+            msg.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
