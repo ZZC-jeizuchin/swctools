@@ -46,7 +46,7 @@ export async function onRequest(context) {
   try {
     const fetchHeaders = new Headers({
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
       'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
       'Sec-Ch-Ua': '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
       'Sec-Ch-Ua-Mobile': '?0',
@@ -83,8 +83,12 @@ export async function onRequest(context) {
     let html = await response.text();
     const proxyBase = myOrigin + '/api/topvpn?url=';
 
+    // 移除原有 <base> 和 CSP meta
     html = html.replace(/<base\b[^>]*>/gi, '');
     html = html.replace(/<meta\s+http-equiv\s*=\s*["']?content-security-policy["']?[^>]*\/?>/gi, '');
+
+    // 注入 <base> 标签，让所有相对路径基于目标站点解析（但最终会被我们的函数重写）
+    const baseTag = `<base href="${finalUrl.href}">`;
 
     const toProxy = (url) => {
       if (!url || /^(javascript:|mailto:|data:|#|about:)/i.test(url)) return url;
@@ -95,13 +99,10 @@ export async function onRequest(context) {
       } catch { return url; }
     };
 
-    // 只重写 href, src, srcset, meta refresh，但不重写 form action
+    // 重写静态链接和资源（保留 form action 不重写）
     html = html.replace(/(\shref)\s*=\s*["']([^"'\s>]+)["']/gi, (_, attr, url) => `${attr}="${toProxy(url)}"`);
-    // 注意：下面这行是重写 form action 的，我们注释掉或删除，以保留原始 action
-    // html = html.replace(/(\saction|\sformaction)\s*=\s*["']([^"'\s>]+)["']/gi, (_, attr, url) => `${attr}="${toProxy(url)}"`);
-    // 但需要处理 formaction 的情况，可以先保留 formaction 重写（按钮的提交地址），表单本身的 action 不动
+    // 只重写 formaction，不重写 action
     html = html.replace(/(\sformaction)\s*=\s*["']([^"'\s>]+)["']/gi, (_, attr, url) => `${attr}="${toProxy(url)}"`);
-
     html = html.replace(/(\ssrc|\ssrcset)\s*=\s*["']([^"']+)["']/gi, (_, attr, url) => {
       if (/^(javascript:|data:)/i.test(url)) return _;
       if (attr.endsWith('srcset')) {
@@ -115,6 +116,7 @@ export async function onRequest(context) {
       }
       return `${attr}="${toProxy(url)}"`;
     });
+    // meta refresh
     html = html.replace(/<meta\s+http-equiv\s*=\s*["']?refresh["']?([^>]*?)>/gi, (_, attrs) => {
       const cm = attrs.match(/content\s*=\s*["']([^"']*)["']/i);
       if (cm) {
@@ -129,51 +131,93 @@ export async function onRequest(context) {
       return _;
     });
 
-    // 注入脚本：锁定导航、拦截链接点击、拦截表单提交，以及智能调整 fixed/sticky 元素
+    // ★ 改写内联脚本中的 location 调用
+    html = html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (match, attrs, scriptContent) => {
+      // 避免破坏我们的注入脚本
+      if (scriptContent.includes('__topvpn_bar__') || scriptContent.includes('__proxyAssign')) {
+        return match;
+      }
+      // 替换 location.href = ... 为 __proxyAssign(...)
+      scriptContent = scriptContent.replace(/(\bwindow\.location\b|\blocation\b)\.href\s*=\s*(?![=])/gi, '__proxyAssign(');
+      // 处理赋值语句，例如 __proxyAssign(表达式) 需要闭合括号，这里简单地在行尾添加括号
+      // 更稳健的做法是使用函数调用包装，这里我们用 /__proxyAssign\(([^;]+)\)/g 来匹配常见的赋值
+      // 由于替换后变成 __proxyAssign(url)，但可能缺少右括号，我们手动添加
+      scriptContent = scriptContent.replace(/__proxyAssign\(([^;]*)/gi, '__proxyAssign($1)');
+      // 替换 location.assign( 为 __proxyAssign(
+      scriptContent = scriptContent.replace(/(\bwindow\.location\b|\blocation\b)\.assign\s*\(/gi, '__proxyAssign(');
+      // 替换 location.replace( 为 __proxyReplace(
+      scriptContent = scriptContent.replace(/(\bwindow\.location\b|\blocation\b)\.replace\s*\(/gi, '__proxyReplace(');
+      return `<script${attrs}>${scriptContent}</script>`;
+    });
+
+    // 注入核心脚本（包含代理函数和事件拦截）
     const injectScript = `
 <script>
 (function() {
   var PROXY_BASE = ${JSON.stringify(proxyBase)};
   var ORIGIN_URL = ${JSON.stringify(finalUrl.href)};
 
-  function toProxyUrl(rawUrl) {
-    if (!rawUrl) return rawUrl;
-    if (rawUrl.indexOf(PROXY_BASE) === 0 || rawUrl.indexOf('/api/topvpn?url=') === 0) return rawUrl;
-    if (/^(javascript:|mailto:|data:|#|about:)/i.test(rawUrl)) return rawUrl;
-    try {
-      var absolute = new URL(rawUrl, ORIGIN_URL).href;
-      return PROXY_BASE + absolute;
-    } catch (e) {
-      return rawUrl;
+  // 全局代理函数
+  window.__proxyAssign = function(url) {
+    if (!url) return;
+    if (url.indexOf(PROXY_BASE) === 0 || url.indexOf('/api/topvpn?url=') === 0) {
+      window._originalAssign(url);
+      return;
     }
-  }
+    if (/^(javascript:|mailto:|data:|#|about:)/i.test(url)) {
+      window._originalAssign(url);
+      return;
+    }
+    try {
+      var absolute = new URL(url, ORIGIN_URL).href;
+      window._originalAssign(PROXY_BASE + absolute);
+    } catch (e) {
+      window._originalAssign(PROXY_BASE + ORIGIN_URL);
+    }
+  };
+  window.__proxyReplace = function(url) {
+    if (!url) return;
+    if (url.indexOf(PROXY_BASE) === 0 || url.indexOf('/api/topvpn?url=') === 0) {
+      window._originalReplace(url);
+      return;
+    }
+    if (/^(javascript:|mailto:|data:|#|about:)/i.test(url)) {
+      window._originalReplace(url);
+      return;
+    }
+    try {
+      var absolute = new URL(url, ORIGIN_URL).href;
+      window._originalReplace(PROXY_BASE + absolute);
+    } catch (e) {
+      window._originalReplace(PROXY_BASE + ORIGIN_URL);
+    }
+  };
 
-  var _assign = window.location.assign.bind(window.location);
-  var _replace = window.location.replace.bind(window.location);
+  // 保存原始方法
+  window._originalAssign = window.location.assign.bind(window.location);
+  window._originalReplace = window.location.replace.bind(window.location);
   var _push = history.pushState.bind(history);
   var _replaceState = history.replaceState.bind(history);
   var _open = window.open.bind(window);
 
-  // 锁定导航方法
-  try { Object.defineProperty(window.location, 'assign', { value: function(url) { return _assign(toProxyUrl(url)); }, writable: false, configurable: false }); } catch(e) {}
-  try { Object.defineProperty(window.location, 'replace', { value: function(url) { return _replace(toProxyUrl(url)); }, writable: false, configurable: false }); } catch(e) {}
-  try { Object.defineProperty(history, 'pushState', { value: function(state, title, url) { if (url) arguments[2] = toProxyUrl(url); return _push.apply(history, arguments); }, writable: false, configurable: false }); } catch(e) {}
-  try { Object.defineProperty(history, 'replaceState', { value: function(state, title, url) { if (url) arguments[2] = toProxyUrl(url); return _replaceState.apply(history, arguments); }, writable: false, configurable: false }); } catch(e) {}
-  try { window.open = function(url, target, features) { if (url && typeof url === 'string') url = toProxyUrl(url); return _open(url, target, features); }; } catch(e) {}
-
-  // 拦截 location.href 赋值
-  try {
-    var hrefDesc = Object.getOwnPropertyDescriptor(Location.prototype, 'href');
-    if (hrefDesc && hrefDesc.set) {
-      Object.defineProperty(Location.prototype, 'href', {
-        get: hrefDesc.get,
-        set: function(url) { _assign(toProxyUrl(url)); },
-        configurable: false
-      });
+  // 重写 location.assign
+  try { Object.defineProperty(window.location, 'assign', { value: function(url) { return window.__proxyAssign(url); }, writable: false, configurable: false }); } catch(e) {}
+  // 重写 location.replace
+  try { Object.defineProperty(window.location, 'replace', { value: function(url) { return window.__proxyReplace(url); }, writable: false, configurable: false }); } catch(e) {}
+  // 重写 history
+  try { Object.defineProperty(history, 'pushState', { value: function(state, title, url) { if (url) arguments[2] = PROXY_BASE + (new URL(url, ORIGIN_URL)).href; return _push.apply(history, arguments); }, writable: false, configurable: false }); } catch(e) {}
+  try { Object.defineProperty(history, 'replaceState', { value: function(state, title, url) { if (url) arguments[2] = PROXY_BASE + (new URL(url, ORIGIN_URL)).href; return _replaceState.apply(history, arguments); }, writable: false, configurable: false }); } catch(e) {}
+  // window.open
+  window.open = function(url, target, features) {
+    if (url && typeof url === 'string') {
+      try {
+        url = PROXY_BASE + (new URL(url, ORIGIN_URL)).href;
+      } catch(e) {}
     }
-  } catch(e) {}
+    return _open(url, target, features);
+  };
 
-  // 全局拦截 <a> 点击
+  // 拦截 <a> 点击
   document.addEventListener('click', function(e) {
     var link = e.target.closest('a');
     if (link && link.href) {
@@ -181,12 +225,12 @@ export async function onRequest(context) {
       if (rawHref && !/^(javascript:|mailto:|#)/i.test(rawHref) && rawHref.indexOf(PROXY_BASE) !== 0 && rawHref.indexOf('/api/topvpn?url=') !== 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        _assign(toProxyUrl(rawHref));
+        window.__proxyAssign(rawHref);
       }
     }
   }, true);
 
-  // ★ 拦截表单提交：读取原始 action，构建完整目标 URL，再代理跳转
+  // 拦截表单提交
   document.addEventListener('submit', function(e) {
     var form = e.target;
     if (form.tagName !== 'FORM') return;
@@ -203,29 +247,27 @@ export async function onRequest(context) {
       actionUrl = new URL(ORIGIN_URL);
     }
     if (method === 'get') {
-      // 将参数直接拼接到 actionUrl 的 search 部分
       actionUrl.search = params;
-    } // 忽略 POST，因为搜索通常是 GET
-    // 跳转到代理后的完整 URL
-    _assign(toProxyUrl(actionUrl.href));
+    }
+    window.__proxyAssign(actionUrl.href);
   }, true);
 
-  // ★ 智能调整被固定定位的元素，避免被我们的控制栏遮挡
+  // 智能调整 fixed/sticky 元素，避免被控制栏遮挡
   var barHeight = 48;
   function adjustFixedElements() {
     var all = document.querySelectorAll('*');
     for (var i = 0; i < all.length; i++) {
       var el = all[i];
+      if (el.id === '__topvpn_bar__') continue; // 跳过控制栏自身
       var style = window.getComputedStyle(el);
       if (style.position === 'fixed' || style.position === 'sticky') {
         var top = parseInt(style.top, 10);
-        if (top >= 0 && top < barHeight) {
+        if (!isNaN(top) && top >= 0 && top < barHeight) {
           el.style.top = (top + barHeight) + 'px';
         }
       }
     }
   }
-  // 页面加载完成后执行，并监听 DOM 变化
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', adjustFixedElements);
   } else {
@@ -235,20 +277,19 @@ export async function onRequest(context) {
 })();
 </script>`;
 
-    // 控制栏：纯 HTML，固定定位
+    // 控制栏
     const controlBar = `
 <div id="__topvpn_bar__" style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#1e293b;color:white;display:flex;align-items:center;padding:8px 12px;gap:10px;font-family:system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.3);">
   <span style="font-weight:600;">🌐 代理</span>
   <input id="__topvpn_url__" type="text" value="${finalUrl.href}" style="flex:1;padding:6px 12px;border-radius:20px;border:none;font-size:14px;background:#334155;color:white;outline:none;" placeholder="输入新网址">
-  <button onclick="location.href='${proxyBase}'+encodeURIComponent(document.getElementById('__topvpn_url__').value)" style="background:#3b82f6;border:none;color:white;padding:6px 14px;border-radius:20px;cursor:pointer;">打开</button>
-  <button onclick="location.reload()" style="background:#475569;border:none;color:white;padding:6px 14px;border-radius:20px;cursor:pointer;">刷新</button>
+  <button onclick="window.__proxyAssign(document.getElementById('__topvpn_url__').value)" style="background:#3b82f6;border:none;color:white;padding:6px 14px;border-radius:20px;cursor:pointer;">打开</button>
+  <button onclick="window._originalAssign(PROXY_BASE + document.getElementById('__topvpn_url__').value)" style="background:#475569;border:none;color:white;padding:6px 14px;border-radius:20px;cursor:pointer;">刷新</button>
   <button onclick="location.href='/topvpn.html'" style="background:#475569;border:none;color:white;padding:6px 14px;border-radius:20px;cursor:pointer;">返回</button>
 </div>`;
 
-    // 将脚本和样式插入 HTML
-    html = injectScript + html;
+    // 组合最终 HTML：<base> + 注入脚本 + 原 HTML + 控制栏
+    html = baseTag + injectScript + html;
     html = html.replace(/<body\b[^>]*>/i, `<body>${controlBar}`);
-    // 不再给 html 加 margin-top，而是由脚本动态调整 fixed 元素
 
     return new Response(html, { status: response.status, headers: safeHeaders });
   } catch (err) {
