@@ -82,21 +82,21 @@
       margin-bottom:20px; line-height:1.6; font-weight:500;
     }
 
-    /* 风险量化数字区域 */
-    .risk-score-container {
+    /* 智商数字区域 */
+    .iq-score-container {
       margin-bottom: 18px;
       display: flex;
       flex-direction: column;
       align-items: center;
     }
-    .risk-label {
+    .iq-label {
       font-size: 0.9rem;
       color: var(--corner-text-color);
       margin-bottom: 4px;
       text-transform: uppercase;
       letter-spacing: 2px;
     }
-    .risk-score {
+    .iq-score {
       font-family: 'JetBrains Mono', monospace;
       font-size: 3.5rem;
       font-weight: 700;
@@ -104,11 +104,11 @@
       line-height: 1;
       transition: color 0.3s;
     }
-    .risk-score.danger {
-      color: #c62828;
+    .iq-score.danger {
+      color: #c62828;   /* 低智商红色 */
     }
-    .risk-score.safe {
-      color: #2e7d32;
+    .iq-score.safe {
+      color: #2e7d32;   /* 高智商绿色 */
     }
 
     .turnstile-wrapper {
@@ -120,7 +120,7 @@
       transform: scale(1.35); transform-origin: center;
     }
 
-    /* 结果区域：左右结构，默认隐藏 */
+    /* 结果区域 */
     .result-area {
       display: none;
       align-items: center;
@@ -132,7 +132,6 @@
     }
     .result-area.show { display: flex; }
 
-    /* 左侧图标 */
     .result-logo {
       width: 100px; height: auto;
       transform: scale(0);
@@ -150,7 +149,6 @@
       100% { transform: scale(1); }
     }
 
-    /* 右侧文字区域 */
     .result-text-area {
       display: flex; flex-direction: column;
       align-items: flex-start; text-align: left;
@@ -174,7 +172,6 @@
     .result-retry-btn.show { display: inline-block; }
     .result-retry-btn:hover { background: #e06d10; }
 
-    /* 乱飞的 CF 图标 */
     .flying-cf {
       position: fixed; width: 80px; height: auto;
       z-index: 9999; pointer-events: none; opacity: 0.9;
@@ -191,16 +188,15 @@
   <h1>swctools.pages.dev</h1>
   <p class="subtitle">反机器爬虫程序</p>
 
-  <!-- 初始标语 -->
   <div class="initial-message" id="initialMsg">
     你个小可爱人类快点来证明你比没浮木的爬虫机器人聪明，不然别想进我的网站。<br>
     证明你不是一只机械晚期智人
   </div>
 
-  <!-- AI 风险指数 -->
-  <div class="risk-score-container">
-    <span class="risk-label">AI 风险指数</span>
-    <div class="risk-score" id="riskScore">--</div>
+  <!-- 智商显示区域 -->
+  <div class="iq-score-container">
+    <span class="iq-label">你的智商（满分100）：</span>
+    <div class="iq-score" id="iqScore">--</div>
   </div>
 
   <div class="turnstile-wrapper">
@@ -213,7 +209,6 @@
     </div>
   </div>
 
-  <!-- 验证结果区域 -->
   <div class="result-area" id="resultArea">
     <img class="result-logo" id="resultLogo" src="https://www.cloudflare.com/img/logo-cloudflare.svg" alt="Cloudflare">
     <div class="result-text-area">
@@ -253,11 +248,9 @@
     }
     requestAnimationFrame(updateFPS);
 
-    // 风险数字元素
-    const riskScoreEl = document.getElementById('riskScore');
-    let riskAnimationInterval = null;
-    let realScoreAvailable = false;
-    let currentRealScore = null;
+    // 智商显示元素
+    const iqScoreEl = document.getElementById('iqScore');
+    let iqAnimationInterval = null;
 
     // 获取真实 Bot Score（来自 Pages Functions）
     async function fetchRealBotScore() {
@@ -275,58 +268,53 @@
     }
 
     // 停止数字波动并固定为指定值
-    function stopRiskAnimation(value) {
-      if (riskAnimationInterval) {
-        clearInterval(riskAnimationInterval);
-        riskAnimationInterval = null;
+    function stopIqAnimation(value) {
+      if (iqAnimationInterval) {
+        clearInterval(iqAnimationInterval);
+        iqAnimationInterval = null;
       }
-      riskScoreEl.textContent = value;
-      riskScoreEl.classList.remove('danger', 'safe');
-      if (value <= 30) {
-        riskScoreEl.classList.add('danger');
+      iqScoreEl.textContent = value;
+      iqScoreEl.classList.remove('danger', 'safe');
+      if (value >= 80) {
+        iqScoreEl.classList.add('safe');   // 高智商绿色
       } else {
-        riskScoreEl.classList.add('safe');
+        iqScoreEl.classList.add('danger'); // 低智商红色
       }
     }
 
     // 开始随机波动
     function startRandomAnimation() {
-      if (riskAnimationInterval) clearInterval(riskAnimationInterval);
-      riskScoreEl.classList.remove('danger', 'safe');
-      riskAnimationInterval = setInterval(() => {
-        riskScoreEl.textContent = Math.floor(Math.random() * 101);
+      if (iqAnimationInterval) clearInterval(iqAnimationInterval);
+      iqScoreEl.classList.remove('danger', 'safe');
+      iqAnimationInterval = setInterval(() => {
+        iqScoreEl.textContent = Math.floor(Math.random() * 101);
       }, 80);
     }
 
-    // 初始化评分显示：尝试获取真实分数，失败则随机波动
-    async function initScoreDisplay() {
+    // 初始化智商显示
+    async function initIqDisplay() {
       const score = await fetchRealBotScore();
       if (score !== null) {
-        realScoreAvailable = true;
-        currentRealScore = score;
-        stopRiskAnimation(score);
+        stopIqAnimation(score);
       } else {
-        realScoreAvailable = false;
         startRandomAnimation();
       }
     }
 
-    // 验证后更新评分（优先真实分数）
-    async function updateScoreAfterVerification(isSuccess) {
+    // 验证后更新智商（真实优先，失败时低分，成功时高分）
+    async function updateIqAfterVerification(isSuccess) {
       const score = await fetchRealBotScore();
       if (score !== null) {
-        stopRiskAnimation(score);
-        currentRealScore = score;
-        realScoreAvailable = true;
+        stopIqAnimation(score);
       } else {
-        // 没有真实分数时，给一个模拟值
-        const fakeScore = isSuccess ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 20) + 80;
-        stopRiskAnimation(fakeScore);
+        // 模拟值：成功则80-99，失败则1-10
+        const fakeScore = isSuccess ? Math.floor(Math.random() * 20) + 80 : Math.floor(Math.random() * 10) + 1;
+        stopIqAnimation(fakeScore);
       }
     }
 
     // 页面加载时初始化
-    initScoreDisplay();
+    initIqDisplay();
 
     // 结果区域元素
     const resultArea = document.getElementById('resultArea');
@@ -386,8 +374,8 @@
     }
 
     async function showResult(message, isSuccess) {
-      // 更新风险分数（真实优先）
-      await updateScoreAfterVerification(isSuccess);
+      // 更新智商分数
+      await updateIqAfterVerification(isSuccess);
 
       resultMessage.textContent = message;
       resultMessage.className = 'result-message ' + (isSuccess ? 'success-text' : 'failure-text');
@@ -428,7 +416,7 @@
       clearFlyingLogos();
 
       // 重试时重新获取真实评分，若失败则恢复波动
-      initScoreDisplay();
+      initIqDisplay();
       try { turnstile.reset('#cf-widget'); } catch(e) {}
     }
 
@@ -454,14 +442,14 @@
     // Turnstile 回调
     window.onSuccess = function(token) {
       localStorage.setItem('not_robot', '1');
-      showResult('你打败了cloudflare的土豆服务器人机验证', true);
+      showResult('你打败了cloudflare的土豆服务器人机验证，看来你的大脑比cpu好使', true);
       setTimeout(() => {
         window.location.href = getRedirectUrl();
       }, 1989);
     };
 
     window.onFailure = function() {
-      showResult('这个地球已经没有人类了，你是伪人么?', false);
+      showResult('这个地球已经没有人类了，你是伪人么?你的健康状况是大脑萎缩小脑缺失或者变成硅基生物二选一', false);
     };
   })();
 </script>
