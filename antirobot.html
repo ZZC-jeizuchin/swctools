@@ -74,13 +74,21 @@
       font-size:1.2rem; color:var(--text-color); opacity:0.7;
       margin-bottom:20px;
     }
-    .main-panel .description {
-      font-size:1rem; color:var(--text-color); opacity:0.8;
-      margin-bottom:28px; line-height:1.7; font-weight:500;
+
+    .dynamic-message {
+      font-size:1.1rem; color:var(--text-color); opacity:0.9;
+      margin-bottom:24px; line-height:1.6; font-weight:500;
+      min-height: 2.5em;
+      transition: color 0.3s;
+    }
+    .dynamic-message.success {
+      color: #2e7d32;
+    }
+    .dynamic-message.failure {
+      color: #c62828;
     }
 
     .turnstile-wrapper {
-      /* 放大验证框 */
       transform: scale(1.35);
       transform-origin: center top;
       margin-bottom: 40px;
@@ -96,15 +104,20 @@
 <div class="main-panel">
   <h1>swctools.pages.dev</h1>
   <p class="subtitle">反机器爬虫程序</p>
-  <p class="description">
+
+  <!-- 动态提示语区域 -->
+  <div class="dynamic-message" id="message">
     你个小可爱人类快点来证明你比没浮木的爬虫机器人聪明，不然别想进我的网站。<br>
     证明你不是一只机械晚期智人
-  </p>
+  </div>
 
   <div class="turnstile-wrapper">
     <div class="cf-turnstile"
          data-sitekey="0x4AAAAAADTIOg1WHw9YWQcn"
-         data-callback="onSuccess">
+         data-callback="onSuccess"
+         data-error-callback="onFailure"
+         data-expired-callback="onFailure"
+         data-timeout-callback="onFailure">
     </div>
   </div>
 </div>
@@ -140,12 +153,46 @@
     }
     requestAnimationFrame(updateFPS);
 
-    // ========== Turnstile 回调：验证通过 → 写入 localStorage → 跳转 index.html ==========
+    // ========== 提示语元素 ==========
+    const messageEl = document.getElementById('message');
+
+    // 获取重定向目标
+    function getRedirectUrl() {
+      // 1. 优先从查询参数 ?redirect=xxx 获取
+      const params = new URLSearchParams(window.location.search);
+      const redirectParam = params.get('redirect');
+      if (redirectParam) {
+        // 简单防止开放在重定向漏洞，只允许本站相对路径
+        if (redirectParam.startsWith('/') || redirectParam.startsWith('./')) {
+          return redirectParam;
+        }
+      }
+      // 2. 尝试从 document.referrer 获取，限制为本域名
+      if (document.referrer) {
+        const referrerUrl = new URL(document.referrer);
+        if (referrerUrl.hostname === 'swctools.pages.dev') {
+          return referrerUrl.pathname + referrerUrl.search + referrerUrl.hash;
+        }
+      }
+      // 3. 默认跳转到 index.html
+      return '/index.html';
+    }
+
+    // 成功回调：夸夸，写 localStorage，1 秒后跳转回上一页
     window.onSuccess = function(token) {
-      // 将 not_robot 标记写入 localStorage，如果不存在则新建
       localStorage.setItem('not_robot', '1');
-      // 跳转到主站
-      window.location.href = 'index.html';
+      messageEl.textContent = '恭喜你击败了机器人快点给我登录不然我每次都要让你检测智商';
+      messageEl.className = 'dynamic-message success';
+      setTimeout(() => {
+        const target = getRedirectUrl();
+        window.location.href = target;
+      }, 1000);
+    };
+
+    // 失败回调：骂骂，显示再试一次
+    window.onFailure = function() {
+      messageEl.textContent = '你要么是硅基生物，要么就是一个大脑萎缩小脑缺失的小笨蛋人类。再试一次';
+      messageEl.className = 'dynamic-message failure';
     };
   })();
 </script>
