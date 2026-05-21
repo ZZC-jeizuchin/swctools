@@ -32,7 +32,7 @@
     body {
       background:var(--bg-body); min-height:100vh; display:flex;
       align-items:center; justify-content:center; padding:12px;
-      position:relative; overflow:auto;
+      position:relative; overflow:hidden;
     }
 
     .corner-tl {
@@ -60,11 +60,11 @@
     .theme-toggle:hover { opacity:1; background:var(--btn-hover-bg, #c2d8ed); }
 
     .main-panel {
-      max-width:560px; width:100%; background:var(--panel-bg);
+      max-width:580px; width:100%; background:var(--panel-bg);
       border-radius:28px; box-shadow:0 16px 30px -8px rgba(30,65,90,0.18);
       border:1px solid var(--panel-border); padding:40px 36px;
       display:flex; flex-direction:column; align-items:center; text-align:center;
-      overflow:visible; /* 关键：允许放大后的 Turnstile 不被裁剪 */
+      overflow:visible; position:relative; z-index:1;
     }
 
     .main-panel h1 {
@@ -73,36 +73,82 @@
     }
     .main-panel .subtitle {
       font-size:1.2rem; color:var(--text-color); opacity:0.7;
-      margin-bottom:20px;
+      margin-bottom:10px;
     }
 
-    .dynamic-message {
+    /* 初始提示语（始终显示） */
+    .initial-message {
       font-size:1.1rem; color:var(--text-color); opacity:0.9;
-      margin-bottom:24px; line-height:1.6; font-weight:500;
-      min-height: 2.5em;
-      transition: color 0.3s;
-    }
-    .dynamic-message.success {
-      color: #2e7d32;
-    }
-    .dynamic-message.failure {
-      color: #c62828;
+      margin-bottom:20px; line-height:1.6; font-weight:500;
     }
 
-    /* 验证框容器：flex居中 + scale放大 + 不裁剪 */
     .turnstile-wrapper {
-      display: flex;
-      justify-content: center;
-      overflow: visible;
-      padding: 10px 0; /* 给放大后留点呼吸空间 */
-      margin-bottom: 24px;
-      width: 100%;
+      display: flex; justify-content: center;
+      overflow: visible; padding: 10px 0;
+      margin-bottom: 12px; width: 100%;
+    }
+    .turnstile-wrapper .cf-turnstile {
+      transform: scale(1.35); transform-origin: center;
     }
 
-    /* 让 Turnstile 组件本身缩放 */
-    .turnstile-wrapper .cf-turnstile {
-      transform: scale(1.35);
-      transform-origin: center; /* 以自身中心缩放，左右对称 */
+    /* 结果区域：左右结构，默认隐藏 */
+    .result-area {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      margin-top: 10px;
+      width: 100%;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .result-area.show { display: flex; }
+
+    /* 左侧图标：动画后恢复100px，但动画时会被改为 fixed 定位 */
+    .result-logo {
+      width: 100px; height: auto;
+      transform: scale(0);            /* 初始隐藏，动画或内联样式会覆盖 */
+      transform-origin: 75% 50%;
+      flex-shrink: 0;
+      position: relative;
+      z-index: auto;
+    }
+    .result-logo.boom {
+      animation: logoBoom 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    }
+    @keyframes logoBoom {
+      0%   { transform: scale(0); }
+      50%  { transform: scale(20); }
+      100% { transform: scale(1); }
+    }
+
+    /* 右侧文字区域 */
+    .result-text-area {
+      display: flex; flex-direction: column;
+      align-items: flex-start; text-align: left;
+      min-width: 180px;
+      margin-top: -16px;
+    }
+    .result-message {
+      font-size: 1.1rem; font-weight: 600;
+      margin-bottom: 10px; color: var(--text-color);
+    }
+    .result-message.success-text { color: #2e7d32; }
+    .result-message.failure-text { color: #c62828; }
+
+    .result-retry-btn {
+      background: #f48120; color: white;
+      border: none; padding: 10px 28px;
+      border-radius: 32px; font-size: 0.95rem;
+      cursor: pointer; transition: background 0.2s;
+      display: none;
+    }
+    .result-retry-btn.show { display: inline-block; }
+    .result-retry-btn:hover { background: #e06d10; }
+
+    /* 乱飞的 CF 图标 */
+    .flying-cf {
+      position: fixed; width: 80px; height: auto;
+      z-index: 9999; pointer-events: none; opacity: 0.9;
     }
   </style>
 </head>
@@ -116,18 +162,28 @@
   <h1>swctools.pages.dev</h1>
   <p class="subtitle">反机器爬虫程序</p>
 
-  <div class="dynamic-message" id="message">
+  <!-- 初始标语（始终显示） -->
+  <div class="initial-message" id="initialMsg">
     你个小可爱人类快点来证明你比没浮木的爬虫机器人聪明，不然别想进我的网站。<br>
     证明你不是一只机械晚期智人
   </div>
 
   <div class="turnstile-wrapper">
-    <div class="cf-turnstile"
+    <div class="cf-turnstile" id="cf-widget"
          data-sitekey="0x4AAAAAADTIOg1WHw9YWQcn"
          data-callback="onSuccess"
          data-error-callback="onFailure"
          data-expired-callback="onFailure"
          data-timeout-callback="onFailure">
+    </div>
+  </div>
+
+  <!-- 验证结果区域（左右结构） -->
+  <div class="result-area" id="resultArea">
+    <img class="result-logo" id="resultLogo" src="https://www.cloudflare.com/img/logo-cloudflare.svg" alt="Cloudflare">
+    <div class="result-text-area">
+      <div class="result-message" id="resultMessage"></div>
+      <button class="result-retry-btn" id="retryBtn">再试一次</button>
     </div>
   </div>
 </div>
@@ -136,7 +192,7 @@
   (function(){
     "use strict";
 
-    // ========== 主题 ==========
+    // 主题
     const themeToggle = document.getElementById('themeToggle');
     const currentTheme = localStorage.getItem('swc_theme') || 'light';
     document.documentElement.setAttribute('data-theme', currentTheme);
@@ -148,7 +204,7 @@
       themeToggle.textContent = newTheme === 'light' ? '深色' : '亮色';
     });
 
-    // ========== FPS ==========
+    // FPS
     const fpsDisplay = document.getElementById('fpsDisplay');
     let frameCount = 0, lastFpsUpdate = performance.now();
     function updateFPS() {
@@ -156,22 +212,125 @@
       const now = performance.now();
       if(now - lastFpsUpdate >= 1000) {
         fpsDisplay.textContent = `FPS: ${Math.round((frameCount * 1000) / (now - lastFpsUpdate))}`;
-        frameCount = 0;
-        lastFpsUpdate = now;
+        frameCount = 0; lastFpsUpdate = now;
       }
       requestAnimationFrame(updateFPS);
     }
     requestAnimationFrame(updateFPS);
 
-    const messageEl = document.getElementById('message');
+    // 元素
+    const resultArea = document.getElementById('resultArea');
+    const resultMessage = document.getElementById('resultMessage');
+    const retryBtn = document.getElementById('retryBtn');
+    const resultLogo = document.getElementById('resultLogo');
 
+    // 飞行图标
+    let flyingTimers = [];
+    function clearFlyingLogos() {
+      document.querySelectorAll('.flying-cf').forEach(el => el.remove());
+      flyingTimers.forEach(t => clearInterval(t));
+      flyingTimers = [];
+    }
+    function spawnFlyingLogos(count = 10) {
+      clearFlyingLogos();
+      const body = document.body;
+      for (let i = 0; i < count; i++) {
+        const img = document.createElement('img');
+        img.src = 'https://www.cloudflare.com/img/logo-cloudflare.svg';
+        img.className = 'flying-cf';
+        const startX = Math.random() * (window.innerWidth - 80);
+        const startY = Math.random() * (window.innerHeight - 80);
+        img.style.left = startX + 'px';
+        img.style.top = startY + 'px';
+        body.appendChild(img);
+        let vx = (Math.random() - 0.5) * 40;
+        let vy = (Math.random() - 0.5) * 40;
+        const timer = setInterval(() => {
+          let l = parseFloat(img.style.left) || startX;
+          let t = parseFloat(img.style.top) || startY;
+          if (l <= 0 || l >= window.innerWidth - 80) vx *= -1;
+          if (t <= 0 || t >= window.innerHeight - 80) vy *= -1;
+          img.style.left = (l + vx) + 'px';
+          img.style.top = (t + vy) + 'px';
+        }, 40);
+        flyingTimers.push(timer);
+        setTimeout(() => {
+          img.style.transition = 'opacity 0.5s';
+          img.style.opacity = '0';
+          setTimeout(() => img.remove(), 500);
+        }, 3000);
+      }
+      setTimeout(clearFlyingLogos, 3500);
+    }
+
+    // 动画结束处理：固定图标为 scale(1) 并恢复定位
+    function onAnimationEnd(e) {
+      if (e.target === resultLogo && resultLogo.classList.contains('boom')) {
+        resultLogo.style.transform = 'scale(1)';   // 保持可见
+        resultLogo.style.position = '';
+        resultLogo.style.left = '';
+        resultLogo.style.top = '';
+        resultLogo.style.zIndex = '';
+        resultLogo.classList.remove('boom');
+        resultLogo.removeEventListener('animationend', onAnimationEnd);
+      }
+    }
+
+    // 显示结果（触发中心放大动画）
+    function showResult(message, isSuccess) {
+      // 不再隐藏初始标语，让它始终可见
+
+      resultMessage.textContent = message;
+      resultMessage.className = 'result-message ' + (isSuccess ? 'success-text' : 'failure-text');
+      retryBtn.classList.toggle('show', !isSuccess);
+
+      const logo = resultLogo;
+      const w = logo.offsetWidth || 100;
+      const h = logo.offsetHeight || 100;
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      const anchorX = w * 0.75;
+      const anchorY = h * 0.5;
+
+      logo.style.position = 'fixed';
+      logo.style.left = (centerX - anchorX) + 'px';
+      logo.style.top = (centerY - anchorY) + 'px';
+      logo.style.zIndex = '10000';
+
+      logo.classList.remove('boom');
+      void logo.offsetWidth;
+      logo.addEventListener('animationend', onAnimationEnd);
+      logo.classList.add('boom');
+
+      resultArea.classList.add('show');
+      spawnFlyingLogos(10);
+    }
+
+    // 隐藏结果（重试时）
+    function hideResult() {
+      resultLogo.removeEventListener('animationend', onAnimationEnd);
+      resultLogo.classList.remove('boom');
+      // 重置所有内联样式，回归默认 scale(0) 隐藏
+      resultLogo.style.transform = '';
+      resultLogo.style.position = '';
+      resultLogo.style.left = '';
+      resultLogo.style.top = '';
+      resultLogo.style.zIndex = '';
+
+      resultArea.classList.remove('show');
+      clearFlyingLogos();
+      // 不再需要恢复初始标语显示，因为它从未被隐藏
+      try { turnstile.reset('#cf-widget'); } catch(e) {}
+    }
+
+    retryBtn.addEventListener('click', hideResult);
+
+    // 跳转 URL
     function getRedirectUrl() {
       const params = new URLSearchParams(window.location.search);
       const redirectParam = params.get('redirect');
-      if (redirectParam) {
-        if (redirectParam.startsWith('/') || redirectParam.startsWith('./')) {
-          return redirectParam;
-        }
+      if (redirectParam && (redirectParam.startsWith('/') || redirectParam.startsWith('./'))) {
+        return redirectParam;
       }
       if (document.referrer) {
         try {
@@ -184,18 +343,17 @@
       return '/index.html';
     }
 
+    // Turnstile 回调
     window.onSuccess = function(token) {
       localStorage.setItem('not_robot', '1');
-      messageEl.textContent = '恭喜你击败了机器人快点给我登录不然我每次都要让你检测智商';
-      messageEl.className = 'dynamic-message success';
+      showResult('你打败了cloudflare的土豆服务器人机验证，快点登录不然我每次都要让你用你可怜的智商去大战cloudflare', true);
       setTimeout(() => {
         window.location.href = getRedirectUrl();
       }, 1989);
     };
 
     window.onFailure = function() {
-      messageEl.textContent = '你要么是硅基生物，要么就是一个大脑萎缩小脑缺失的小笨蛋人类。再试一次';
-      messageEl.className = 'dynamic-message failure';
+      showResult('这个地球已经没有人类了，你是伪人么?', false);
     };
   })();
 </script>
