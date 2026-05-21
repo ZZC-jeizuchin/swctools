@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Browser Shell - SwCTools</title>
+  <style>
+    :root {
+      --bar-bg: #1e293b;
+      --input-bg: #334155;
+      --btn-blue: #3b82f6;
+      --btn-hover: #2563eb;
+      --btn-gray: #475569;
+      --text: #ffffff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #0f172a;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    /* 顶部工具栏 */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bar-bg);
+      color: var(--text);
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      z-index: 1000;
+    }
+    .toolbar .brand {
+      font-weight: 700;
+      white-space: nowrap;
+      font-size: 1rem;
+      margin-right: 4px;
+    }
+    .nav-btns {
+      display: flex;
+      gap: 4px;
+    }
+    .toolbar button {
+      background: transparent;
+      border: none;
+      color: white;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+    .toolbar button:hover {
+      background: rgba(255,255,255,0.15);
+    }
+    .address-bar {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background: var(--input-bg);
+      border-radius: 24px;
+      padding: 0 14px;
+      height: 36px;
+    }
+    .address-bar input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 0.9rem;
+      outline: none;
+      padding: 0 6px;
+    }
+    .address-bar input::placeholder {
+      color: #94a3b8;
+    }
+    .go-btn {
+      background: var(--btn-blue) !important;
+      border-radius: 20px !important;
+      padding: 6px 16px !important;
+      font-weight: 600;
+      font-size: 0.85rem !important;
+      margin-left: 4px;
+    }
+    .go-btn:hover {
+      background: var(--btn-hover) !important;
+    }
+
+    /* iframe 填满剩余空间 */
+    .content-frame {
+      flex: 1;
+      width: 100%;
+      border: none;
+      background: #ffffff;
+    }
+
+    /* 错误提示（备用） */
+    .error-hint {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <span class="brand">🌐 浏览器</span>
+    <div class="nav-btns">
+      <button id="backBtn" title="后退">←</button>
+      <button id="forwardBtn" title="前进">→</button>
+      <button id="refreshBtn" title="刷新">↻</button>
+      <button id="homeBtn" title="主页">⌂</button>
+    </div>
+    <div class="address-bar">
+      <input type="text" id="urlInput" placeholder="输入网址或搜索词" autofocus>
+    </div>
+    <button id="goBtn" class="go-btn">打开</button>
+  </div>
+
+  <iframe id="contentFrame" class="content-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-modals allow-downloads"></iframe>
+
+  <script>
+    const urlInput = document.getElementById('urlInput');
+    const goBtn = document.getElementById('goBtn');
+    const backBtn = document.getElementById('backBtn');
+    const forwardBtn = document.getElementById('forwardBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const homeBtn = document.getElementById('homeBtn');
+    const iframe = document.getElementById('contentFrame');
+
+    // 默认主页（可自行修改）
+    const HOME_URL = 'https://www.google.com';
+
+    // 更新地址栏（仅同源时可读，跨域时忽略）
+    function updateAddressBar() {
+      try {
+        const doc = iframe.contentDocument;
+        if (doc && doc.location) {
+          urlInput.value = doc.location.href;
+        }
+      } catch (e) {}
+    }
+
+    // 导航到指定 URL
+    function navigate(rawUrl) {
+      let finalUrl = rawUrl.trim();
+      if (!finalUrl) return;
+
+      // 如果没写协议，且没有点号或包含空格，当作搜索
+      if (!/^https?:\/\//i.test(finalUrl) && !finalUrl.startsWith('//')) {
+        if (!finalUrl.includes('.') || finalUrl.includes(' ')) {
+          // 搜索词
+          finalUrl = 'https://www.google.com/search?q=' + encodeURIComponent(finalUrl);
+        } else {
+          // 纯域名
+          finalUrl = 'https://' + finalUrl;
+        }
+      }
+
+      urlInput.value = finalUrl;
+      iframe.src = finalUrl;
+    }
+
+    // 事件绑定
+    goBtn.addEventListener('click', () => navigate(urlInput.value));
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') navigate(urlInput.value);
+    });
+
+    backBtn.addEventListener('click', () => {
+      try { iframe.contentWindow.history.back(); } catch (e) {}
+    });
+    forwardBtn.addEventListener('click', () => {
+      try { iframe.contentWindow.history.forward(); } catch (e) {}
+    });
+    refreshBtn.addEventListener('click', () => {
+      try { iframe.contentWindow.location.reload(); } catch (e) { iframe.src = iframe.src; }
+    });
+    homeBtn.addEventListener('click', () => navigate(HOME_URL));
+
+    // 加载完成更新地址栏
+    iframe.addEventListener('load', updateAddressBar);
+
+    // 定时同步（仅对同源有效）
+    setInterval(updateAddressBar, 1000);
+
+    // 初始加载主页
+    navigate(HOME_URL);
+  </script>
+</body>
+</html>
