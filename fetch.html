@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验室源码抓取器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }
+        h1 { font-size: 1.3em; margin-bottom: 16px; color: #e94560; }
+        .section { margin-bottom: 20px; }
+        .section h2 { font-size: 1em; margin-bottom: 8px; color: #0f3460; background: #16213e; padding: 8px 12px; border-radius: 6px; }
+        button { background: #e94560; color: #fff; border: none; padding: 10px 20px; margin: 4px; border-radius: 6px; cursor: pointer; font-size: 0.9em; }
+        button:active { background: #c23152; }
+        button.green { background: #4ecca3; color: #1a1a2e; }
+        textarea, pre { width: 100%; background: #0f3460; color: #e0e0e0; border: 1px solid #16213e; border-radius: 6px; padding: 12px; font-size: 0.85em; font-family: 'Courier New', monospace; white-space: pre-wrap; word-break: break-all; min-height: 120px; max-height: 400px; overflow-y: auto; }
+        #status { padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 0.9em; background: #16213e; }
+        .success { background: #1a3a1a !important; color: #4ecca3; }
+        .error { background: #3a1a1a !important; color: #e94560; }
+    </style>
+</head>
+<body>
+    <h1>🧪 希沃实验室源码抓取器</h1>
+
+    <div id="status">就绪，等待操作</div>
+
+    <div class="section">
+        <h2>🎯 目标URL</h2>
+        <textarea id="targetUrl" rows="2">https://easiclass-webview.seewo.com/laboratory/player?stage=heightSchool&subject=physics&title=%E4%B8%89%E6%98%9F%E7%B3%BB%E7%BB%9F&historyId=15ea09212176448e8848a4aa25428692</textarea>
+    </div>
+
+    <div class="section">
+        <h2>🎮 操作</h2>
+        <button onclick="grabHTML()">📄 抓取 HTML 源码</button>
+        <button onclick="grabJS()">📜 抓取 JS 脚本列表</button>
+        <button onclick="grabAll()">📦 一键抓取全部</button>
+        <button class="green" onclick="viewStored()">📂 查看已存储数据</button>
+        <button class="green" onclick="clearStored()">🗑️ 清除存储</button>
+    </div>
+
+    <div class="section">
+        <h2>📋 结果</h2>
+        <pre id="result">点击上方按钮开始抓取...</pre>
+    </div>
+
+    <script>
+        // ========== 配置 ==========
+        const STORAGE_KEY = 'swc_standalone_ide_code';
+        const WAIT_TIME = 4000;
+
+        // ========== 工具函数 ==========
+        function setStatus(msg, type) {
+            const s = document.getElementById('status');
+            s.textContent = msg;
+            s.className = type || '';
+        }
+
+        function showResult(data) {
+            document.getElementById('result').textContent = data;
+        }
+
+        function getTarget() {
+            return document.getElementById('targetUrl').value.trim();
+        }
+
+        // ========== 存储到 localStorage ==========
+        function saveToStorage(data) {
+            try {
+                const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+                // 合并新数据
+                Object.assign(stored, data);
+                // 加上时间戳
+                stored._lastUpdate = new Date().toISOString();
+                stored._url = getTarget();
+                
+                const jsonStr = JSON.stringify(stored);
+                localStorage.setItem(STORAGE_KEY, jsonStr);
+                
+                const sizeKB = (jsonStr.length / 1024).toFixed(1);
+                setStatus('✅ 已存入 localStorage (键: ' + STORAGE_KEY + ', 大小: ' + sizeKB + ' KB)', 'success');
+                showResult('数据已保存到 localStorage["' + STORAGE_KEY + '"]\n\n当前存储内容预览 (前500字):\n' + jsonStr.substring(0, 500) + '...\n\n' + '总计: ' + sizeKB + ' KB');
+            } catch (e) {
+                setStatus('❌ 存储失败: ' + e.message, 'error');
+                showResult('存储错误: ' + e.message + '\n\n可能是数据太大，超出 localStorage 容量限制。');
+            }
+        }
+
+        // ========== 查看已存储数据 ==========
+        function viewStored() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            if (!data) {
+                setStatus('⚠️ 暂无存储数据', 'error');
+                showResult('localStorage["' + STORAGE_KEY + '"] 为空，请先抓取数据。');
+                return;
+            }
+            setStatus('✅ 已读取存储数据', 'success');
+            showResult(data);
+        }
+
+        // ========== 清除存储 ==========
+        function clearStored() {
+            localStorage.removeItem(STORAGE_KEY);
+            setStatus('🗑️ 已清除存储', '');
+            showResult('localStorage["' + STORAGE_KEY + '"] 已删除。');
+        }
+
+        // ========== 核心：打开目标窗口并抓取 ==========
+        function openAndGrab(callback) {
+            const url = getTarget();
+            if (!url) {
+                setStatus('请先填写目标URL', 'error');
+                return;
+            }
+
+            setStatus('正在打开目标页面...');
+            const w = window.open(url);
+
+            if (!w) {
+                setStatus('❌ 窗口被拦截！请检查弹窗设置', 'error');
+                showResult('弹窗被拦截，无法打开目标页面。\n请尝试在AI讲题的WebView中运行此页面。');
+                return;
+            }
+
+            setTimeout(() => {
+                try {
+                    callback(w);
+                } catch (e) {
+                    setStatus('❌ 抓取失败: ' + e.message, 'error');
+                    showResult('错误: ' + e.message + '\n\n可能是跨域限制导致无法访问子窗口内容。');
+                }
+            }, WAIT_TIME);
+        }
+
+        // ========== 抓取 HTML 源码 ==========
+        function grabHTML() {
+            openAndGrab((w) => {
+                const html = w.document.documentElement.outerHTML;
+                setStatus('✅ HTML 源码获取成功！长度: ' + html.length + ' 字符', 'success');
+                showResult(html);
+
+                // 存入 localStorage
+                saveToStorage({ html: html });
+            });
+        }
+
+        // ========== 抓取 JS 脚本列表 ==========
+        function grabJS() {
+            openAndGrab((w) => {
+                const scripts = w.document.querySelectorAll('script');
+                let result = '=== 页面 JavaScript 脚本列表 ===\n\n';
+                result += '共找到 ' + scripts.length + ' 个脚本\n\n';
+
+                const jsList = [];
+
+                scripts.forEach((s, i) => {
+                    result += '--- 脚本 ' + (i + 1) + ' ---\n';
+                    result += 'src: ' + (s.src || '(内联脚本)') + '\n';
+                    if (s.innerHTML.trim()) {
+                        result += '内容长度: ' + s.innerHTML.length + ' 字符\n';
+                        result += '内容预览 (前500字):\n' + s.innerHTML.substring(0, 500) + '\n';
+                    }
+                    result += '\n';
+
+                    jsList.push({
+                        index: i,
+                        src: s.src || null,
+                        content: s.innerHTML
+                    });
+                });
+
+                setStatus('✅ JS 脚本列表获取成功！共 ' + scripts.length + ' 个', 'success');
+                showResult(result);
+
+                // 存入 localStorage
+                saveToStorage({ jsList: jsList, jsSummary: result });
+            });
+        }
+
+        // ========== 一键抓取全部 ==========
+        function grabAll() {
+            setStatus('正在全面抓取...');
+            openAndGrab((w) => {
+                // 抓 HTML
+                const html = w.document.documentElement.outerHTML;
+
+                // 抓 JS
+                const scripts = w.document.querySelectorAll('script');
+                const jsList = [];
+                scripts.forEach((s, i) => {
+                    jsList.push({
+                        index: i,
+                        src: s.src || null,
+                        content: s.innerHTML
+                    });
+                });
+
+                const jsSummary = '共找到 ' + scripts.length + ' 个脚本';
+
+                // 一次性存入
+                saveToStorage({
+                    html: html,
+                    jsList: jsList,
+                    jsSummary: jsSummary
+                });
+
+                setStatus('✅ 全部抓取完成！HTML: ' + html.length + ' 字符, JS: ' + scripts.length + ' 个', 'success');
+                showResult('HTML 长度: ' + html.length + ' 字符\n' + jsSummary + '\n\n数据已存入 localStorage["' + STORAGE_KEY + '"]');
+            });
+        }
+    </script>
+</body>
+</html>
