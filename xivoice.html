@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>API 诊断 - XI Speech Synthesizer</title>
+    <style>
+        body { font-family: monospace; max-width: 650px; margin: 2rem auto; padding: 0 1rem; }
+        textarea { width: 100%; height: 80px; margin: 0.5rem 0; }
+        button { padding: 0.6rem 1.2rem; font-weight: bold; cursor: pointer; }
+        pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 8px; white-space: pre-wrap; }
+        .error { color: #dc2626; background: #fee2e2; padding: 0.7rem; border-radius: 8px; margin: 0.8rem 0; }
+        label { display: block; margin: 0.8rem 0 0.2rem; font-weight: 600; }
+        .hint { font-size: 0.9rem; color: #4b5563; margin-top: 0.2rem; }
+    </style>
+</head>
+<body>
+    <h1>🔍 API 连通性诊断</h1>
+    <p>目标：<code>POST https://xi-speech-synthesizer.herokuapp.com/task</code></p>
+    
+    <label for="bodyInput">请求体 (JSON)：</label>
+    <textarea id="bodyInput">{"text":"hello"}</textarea>
+    
+    <div style="margin: 0.8rem 0;">
+        <input type="checkbox" id="useProxy">
+        <label for="useProxy" style="display:inline; font-weight:normal;">通过 CORS 代理测试（绕过浏览器限制）</label>
+        <div class="hint">代理前缀：<code>https://corsproxy.io/?</code> （仅用于临时测试）</div>
+    </div>
+    
+    <button id="sendBtn">🚀 发送请求（超时 20 秒）</button>
+    <button id="clearBtn" style="margin-left:0.5rem;">清空日志</button>
+
+    <h3>📋 诊断日志</h3>
+    <pre id="log">等待操作...</pre>
+
+    <script>
+        const logEl = document.getElementById('log');
+        const bodyInput = document.getElementById('bodyInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const useProxy = document.getElementById('useProxy');
+
+        function log(message, isError = false) {
+            logEl.innerHTML += (isError ? '\n❌ ' : '\n✅ ') + message;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        clearBtn.addEventListener('click', () => {
+            logEl.textContent = '日志已清空';
+        });
+
+        sendBtn.addEventListener('click', async () => {
+            logEl.textContent = '开始诊断...';
+            sendBtn.disabled = true;
+
+            // 解析 JSON
+            let json;
+            try {
+                json = JSON.parse(bodyInput.value);
+            } catch (e) {
+                log('请求体 JSON 格式错误：' + e.message, true);
+                sendBtn.disabled = false;
+                return;
+            }
+
+            const baseUrl = 'https://xi-speech-synthesizer.herokuapp.com/task';
+            const url = useProxy.checked 
+                ? 'https://corsproxy.io/?' + encodeURIComponent(baseUrl)
+                : baseUrl;
+
+            log('请求 URL: ' + url);
+            log('请求体: ' + JSON.stringify(json));
+
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 20000); // 20秒超时
+
+            try {
+                const startTime = Date.now();
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(json),
+                    signal: controller.signal
+                });
+                clearTimeout(timeout);
+
+                const elapsed = Date.now() - startTime;
+                log(`响应到达，耗时 ${elapsed}ms`);
+                log(`HTTP 状态码: ${res.status} ${res.statusText}`);
+
+                // 显示响应头
+                const headers = {};
+                res.headers.forEach((value, key) => headers[key] = value);
+                log('响应头: ' + JSON.stringify(headers, null, 2));
+
+                // 读取响应文本
+                const text = await res.text();
+                log('响应正文:');
+                log(text);
+
+                // 检查 CORS 关键头
+                if (!headers['access-control-allow-origin'] && !useProxy.checked) {
+                    log('⚠️ 警告：响应中没有 Access-Control-Allow-Origin 头，这可能是因为 CORS 策略导致浏览器拦截，但当前请求成功可能是因为使用了 no-cors 模式或代理。如果没有使用代理且浏览器报错，请勾选“通过CORS代理”再试。');
+                }
+
+            } catch (err) {
+                clearTimeout(timeout);
+                if (err.name === 'AbortError') {
+                    log('⏰ 请求超时（20秒）！可能 Heroku 休眠唤醒缓慢，或网络不通。请稍后重试。', true);
+                } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+                    log('🌐 网络错误：请求无法发送。可能原因：', true);
+                    log('  1. 浏览器 CORS 策略拦截（请勾选“通过CORS代理”测试）');
+                    log('  2. 本地网络无法访问 Heroku（尝试 VPN 或切换网络）');
+                    log('  3. 浏览器插件阻止了请求');
+                    log('  完整错误信息：' + err.message);
+                } else {
+                    log('未知错误：' + err.message, true);
+                }
+            } finally {
+                sendBtn.disabled = false;
+            }
+        });
+
+        // 页面加载时显示提示
+        log('👋 请直接点击“发送请求”测试，或勾选代理后再试。\n' +
+            '   同时请打开浏览器开发者工具 (F12) 查看 Console 和 Network 标签页。');
+    </script>
+</body>
+</html>
