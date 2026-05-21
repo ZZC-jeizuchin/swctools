@@ -64,6 +64,7 @@
       border-radius:28px; box-shadow:0 16px 30px -8px rgba(30,65,90,0.18);
       border:1px solid var(--panel-border); padding:40px 36px;
       display:flex; flex-direction:column; align-items:center; text-align:center;
+      overflow:visible; /* 关键：允许放大后的 Turnstile 不被裁剪 */
     }
 
     .main-panel h1 {
@@ -88,10 +89,20 @@
       color: #c62828;
     }
 
+    /* 验证框容器：flex居中 + scale放大 + 不裁剪 */
     .turnstile-wrapper {
+      display: flex;
+      justify-content: center;
+      overflow: visible;
+      padding: 10px 0; /* 给放大后留点呼吸空间 */
+      margin-bottom: 24px;
+      width: 100%;
+    }
+
+    /* 让 Turnstile 组件本身缩放 */
+    .turnstile-wrapper .cf-turnstile {
       transform: scale(1.35);
-      transform-origin: center top;
-      margin-bottom: 40px;
+      transform-origin: center; /* 以自身中心缩放，左右对称 */
     }
   </style>
 </head>
@@ -105,7 +116,6 @@
   <h1>swctools.pages.dev</h1>
   <p class="subtitle">反机器爬虫程序</p>
 
-  <!-- 动态提示语区域 -->
   <div class="dynamic-message" id="message">
     你个小可爱人类快点来证明你比没浮木的爬虫机器人聪明，不然别想进我的网站。<br>
     证明你不是一只机械晚期智人
@@ -153,43 +163,36 @@
     }
     requestAnimationFrame(updateFPS);
 
-    // ========== 提示语元素 ==========
     const messageEl = document.getElementById('message');
 
-    // 获取重定向目标
     function getRedirectUrl() {
-      // 1. 优先从查询参数 ?redirect=xxx 获取
       const params = new URLSearchParams(window.location.search);
       const redirectParam = params.get('redirect');
       if (redirectParam) {
-        // 简单防止开放在重定向漏洞，只允许本站相对路径
         if (redirectParam.startsWith('/') || redirectParam.startsWith('./')) {
           return redirectParam;
         }
       }
-      // 2. 尝试从 document.referrer 获取，限制为本域名
       if (document.referrer) {
-        const referrerUrl = new URL(document.referrer);
-        if (referrerUrl.hostname === 'swctools.pages.dev') {
-          return referrerUrl.pathname + referrerUrl.search + referrerUrl.hash;
-        }
+        try {
+          const referrerUrl = new URL(document.referrer);
+          if (referrerUrl.hostname === 'swctools.pages.dev') {
+            return referrerUrl.pathname + referrerUrl.search + referrerUrl.hash;
+          }
+        } catch(e) {}
       }
-      // 3. 默认跳转到 index.html
       return '/index.html';
     }
 
-    // 成功回调：夸夸，写 localStorage，1 秒后跳转回上一页
     window.onSuccess = function(token) {
       localStorage.setItem('not_robot', '1');
       messageEl.textContent = '恭喜你击败了机器人快点给我登录不然我每次都要让你检测智商';
       messageEl.className = 'dynamic-message success';
       setTimeout(() => {
-        const target = getRedirectUrl();
-        window.location.href = target;
-      }, 1000);
+        window.location.href = getRedirectUrl();
+      }, 1989);
     };
 
-    // 失败回调：骂骂，显示再试一次
     window.onFailure = function() {
       messageEl.textContent = '你要么是硅基生物，要么就是一个大脑萎缩小脑缺失的小笨蛋人类。再试一次';
       messageEl.className = 'dynamic-message failure';
