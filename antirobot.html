@@ -76,10 +76,39 @@
       margin-bottom:10px;
     }
 
-    /* 初始提示语（始终显示） */
+    /* 初始提示语 */
     .initial-message {
       font-size:1.1rem; color:var(--text-color); opacity:0.9;
       margin-bottom:20px; line-height:1.6; font-weight:500;
+    }
+
+    /* 风险量化数字区域 */
+    .risk-score-container {
+      margin-bottom: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .risk-label {
+      font-size: 0.9rem;
+      color: var(--corner-text-color);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .risk-score {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 3.5rem;
+      font-weight: 700;
+      color: var(--text-color);
+      line-height: 1;
+      transition: color 0.3s;
+    }
+    .risk-score.danger {
+      color: #c62828;
+    }
+    .risk-score.safe {
+      color: #2e7d32;
     }
 
     .turnstile-wrapper {
@@ -103,10 +132,10 @@
     }
     .result-area.show { display: flex; }
 
-    /* 左侧图标：动画后恢复100px，但动画时会被改为 fixed 定位 */
+    /* 左侧图标 */
     .result-logo {
       width: 100px; height: auto;
-      transform: scale(0);            /* 初始隐藏，动画或内联样式会覆盖 */
+      transform: scale(0);
       transform-origin: 75% 50%;
       flex-shrink: 0;
       position: relative;
@@ -162,10 +191,16 @@
   <h1>swctools.pages.dev</h1>
   <p class="subtitle">反机器爬虫程序</p>
 
-  <!-- 初始标语（始终显示） -->
+  <!-- 初始标语 -->
   <div class="initial-message" id="initialMsg">
     你个小可爱人类快点来证明你比没浮木的爬虫机器人聪明，不然别想进我的网站。<br>
     证明你不是一只机械晚期智人
+  </div>
+
+  <!-- AI 风险指数 -->
+  <div class="risk-score-container">
+    <span class="risk-label">AI 风险指数</span>
+    <div class="risk-score" id="riskScore">--</div>
   </div>
 
   <div class="turnstile-wrapper">
@@ -178,7 +213,7 @@
     </div>
   </div>
 
-  <!-- 验证结果区域（左右结构） -->
+  <!-- 验证结果区域 -->
   <div class="result-area" id="resultArea">
     <img class="result-logo" id="resultLogo" src="https://www.cloudflare.com/img/logo-cloudflare.svg" alt="Cloudflare">
     <div class="result-text-area">
@@ -218,7 +253,82 @@
     }
     requestAnimationFrame(updateFPS);
 
-    // 元素
+    // 风险数字元素
+    const riskScoreEl = document.getElementById('riskScore');
+    let riskAnimationInterval = null;
+    let realScoreAvailable = false;
+    let currentRealScore = null;
+
+    // 获取真实 Bot Score（来自 Pages Functions）
+    async function fetchRealBotScore() {
+      try {
+        const res = await fetch('/api/bot-score');
+        if (!res.ok) throw new Error('API error');
+        const data = await res.json();
+        if (typeof data.botScore === 'number') {
+          return data.botScore;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch real bot score, using fallback.');
+      }
+      return null;
+    }
+
+    // 停止数字波动并固定为指定值
+    function stopRiskAnimation(value) {
+      if (riskAnimationInterval) {
+        clearInterval(riskAnimationInterval);
+        riskAnimationInterval = null;
+      }
+      riskScoreEl.textContent = value;
+      riskScoreEl.classList.remove('danger', 'safe');
+      if (value <= 30) {
+        riskScoreEl.classList.add('danger');
+      } else {
+        riskScoreEl.classList.add('safe');
+      }
+    }
+
+    // 开始随机波动
+    function startRandomAnimation() {
+      if (riskAnimationInterval) clearInterval(riskAnimationInterval);
+      riskScoreEl.classList.remove('danger', 'safe');
+      riskAnimationInterval = setInterval(() => {
+        riskScoreEl.textContent = Math.floor(Math.random() * 101);
+      }, 80);
+    }
+
+    // 初始化评分显示：尝试获取真实分数，失败则随机波动
+    async function initScoreDisplay() {
+      const score = await fetchRealBotScore();
+      if (score !== null) {
+        realScoreAvailable = true;
+        currentRealScore = score;
+        stopRiskAnimation(score);
+      } else {
+        realScoreAvailable = false;
+        startRandomAnimation();
+      }
+    }
+
+    // 验证后更新评分（优先真实分数）
+    async function updateScoreAfterVerification(isSuccess) {
+      const score = await fetchRealBotScore();
+      if (score !== null) {
+        stopRiskAnimation(score);
+        currentRealScore = score;
+        realScoreAvailable = true;
+      } else {
+        // 没有真实分数时，给一个模拟值
+        const fakeScore = isSuccess ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 20) + 80;
+        stopRiskAnimation(fakeScore);
+      }
+    }
+
+    // 页面加载时初始化
+    initScoreDisplay();
+
+    // 结果区域元素
     const resultArea = document.getElementById('resultArea');
     const resultMessage = document.getElementById('resultMessage');
     const retryBtn = document.getElementById('retryBtn');
@@ -263,10 +373,9 @@
       setTimeout(clearFlyingLogos, 3500);
     }
 
-    // 动画结束处理：固定图标为 scale(1) 并恢复定位
     function onAnimationEnd(e) {
       if (e.target === resultLogo && resultLogo.classList.contains('boom')) {
-        resultLogo.style.transform = 'scale(1)';   // 保持可见
+        resultLogo.style.transform = 'scale(1)';
         resultLogo.style.position = '';
         resultLogo.style.left = '';
         resultLogo.style.top = '';
@@ -276,9 +385,9 @@
       }
     }
 
-    // 显示结果（触发中心放大动画）
-    function showResult(message, isSuccess) {
-      // 不再隐藏初始标语，让它始终可见
+    async function showResult(message, isSuccess) {
+      // 更新风险分数（真实优先）
+      await updateScoreAfterVerification(isSuccess);
 
       resultMessage.textContent = message;
       resultMessage.className = 'result-message ' + (isSuccess ? 'success-text' : 'failure-text');
@@ -306,11 +415,9 @@
       spawnFlyingLogos(10);
     }
 
-    // 隐藏结果（重试时）
     function hideResult() {
       resultLogo.removeEventListener('animationend', onAnimationEnd);
       resultLogo.classList.remove('boom');
-      // 重置所有内联样式，回归默认 scale(0) 隐藏
       resultLogo.style.transform = '';
       resultLogo.style.position = '';
       resultLogo.style.left = '';
@@ -319,13 +426,14 @@
 
       resultArea.classList.remove('show');
       clearFlyingLogos();
-      // 不再需要恢复初始标语显示，因为它从未被隐藏
+
+      // 重试时重新获取真实评分，若失败则恢复波动
+      initScoreDisplay();
       try { turnstile.reset('#cf-widget'); } catch(e) {}
     }
 
     retryBtn.addEventListener('click', hideResult);
 
-    // 跳转 URL
     function getRedirectUrl() {
       const params = new URLSearchParams(window.location.search);
       const redirectParam = params.get('redirect');
@@ -346,7 +454,7 @@
     // Turnstile 回调
     window.onSuccess = function(token) {
       localStorage.setItem('not_robot', '1');
-      showResult('你打败了cloudflare的土豆服务器人机验证，快点登录不然我每次都要让你用你可怜的智商去大战cloudflare', true);
+      showResult('你打败了cloudflare的土豆服务器人机验证', true);
       setTimeout(() => {
         window.location.href = getRedirectUrl();
       }, 1989);
