@@ -10,7 +10,6 @@ export async function onRequest(context) {
     });
   }
 
-  // 完整的签名验证
   const payload = await verifyToken(authHeader, env.JWT_SECRET);
   if (!payload) {
     return new Response(JSON.stringify({ error: 'token无效或已过期' }), {
@@ -27,7 +26,6 @@ export async function onRequest(context) {
     });
   }
 
-  // 密码复杂度：仅允许大小写字母和数字
   const passwordPattern = /^[A-Za-z0-9]+$/;
   if (!passwordPattern.test(body.newPassword)) {
     return new Response(JSON.stringify({ error: '密码只能包含大小写字母和数字' }), {
@@ -63,7 +61,7 @@ export async function onRequest(context) {
   });
 }
 
-// ========== 内联签名验证函数 ==========
+// ========== 内联签名验证函数（已修复中文解码） ==========
 async function verifyToken(token, secret) {
   try {
     const parts = token.split('.');
@@ -72,7 +70,10 @@ async function verifyToken(token, secret) {
     const unsigned = `${headerB64}.${payloadB64}`;
     const expectedSig = await sign(unsigned, secret);
     if (signatureB64 !== expectedSig) return null;
-    const payload = JSON.parse(atob(payloadB64));
+
+    // 安全 Base64URL 解码，支持中文
+    const decoded = decodeURIComponent(escape(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'))));
+    const payload = JSON.parse(decoded);
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
     return payload;
   } catch {
@@ -89,5 +90,8 @@ async function sign(data, secret) {
     ['sign']
   );
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
-  return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=+$/, '');
+  return btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
