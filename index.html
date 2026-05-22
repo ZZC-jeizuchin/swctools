@@ -1,41 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <script>
-  (function() {
-    const token = localStorage.getItem('swc_token');
-    let needLogin = true;
-
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-          needLogin = true;
-        } else {
-          needLogin = false;
-        }
-      } catch (e) {
-        needLogin = true;
-      }
-    }
-
-    // 未登录时，进行机器人检测
-    if (needLogin) {
-      const notRobot = localStorage.getItem('not_robot');
-      if (notRobot !== '1') {
-        // 没有标记或标记为0，立即跳转到反爬虫页面
-        window.location.href = 'antirobot.html';
-        return; // 终止后续执行
-      } else {
-        // 标记为1，将其重置为0，然后弹出登录框
-        localStorage.setItem('not_robot', '0');
-        const loginBtn = document.getElementById('loginBtn');
-        if (loginBtn) loginBtn.click();
-      }
-    }
-    // 已登录用户什么都不需要做
-  })();
-  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -254,7 +219,6 @@
     .loading-spinner { width: calc(var(--main-w) * 0.035); height: calc(var(--main-w) * 0.035); border: calc(var(--main-w) * 0.003) solid rgba(79, 127, 158, 0.2); border-top-color: #4f7f9e; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: calc(var(--main-w) * 0.018); }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* 修复 Base64 表格样式 */
     .base64-table {
       width: 100%;
       border-collapse: collapse;
@@ -418,7 +382,9 @@
     const token = localStorage.getItem('swc_token');
     if (!token) return null;
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))));
       if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
       return payload.sub;
     } catch { return null; }
@@ -436,6 +402,35 @@
     loginBtn.style.display = 'inline-block';
   }
   updateLoginButton();
+
+  // 智能登录框弹出逻辑（未登录且反爬虫已验证）
+  (function() {
+    const token = localStorage.getItem('swc_token');
+    let needLogin = true;
+    if (token) {
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))));
+          if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+            needLogin = true;
+          } else {
+            needLogin = false;
+          }
+        }
+      } catch (e) {
+        needLogin = true;
+      }
+    }
+    if (needLogin) {
+      const notRobot = localStorage.getItem('not_robot');
+      if (notRobot === '1') {
+        localStorage.setItem('not_robot', '0');
+        const loginBtn = document.getElementById('loginBtn');
+        if (loginBtn) loginBtn.click();
+      }
+    }
+  })();
 
   const modalOverlay = document.getElementById('modalOverlay'), modalSlides = document.getElementById('modalSlides');
   let currentCatIndex = 0, modalStartX = 0, modalCurrentX = 0, isModalDragging = false;
