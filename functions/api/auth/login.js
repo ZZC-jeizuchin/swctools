@@ -87,12 +87,19 @@ export async function onRequest(context) {
   });
 }
 
-// ========== 内联工具函数 ==========
+// ========== 内联工具函数（已修复中文编码） ==========
 async function generateToken(username, secret) {
   const header = { alg: 'HS256', typ: 'JWT' };
   const now = Math.floor(Date.now() / 1000);
   const payload = { sub: username, iat: now, exp: now + 60 * 60 * 24 * 30 };
-  const encode = (obj) => btoa(JSON.stringify(obj)).replace(/=+$/, '');
+
+  const encode = (obj) => {
+    return btoa(unescape(encodeURIComponent(JSON.stringify(obj))))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  };
+
   const unsigned = `${encode(header)}.${encode(payload)}`;
   const signature = await sign(unsigned, secret);
   return `${unsigned}.${signature}`;
@@ -107,5 +114,8 @@ async function sign(data, secret) {
     ['sign']
   );
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
-  return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=+$/, '');
+  return btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
