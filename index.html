@@ -609,6 +609,12 @@
     const changePwdBtn = document.getElementById('changePwdBtn');
     const logoutBtn = document.getElementById('logoutBtn');
     const deleteAccountBtn = document.getElementById('deleteAccountBtn');
+    const changeAvatarBtn = document.getElementById('changeAvatarBtn');
+    if (changeAvatarBtn) {
+      changeAvatarBtn.addEventListener('click', () => {
+        window.location.href = 'uploadicon.html';
+      });
+    }
 
     if (authLoginBtn) {
       authLoginBtn.addEventListener('click', async () => {
