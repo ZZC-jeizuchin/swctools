@@ -44,6 +44,7 @@
     .current-avatar {
       width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
       border: 2px solid #bdd1e6; margin-bottom: 8px;
+      background: #ccc; /* 默认灰色占位 */
     }
     .btn-row {
       display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 12px;
@@ -87,7 +88,7 @@
   <div class="container">
     <h2>上传头像</h2>
     <div>
-      <img id="currentAvatar" class="current-avatar" src="#" alt="当前头像" style="display:none;">
+      <img id="currentAvatar" class="current-avatar" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt="当前头像">
       <p style="color:#666;font-size:0.85rem;">当前头像</p>
     </div>
     <hr class="divider">
@@ -125,7 +126,10 @@
 
     async function loadCurrentIcon() {
       const token = localStorage.getItem('swc_token');
+      const defaultSrc = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
+
       if (!token) {
+        currentAvatar.src = defaultSrc;
         messageDiv.textContent = '未登录，请先登录。';
         messageDiv.className = 'message error';
         return;
@@ -139,6 +143,7 @@
           if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
             messageDiv.textContent = '登录已过期，请重新登录。';
             messageDiv.className = 'message error';
+            currentAvatar.src = defaultSrc;
             return;
           }
           username = payload.sub;
@@ -146,6 +151,12 @@
       } catch (e) {
         messageDiv.textContent = 'token无效';
         messageDiv.className = 'message error';
+        currentAvatar.src = defaultSrc;
+        return;
+      }
+
+      if (!username) {
+        currentAvatar.src = defaultSrc;
         return;
       }
 
@@ -155,18 +166,15 @@
         });
         if (res.ok) {
           const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-          previewImg.src = url;
-          previewImg.style.display = 'inline-block';
+          currentAvatar.src = URL.createObjectURL(blob);
         } else {
-          previewImg.style.display = 'none';
-          const err = await res.json();
-          messageDiv.textContent = err.error || '加载失败';
+          currentAvatar.src = defaultSrc;
         }
       } catch {
-        messageDiv.textContent = '网络错误';
+        currentAvatar.src = defaultSrc;
       }
     }
+
     function initCropper(img) {
       if (cropper) { cropper.destroy(); cropper = null; }
       cropContainer.style.display = 'block';
