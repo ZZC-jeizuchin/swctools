@@ -48,6 +48,18 @@
   <meta name="bingbot" content="noindex, nofollow">
   <title>SwCTools</title>
   <style>
+    /* 用户头像 — 添加在 <style> 标签内 */
+    .user-avatar {
+      display: none;           /* 默认隐藏，登录后显示 */
+      width: calc(var(--main-h) * 0.095);
+      height: calc(var(--main-h) * 0.095);
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--panel-border);
+      background: var(--panel-bg);
+      margin-right: calc(var(--main-w) * 0.01);
+      flex-shrink: 0;
+    }
     :root {
       --bg-body: #e8edf2;
       --panel-bg: rgba(255, 255, 255, 0.85);
