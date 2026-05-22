@@ -461,12 +461,21 @@
     const avatar = document.getElementById('userAvatar');
     const token = localStorage.getItem('swc_token');
     const defaultSrc = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
+  
     if (!token) {
       avatar.src = defaultSrc;
       return;
     }
+ 
+    const username = getUsernameFromToken();
+    if (!username) {
+      avatar.src = defaultSrc;
+      return;
+    }
+
     try {
-      const res = await fetch('/api/upload-icon', {
+      // 带上用户名参数，确保后端返回该用户的专属头像
+      const res = await fetch(`/api/upload-icon?username=${encodeURIComponent(username)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -479,7 +488,6 @@
       avatar.src = defaultSrc;
     }
   }
-
   function updateLoginButton() {
     const username = getUsernameFromToken();
     if (username) {
