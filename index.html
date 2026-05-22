@@ -461,21 +461,37 @@
     const avatar = document.getElementById('userAvatar');
     const token = localStorage.getItem('swc_token');
     const defaultSrc = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
-  
+
     if (!token) {
       avatar.src = defaultSrc;
       return;
     }
- 
-    const username = getUsernameFromToken();
+
+    // 从 JWT 中提取用户名
+    let username;
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+          avatar.src = defaultSrc;
+          return;
+        }
+        username = payload.sub;
+      }
+    } catch {
+      avatar.src = defaultSrc;
+      return;
+    }
+
     if (!username) {
       avatar.src = defaultSrc;
       return;
     }
 
     try {
-      // 带上用户名参数，确保后端返回该用户的专属头像
-      const res = await fetch(`/api/upload-icon?username=${encodeURIComponent(username)}`, {
+      // ✅ 唯一关键修改：加上时间戳破坏浏览器/CDN缓存
+      const res = await fetch(`/api/upload-icon?t=${Date.now()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
