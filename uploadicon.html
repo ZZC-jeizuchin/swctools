@@ -124,17 +124,49 @@
     let cropper = null;
 
     async function loadCurrentIcon() {
-      if (!token) return;
+      const token = localStorage.getItem('swc_token');
+      if (!token) {
+        messageDiv.textContent = '未登录，请先登录。';
+        messageDiv.className = 'message error';
+        return;
+      }
+
+      let username = '';
       try {
-        const res = await fetch('/api/upload-icon', { headers: { 'Authorization': `Bearer ${token}` } });
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))));
+          if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+            messageDiv.textContent = '登录已过期，请重新登录。';
+            messageDiv.className = 'message error';
+            return;
+          }
+          username = payload.sub;
+        }
+      } catch (e) {
+        messageDiv.textContent = 'token无效';
+        messageDiv.className = 'message error';
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/upload-icon?username=${encodeURIComponent(username)}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         if (res.ok) {
           const blob = await res.blob();
-          currentAvatar.src = URL.createObjectURL(blob);
-          currentAvatar.style.display = 'inline-block';
+          const url = URL.createObjectURL(blob);
+          previewImg.src = url;
+          previewImg.style.display = 'inline-block';
+        } else {
+          previewImg.style.display = 'none';
+          const err = await res.json();
+          messageDiv.textContent = err.error || '加载失败';
         }
-      } catch {}
+      } catch {
+        messageDiv.textContent = '网络错误';
+      }
     }
-
     function initCropper(img) {
       if (cropper) { cropper.destroy(); cropper = null; }
       cropContainer.style.display = 'block';
