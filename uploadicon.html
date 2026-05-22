@@ -138,14 +138,8 @@
           const blob = await res.blob();
           currentAvatar.src = URL.createObjectURL(blob);
           currentAvatar.style.display = 'inline-block';
-        } else {
-          currentAvatar.src = '#';
-          currentAvatar.style.display = 'none';
         }
-      } catch {
-        currentAvatar.src = '#';
-        currentAvatar.style.display = 'none';
-      }
+      } catch {}
     }
 
     function initCropper(img) {
@@ -191,6 +185,10 @@
       showMessage('正在上传…', '');
       try {
         const canvas = cropper.getCroppedCanvas({ width: 256, height: 256, fillColor: '#fff' });
+        if (!canvas) {
+          showMessage('裁剪失败，请重新加载图片', 'error');
+          return;
+        }
         const blob = await new Promise((resolve, reject) => {
           canvas.toBlob((b) => { if (b) resolve(b); else reject(new Error('Canvas导出失败')); }, 'image/png');
         });
@@ -199,22 +197,11 @@
         const res = await fetch('/api/upload-icon', {
           method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData
         });
-
-        // 修复：只要 HTTP 状态码表示成功，就视为上传成功
-        if (res.ok) {
-          showMessage('头像上传成功！', 'success');
-          // 延迟一小会儿再刷新头像，确保 KV 写入已传播
-          setTimeout(() => { loadCurrentIcon(); }, 800);
-          resetCrop();
-        } else {
-          const data = await res.json().catch(() => ({}));
-          showMessage(data.error || '上传失败', 'error');
-        }
-      } catch (err) {
-        showMessage('上传出错: ' + err.message, 'error');
-      } finally {
-        cropUploadBtn.disabled = false;
-      }
+        const data = await res.json();
+        if (res.ok) { showMessage('头像上传成功！', 'success'); loadCurrentIcon(); resetCrop(); }
+        else { showMessage(data.error || '上传失败', 'error'); }
+      } catch (err) { showMessage('上传出错: ' + err.message, 'error'); }
+      finally { cropUploadBtn.disabled = false; }
     });
 
     window.resetCrop = function() {
