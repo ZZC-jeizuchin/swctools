@@ -518,7 +518,28 @@
         </div>`;
     }
   }
-
+  async function loadUserAvatar() {
+    const avatar = document.getElementById('userAvatar');
+    const token = localStorage.getItem('swc_token');
+    if (!token) {
+      avatar.style.display = 'none';
+      return;
+    }
+    try {
+      const res = await fetch('/api/upload-icon', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        avatar.src = URL.createObjectURL(blob);
+        avatar.style.display = 'inline-block';
+      } else {
+        avatar.style.display = 'none';
+      }
+    } catch {
+      avatar.style.display = 'none';
+    }
+  }
   function buildModalSlides() {
     modalSlides.innerHTML = categories.map(cat => {
       if (cat === 'login') {
