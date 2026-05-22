@@ -126,7 +126,6 @@
     async function loadCurrentIcon() {
       if (!token) return;
       try {
-        // 修复：携带当前用户名，确保加载专属头像
         let username = '';
         const parts = token.split('.');
         if (parts.length === 3) {
@@ -168,7 +167,14 @@
       const url = urlInput.value.trim();
       if (!url) { showMessage('请输入图片URL', 'error'); return; }
       showMessage('正在加载图片…', '');
-      cropImage.crossOrigin = 'anonymous';
+
+      // ★★★ 唯一核心修复：Data URL不使用crossOrigin，避免Canvas被污染 ★★★
+      if (url.startsWith('data:')) {
+        cropImage.removeAttribute('crossorigin');
+      } else {
+        cropImage.crossOrigin = 'anonymous';
+      }
+
       cropImage.onload = () => { initCropper(cropImage); showMessage('图片加载成功，请调整裁剪框', 'success'); };
       cropImage.onerror = () => { showMessage('图片加载失败，请检查URL或尝试其他图片', 'error'); };
       cropImage.src = url;
