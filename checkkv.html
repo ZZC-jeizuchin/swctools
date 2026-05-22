@@ -1,11 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <script>
-  if (!localStorage.getItem('swc_token')) {
-    alert('未登录!');
-  }
-  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>我的 KV 数据 - SwCTools</title>
@@ -32,6 +27,12 @@
       padding: 20px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.1);
     }
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
     button {
       background: #4f7f9e;
       color: white;
@@ -41,11 +42,15 @@
       font-size: 0.9rem;
       cursor: pointer;
       font-weight: 600;
-      margin-bottom: 15px;
       transition: background 0.15s;
     }
-    button:hover {
-      background: #3a6b8c;
+    button:hover { background: #3a6b8c; }
+    button.danger { background: #c0392b; }
+    button.danger:hover { background: #e74c3c; }
+    button.delete-item {
+      background: #e74c3c;
+      padding: 4px 12px;
+      font-size: 0.8rem;
     }
     table {
       width: 100%;
@@ -78,37 +83,38 @@
       text-align: center;
       padding: 20px;
     }
-    .error {
-      color: #c0392b;
-    }
+    .error { color: #c0392b; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h3><a href="index.html">返回主站</a></h3>
     <h1>我的 KV 数据</h1>
-    <button onclick="loadKV()">刷新数据</button>
+    <div class="btn-group">
+      <button onclick="loadKV()">刷新数据</button>
+    </div>
     <table id="kvTable">
       <thead>
         <tr>
-          <th style="width: 30%;">键 (Key)</th>
-          <th style="width: 70%;">值 (Value)</th>
+          <th style="width: 25%;">键 (Key)</th>
+          <th style="width: 60%;">值 (Value)</th>
+          <th style="width: 15%;">操作</th>
         </tr>
       </thead>
       <tbody id="tbody">
-        <tr><td colspan="2" class="message">点击“刷新数据”查看</td></tr>
+        <tr><td colspan="3" class="message">点击“刷新数据”查看</td></tr>
       </tbody>
     </table>
   </div>
 
   <script>
+    const token = localStorage.getItem('swc_token');
+
     async function loadKV() {
       const tbody = document.getElementById('tbody');
-      tbody.innerHTML = '<tr><td colspan="2" class="message">加载中...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="3" class="message">加载中...</td></tr>';
 
-      const token = localStorage.getItem('swc_token');
       if (!token) {
-        tbody.innerHTML = '<tr><td colspan="2" class="message error">未登录，请先登录。</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="message error">未登录，请先登录。</td></tr>';
         return;
       }
 
@@ -119,13 +125,13 @@
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          tbody.innerHTML = `<tr><td colspan="2" class="message error">请求失败：${escapeHTML(err.error || res.status)}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="3" class="message error">请求失败：${escapeHTML(err.error || res.status)}</td></tr>`;
           return;
         }
 
         const data = await res.json();
         if (!data.items || data.items.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="2" class="message">没有属于你的 KV 数据。</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="3" class="message">没有属于你的 KV 数据。</td></tr>';
           return;
         }
 
@@ -134,28 +140,56 @@
           const row = tbody.insertRow();
           const keyCell = row.insertCell();
           const valCell = row.insertCell();
+          const actionCell = row.insertCell();
 
           keyCell.textContent = item.key;
-
-          // 先转义 HTML 特殊字符，再将字面的 \n 替换为真正换行符
           let escaped = escapeHTML(item.value);
-          escaped = escaped.replace(/\\n/g, '\n');   // 支持 \n 换行
-          escaped = escaped.replace(/\\r/g, '');     // 移除独立的 \r
-          escaped = escaped.replace(/\\t/g, '\t');   // 可选：将 \t 转为制表符
+          escaped = escaped.replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\\t/g, '\t');
           valCell.innerHTML = `<span class="value-cell">${escaped}</span>`;
+
+          const delBtn = document.createElement('button');
+          delBtn.textContent = '删除';
+          delBtn.className = 'delete-item';
+          delBtn.onclick = () => {
+            const adminPass = prompt('请输入管理员密码以删除该键：');
+            if (adminPass) {
+              deleteKey(item.key, adminPass);
+            }
+          };
+          actionCell.appendChild(delBtn);
         });
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="2" class="message error">网络错误，请重试。</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="message error">网络错误，请重试。</td></tr>';
+      }
+    }
+
+    async function deleteKey(key, adminPass) {
+      if (!token || !adminPass) return;
+      try {
+        const res = await fetch('/api/auth/check-kv', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ action: 'delete', key, adminPass })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          loadKV(); // 刷新列表
+        } else {
+          alert('删除失败：' + (data.error || '未知错误'));
+        }
+      } catch {
+        alert('网络错误');
       }
     }
 
     function escapeHTML(str) {
-      return str.replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
+
+    loadKV();
   </script>
 </body>
 </html>
