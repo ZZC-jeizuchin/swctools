@@ -548,7 +548,6 @@
     const cards = modalSlides.children;
     for (let i = 0; i < cards.length; i++) cards[i].classList.toggle('hidden-card', i !== index);
   }
-
   function buildLoginCard() {
     if (currentUser) {
       return `
@@ -556,9 +555,12 @@
           <div class="modal-header"><h3>账号管理</h3><button class="modal-close" data-close-modal>&times;</button></div>
           <div style="display:flex;flex-direction:column;gap:12px;">
             <p style="text-align:center;color:var(--text-color);">当前用户：${currentUser}</p>
-            <button class="nav-btn" id="changePwdBtn" style="margin:0;">修改密码</button>
-            <button class="nav-btn" id="logoutBtn" style="margin:0;">退出登录</button>
-            <button class="nav-btn" id="deleteAccountBtn" style="margin:0;background:var(--go-btn-bg);color:white;">注销账号</button>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <button class="nav-btn" id="changePwdBtn" style="margin:0;">修改密码</button>
+              <button class="nav-btn" id="changeAvatarBtn" style="margin:0;">修改账户头像</button>
+              <button class="nav-btn" id="logoutBtn" style="margin:0;">退出登录</button>
+              <button class="nav-btn" id="deleteAccountBtn" style="margin:0;background:var(--go-btn-bg);color:white;">注销账号</button>
+            </div>
           </div>
         </div>`;
     } else {
