@@ -48,18 +48,6 @@
   <meta name="bingbot" content="noindex, nofollow">
   <title>SwCTools</title>
   <style>
-    /* 用户头像 — 添加在 <style> 标签内 */
-    .user-avatar {
-      display: none;           /* 默认隐藏，登录后显示 */
-      width: calc(var(--main-h) * 0.095);
-      height: calc(var(--main-h) * 0.095);
-      border-radius: 50%;
-      object-fit: cover;
-      border: 2px solid var(--panel-border);
-      background: var(--panel-bg);
-      margin-right: calc(var(--main-w) * 0.01);
-      flex-shrink: 0;
-    }
     :root {
       --bg-body: #e8edf2;
       --panel-bg: rgba(255, 255, 255, 0.85);
@@ -165,9 +153,30 @@
       display: flex; flex-direction: column; overflow: hidden; position: relative;
     }
 
-    .title-section { flex: 0 0 calc(var(--main-h) * 0.14); display: flex; align-items: center; justify-content: space-between; border-bottom: calc(var(--main-h) * 0.003) solid var(--panel-border); padding: 0 calc(var(--main-w) * 0.02); }
+    /* 标题区高度调整为19% */
+    .title-section {
+      flex: 0 0 calc(var(--main-h) * 0.19);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: calc(var(--main-h) * 0.003) solid var(--panel-border);
+      padding: 0 calc(var(--main-w) * 0.02);
+    }
     .title-section h1 { font-size: calc(var(--main-h) * 0.065); font-weight: 550; color: var(--title-color); white-space: nowrap; }
     .badge { font-size: calc(var(--main-h) * 0.039); color: var(--badge-color); background: var(--badge-bg); padding: calc(var(--main-h) * 0.01) calc(var(--main-w) * 0.025); border-radius: calc(var(--main-w) * 0.04); border: 1px solid var(--cat-btn-border); white-space: nowrap; }
+
+    /* 用户头像 — 始终显示，未上传/未登录时为灰色圆形 */
+    .user-avatar {
+      display: inline-block;
+      width: calc(var(--main-h) * 0.18);
+      height: calc(var(--main-h) * 0.18);
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--panel-border);
+      background: #ccc;
+      flex-shrink: 0;
+      margin-right: calc(var(--main-w) * 0.01);
+    }
 
     .category-bar {
       flex: 0 0 calc(var(--main-h) * 0.13);
@@ -189,7 +198,11 @@
       flex-shrink: 0;
     }
 
-    .jump-section { flex: 0 0 calc(var(--main-h) * 0.40); display: flex; flex-direction: column; gap: calc(var(--main-h) * 0.002); padding: 0 calc(var(--main-w) * 0.02); }
+    /* 搜索区高度调整为35% */
+    .jump-section {
+      flex: 0 0 calc(var(--main-h) * 0.35);
+      display: flex; flex-direction: column; gap: calc(var(--main-h) * 0.002); padding: 0 calc(var(--main-w) * 0.02);
+    }
     .jump-row { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--main-w) * 0.012); background: var(--jump-row-bg); padding: calc(var(--main-h) * 0.004) calc(var(--main-w) * 0.02); border-radius: calc(var(--main-w) * 0.06); border: 1px solid var(--jump-row-border); flex: 1 1 0; }
     .jump-row input, .jump-row select {
       flex: 4 1 0; height: calc(var(--main-h) * 0.10); box-sizing: border-box;
@@ -205,7 +218,10 @@
       font-size: calc(var(--main-h) * 0.0325); font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.15s;
     }
 
-    .tools-bar { flex: 0 0 calc(var(--main-h) * 0.26); display: flex; align-items: center; gap: calc(var(--main-w) * 0.012); padding: 0 calc(var(--main-w) * 0.02); margin-top: calc(var(--main-h) * 0.02); }
+    .tools-bar {
+      flex: 0 0 calc(var(--main-h) * 0.26);
+      display: flex; align-items: center; gap: calc(var(--main-w) * 0.012); padding: 0 calc(var(--main-w) * 0.02); margin-top: calc(var(--main-h) * 0.02);
+    }
     .tool-btn {
       background: var(--tool-btn-bg); border: 1px solid var(--tool-btn-border); color: var(--tool-btn-color);
       padding: calc(var(--main-h) * 0.03) 0; border-radius: calc(var(--main-w) * 0.07);
@@ -312,7 +328,10 @@
 <button class="perf-toggle" id="perfToggle">性能</button>
 
 <div class="main-panel" id="mainPanel">
-  <div class="title-section"><img id="userAvatar" class="user-avatar" src="#" alt="头像"><h1>Seewo Crack Tools</h1><span class="badge">自由工具箱</span></div>
+  <div class="title-section">
+    <img id="userAvatar" class="user-avatar" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt="头像">
+    <h1>Seewo Crack Tools</h1><span class="badge">自由工具箱</span>
+  </div>
   <div class="category-bar">
     <button class="cat-btn" data-cat="ai">AI工具</button>
     <button class="cat-btn" data-cat="search">搜索引擎</button>
@@ -438,6 +457,29 @@
     } catch { return null; }
   }
 
+  async function loadUserAvatar() {
+    const avatar = document.getElementById('userAvatar');
+    const token = localStorage.getItem('swc_token');
+    const defaultSrc = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
+    if (!token) {
+      avatar.src = defaultSrc;
+      return;
+    }
+    try {
+      const res = await fetch('/api/upload-icon', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        avatar.src = URL.createObjectURL(blob);
+      } else {
+        avatar.src = defaultSrc;
+      }
+    } catch {
+      avatar.src = defaultSrc;
+    }
+  }
+
   function updateLoginButton() {
     const username = getUsernameFromToken();
     if (username) {
@@ -531,28 +573,7 @@
         </div>`;
     }
   }
-  async function loadUserAvatar() {
-    const avatar = document.getElementById('userAvatar');
-    const token = localStorage.getItem('swc_token');
-    if (!token) {
-      avatar.style.display = 'none';
-      return;
-    }
-    try {
-      const res = await fetch('/api/upload-icon', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const blob = await res.blob();
-        avatar.src = URL.createObjectURL(blob);
-        avatar.style.display = 'inline-block';
-      } else {
-        avatar.style.display = 'none';
-      }
-    } catch {
-      avatar.style.display = 'none';
-    }
-  }
+
   function buildModalSlides() {
     modalSlides.innerHTML = categories.map(cat => {
       if (cat === 'login') {
@@ -986,7 +1007,6 @@
 
   buildModalSlides();
 })();
-loadUserAvatar();
 </script>
 </body>
 </html>
