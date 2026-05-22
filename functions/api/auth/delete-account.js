@@ -1,27 +1,13 @@
 export async function onRequest(context) {
   const { request, env } = context;
-
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
+  if (request.method !== 'POST') return new Response(null, { status: 405 });
 
   const body = await request.json().catch(() => ({}));
   const authHeader = request.headers.get('Authorization')?.split('Bearer ')[1];
   const { username: targetUser, adminPass } = body;
 
-  // ========== 管理员路径：通过管理员密码直接删除任意用户 ==========
-  if (adminPass && adminPass === env.ADMIN_PASSWORD) {
-    // 必须指明要删除的目标用户
-    if (!targetUser) {
-      return new Response(JSON.stringify({ error: '缺少要删除的用户名' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
+  // 管理员密码方式删除任意用户
+  if (adminPass && adminPass === env.ADMIN_PASSWORD && targetUser) {
     const userData = await env.AUTH_KV.get(`user:${targetUser}`);
     if (!userData) {
       return new Response(JSON.stringify({ error: '用户不存在' }), {
@@ -29,23 +15,19 @@ export async function onRequest(context) {
         headers: { 'Content-Type': 'application/json' }
       });
     }
-
     await env.AUTH_KV.delete(`user:${targetUser}`);
-
-    // 从用户列表中移除
     let list = await env.AUTH_KV.get('userlist');
     if (list) {
       list = JSON.parse(list).filter(u => u !== targetUser);
       await env.AUTH_KV.put('userlist', JSON.stringify(list));
     }
-
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
   }
 
-  // ========== 普通用户路径：必须携带 JWT 并验证密码 ==========
+  // 普通用户通过 JWT 删除自己
   if (!authHeader) {
     return new Response(JSON.stringify({ error: '未登录' }), {
       status: 401,
@@ -53,17 +35,17 @@ export async function onRequest(context) {
     });
   }
 
-  const tokenPayload = await verifyToken(authHeader, env.JWT_SECRET);
-  if (!tokenPayload) {
+  const payload = await verifyToken(authHeader, env.JWT_SECRET);
+  if (!payload) {
     return new Response(JSON.stringify({ error: 'token无效或已过期' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' }
     });
   }
 
-  const currentUser = tokenPayload.sub;
+  const currentUser = payload.sub;
 
-  // 普通用户必须再次输入密码（自己的密码或管理员密码）才能删除
+  // 普通用户删除自己，需要验证密码
   if (!adminPass) {
     return new Response(JSON.stringify({ error: '请输入密码以确认删除' }), {
       status: 400,
@@ -71,7 +53,6 @@ export async function onRequest(context) {
     });
   }
 
-  // 获取当前用户的密码哈希
   const userData = await env.AUTH_KV.get(`user:${currentUser}`);
   if (!userData) {
     return new Response(JSON.stringify({ error: '用户不存在' }), {
@@ -81,8 +62,6 @@ export async function onRequest(context) {
   }
 
   const { passwordHash } = JSON.parse(userData);
-
-  // 验证输入的密码是否正确
   const encoder = new TextEncoder();
   const hashBuffer = await crypto.subtle.digest(
     'SHA-256',
@@ -98,7 +77,6 @@ export async function onRequest(context) {
     });
   }
 
-  // 密码正确，执行删除自己的账号
   await env.AUTH_KV.delete(`user:${currentUser}`);
 
   let list = await env.AUTH_KV.get('userlist');
@@ -113,7 +91,7 @@ export async function onRequest(context) {
   });
 }
 
-// ========== 内联签名验证函数 ==========
+// ========== 内联签名验证函数（已修复中文解码） ==========
 async function verifyToken(token, secret) {
   try {
     const parts = token.split('.');
@@ -122,7 +100,9 @@ async function verifyToken(token, secret) {
     const unsigned = `${headerB64}.${payloadB64}`;
     const expectedSig = await sign(unsigned, secret);
     if (signatureB64 !== expectedSig) return null;
-    const payload = JSON.parse(atob(payloadB64));
+
+    const decoded = decodeURIComponent(escape(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'))));
+    const payload = JSON.parse(decoded);
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
     return payload;
   } catch {
@@ -139,5 +119,8 @@ async function sign(data, secret) {
     ['sign']
   );
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
-  return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=+$/, '');
+  return btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
