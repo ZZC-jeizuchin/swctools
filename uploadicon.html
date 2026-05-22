@@ -69,16 +69,25 @@
         try {
           const parts = token.split('.');
           if (parts.length === 3) {
-            const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))));
-            if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) { needLogin = true; }
-            else { needLogin = false; }
+            // 安全解码 JWT payload（纯 ASCII，直接用 atob）
+            const payload = JSON.parse(
+              atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
+            );
+            if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+              needLogin = true;
+            } else {
+              needLogin = false;
+            }
           }
         } catch (e) { needLogin = true; }
       }
       if (needLogin) {
         const notRobot = localStorage.getItem('not_robot');
-        if (notRobot !== '1') { window.location.href = 'antirobot.html'; }
-        else { localStorage.setItem('not_robot', '0'); }
+        if (notRobot !== '1') {
+          window.location.href = 'antirobot.html';
+        } else {
+          localStorage.setItem('not_robot', '0');
+        }
       }
     })();
   </script>
@@ -123,17 +132,14 @@
     const urlInput = document.getElementById('urlInput');
     let cropper = null;
 
+    // 加载当前头像（添加时间戳破坏缓存）
     async function loadCurrentIcon() {
       if (!token) return;
       try {
-        let username = '';
-        const parts = token.split('.');
-        if (parts.length === 3) {
-          const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))));
-          username = payload.sub || '';
-        }
-        const url = username ? `/api/upload-icon?username=${encodeURIComponent(username)}` : '/api/upload-icon';
-        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+        const url = `/api/upload-icon?t=${Date.now()}`;
+        const res = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         if (res.ok) {
           const blob = await res.blob();
           currentAvatar.src = URL.createObjectURL(blob);
@@ -142,76 +148,170 @@
       } catch {}
     }
 
+    // 初始化裁剪器，增加尺寸保护
     function initCropper(img) {
+      const minSize = 50; // 图片小于50px时跳过裁剪
+      if (img.naturalWidth < minSize || img.naturalHeight < minSize) {
+        showMessage('图片尺寸过小，将直接使用原图上传', 'success');
+        cropContainer.style.display = 'block';
+        actionButtons.style.display = 'flex';
+        cropImage._skipCrop = true;  // 标记跳过裁剪
+        messageDiv.textContent = '点击“裁剪并上传”将使用原图';
+        return;
+      }
+
       if (cropper) { cropper.destroy(); cropper = null; }
       cropContainer.style.display = 'block';
       actionButtons.style.display = 'flex';
       messageDiv.textContent = '';
+      delete cropImage._skipCrop;
+
       cropper = new Cropper(img, {
-        aspectRatio: 1, viewMode: 1, autoCropArea: 0.8, responsive: true,
-        guides: true, center: true, background: false, modal: true,
-        movable: true, zoomable: true, rotatable: false, scalable: true
+        aspectRatio: 1,
+        viewMode: 1,
+        autoCropArea: 0.8,
+        minCropBoxWidth: 20,
+        minCropBoxHeight: 20,
+        responsive: true,
+        guides: true,
+        center: true,
+        background: false,
+        modal: true,
+        movable: true,
+        zoomable: true,
+        rotatable: false,
+        scalable: true
       });
     }
 
+    // 文件选择事件
     fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (ev) => { cropImage.src = ev.target.result; initCropper(cropImage); };
+      reader.onload = (ev) => {
+        cropImage.src = ev.target.result;
+        initCropper(cropImage);
+      };
       reader.readAsDataURL(file);
       urlInput.value = '';
     });
 
+    // 从 URL 加载图片
     window.loadFromURL = function() {
       const url = urlInput.value.trim();
-      if (!url) { showMessage('请输入图片URL', 'error'); return; }
+      if (!url) {
+        showMessage('请输入图片URL', 'error');
+        return;
+      }
       showMessage('正在加载图片…', '');
+      // 对于 data: / blob: 直接使用，其他尝试设置 crossOrigin
       if (url.startsWith('data:') || url.startsWith('blob:')) {
         cropImage.removeAttribute('crossorigin');
       } else {
         cropImage.crossOrigin = 'anonymous';
       }
-      cropImage.onload = () => { initCropper(cropImage); showMessage('图片加载成功，请调整裁剪框', 'success'); };
-      cropImage.onerror = () => { showMessage('图片加载失败，请检查URL或尝试其他图片', 'error'); };
+      cropImage.onload = () => {
+        initCropper(cropImage);
+        showMessage('图片加载成功，请调整裁剪框', 'success');
+      };
+      cropImage.onerror = () => {
+        showMessage('图片加载失败，请检查URL或尝试其他图片', 'error');
+      };
       cropImage.src = url;
       fileInput.value = '';
     };
 
-    cropUploadBtn.addEventListener('click', async () => {
-      if (!cropper) { showMessage('请先选择图片', 'error'); return; }
-      if (!token) { showMessage('未登录，请先登录', 'error'); return; }
-      cropUploadBtn.disabled = true;
-      showMessage('正在上传…', '');
-      try {
-        const canvas = cropper.getCroppedCanvas({ width: 256, height: 256, fillColor: '#fff' });
-        if (!canvas) {
-          showMessage('裁剪失败，请重新加载图片', 'error');
-          return;
-        }
-        const blob = await new Promise((resolve, reject) => {
-          canvas.toBlob((b) => { if (b) resolve(b); else reject(new Error('Canvas导出失败')); }, 'image/png');
-        });
-        const formData = new FormData();
-        formData.append('icon', blob, 'avatar.png');
-        const res = await fetch('/api/upload-icon', {
-          method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData
-        });
-        const data = await res.json();
-        if (res.ok) { showMessage('头像上传成功！', 'success'); loadCurrentIcon(); resetCrop(); }
-        else { showMessage(data.error || '上传失败', 'error'); }
-      } catch (err) { showMessage('上传出错: ' + err.message, 'error'); }
-      finally { cropUploadBtn.disabled = false; }
-    });
-
+    // 重置裁剪
     window.resetCrop = function() {
       if (cropper) { cropper.destroy(); cropper = null; }
-      cropImage.src = '#'; cropContainer.style.display = 'none'; actionButtons.style.display = 'none';
-      fileInput.value = ''; urlInput.value = ''; messageDiv.textContent = '';
+      cropImage.src = '#';
+      cropContainer.style.display = 'none';
+      actionButtons.style.display = 'none';
+      fileInput.value = '';
+      urlInput.value = '';
+      messageDiv.textContent = '';
+      delete cropImage._skipCrop;
     };
 
-    function showMessage(msg, type) { messageDiv.textContent = msg; messageDiv.className = 'message ' + (type || ''); }
+    // 显示消息
+    function showMessage(msg, type) {
+      messageDiv.textContent = msg;
+      messageDiv.className = 'message ' + (type || '');
+    }
 
+    // 裁剪并上传（增强错误显示）
+    cropUploadBtn.addEventListener('click', async () => {
+      if (!token) {
+        showMessage('错误：未找到登录令牌，请重新登录', 'error');
+        return;
+      }
+      cropUploadBtn.disabled = true;
+      showMessage('正在上传…', '');
+
+      try {
+        let blob;
+
+        // 如果之前标记为跳过裁剪（图片太小）
+        if (cropImage._skipCrop) {
+          showMessage('正在获取原图…', '');
+          const resp = await fetch(cropImage.src);
+          if (!resp.ok) {
+            throw new Error('获取原图失败，状态码: ' + resp.status);
+          }
+          blob = await resp.blob();
+        } else {
+          if (!cropper) {
+            showMessage('错误：裁剪器未初始化，请重新选择图片', 'error');
+            return;
+          }
+          const canvas = cropper.getCroppedCanvas({ maxWidth: 512, maxHeight: 512 });
+          if (!canvas || canvas.width === 0 || canvas.height === 0) {
+            throw new Error('裁剪区域无效，请调整裁剪框后重试');
+          }
+          blob = await new Promise((resolve, reject) => {
+            canvas.toBlob((b) => {
+              if (b && b.size > 0) {
+                resolve(b);
+              } else {
+                reject(new Error('导出图片失败，可能内存不足'));
+              }
+            }, 'image/png');
+          });
+        }
+
+        const formData = new FormData();
+        formData.append('icon', blob, 'avatar.png');
+
+        const res = await fetch('/api/upload-icon', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token },
+          body: formData
+        });
+
+        const resText = await res.text();
+        let data;
+        try {
+          data = JSON.parse(resText);
+        } catch {
+          throw new Error('服务器返回异常（状态' + res.status + '）: ' + resText.substring(0, 100));
+        }
+
+        if (res.ok) {
+          showMessage('头像上传成功！', 'success');
+          loadCurrentIcon();
+          resetCrop();
+        } else {
+          showMessage('上传失败：' + (data.error || '未知错误'), 'error');
+        }
+      } catch (err) {
+        showMessage('上传出错：' + err.message, 'error');
+      } finally {
+        cropUploadBtn.disabled = false;
+      }
+    });
+
+    // 页面加载时获取当前头像
     loadCurrentIcon();
   </script>
 </body>
