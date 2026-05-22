@@ -30,7 +30,9 @@ export async function onRequest(context) {
       return respond(false);
     }
 
-    const payload = JSON.parse(atob(payloadB64));
+    // 安全 Base64URL 解码
+    const decoded = decodeURIComponent(escape(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'))));
+    const payload = JSON.parse(decoded);
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
       return respond(false);
     }
@@ -57,5 +59,8 @@ async function sign(data, secret) {
     ['sign']
   );
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
-  return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=+$/, '');
+  return btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
