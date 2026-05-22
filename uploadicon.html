@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+  <title>上传头像 - SwCTools</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.1/dist/cropper.min.css">
+  <style>
+    body {
+      background: #e8edf2;
+      font-family: 'Inter', system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 24px;
+      padding: 30px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    h2 { color: #1e4b6e; margin-bottom: 20px; }
+    .source-section { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+    .source-section input[type="file"] { padding: 8px; }
+    .url-input-row { display: flex; gap: 8px; }
+    .url-input-row input {
+      flex: 1; padding: 10px 14px; border: 1.5px solid #b3cce2;
+      border-radius: 24px; font-size: 0.9rem; outline: none;
+    }
+    .url-input-row input:focus {
+      border-color: #4f7fa3; box-shadow: 0 0 0 3px rgba(79,127,163,0.2);
+    }
+    .crop-container {
+      width: 100%; max-height: 350px; margin: 16px 0;
+      border-radius: 12px; overflow: hidden; background: #f0f0f0; display: none;
+    }
+    .crop-container img { max-width: 100%; display: block; }
+    .current-avatar {
+      width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
+      border: 2px solid #bdd1e6; margin-bottom: 8px;
+    }
+    .btn-row {
+      display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 12px;
+    }
+    button {
+      background: #4f7f9e; border: none; color: white; padding: 10px 22px;
+      border-radius: 30px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 0.9rem;
+    }
+    button:hover { background: #3a6b8c; }
+    button.outline { background: transparent; color: #4f7f9e; border: 1.5px solid #4f7f9e; }
+    button.outline:hover { background: #4f7f9e; color: white; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .message { margin-top: 12px; color: #173e58; font-size: 0.9rem; min-height: 1.2em; }
+    .message.error { color: #c0392b; }
+    .message.success { color: #27ae60; }
+    .divider { border: none; border-top: 1px solid #e0e7ef; margin: 16px 0; }
+  </style>
+  <script>
+    (function() {
+      const token = localStorage.getItem('swc_token');
+      let needLogin = true;
+      if (token) {
+        try {
+          const parts = token.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))));
+            if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) { needLogin = true; }
+            else { needLogin = false; }
+          }
+        } catch (e) { needLogin = true; }
+      }
+      if (needLogin) {
+        const notRobot = localStorage.getItem('not_robot');
+        if (notRobot !== '1') { window.location.href = 'antirobot.html'; }
+        else { localStorage.setItem('not_robot', '0'); }
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h2>上传头像</h2>
+    <h3><a href="index.html">返回主站</a></h3>
+    <div>
+      <img id="currentAvatar" class="current-avatar" src="#" alt="当前头像" style="display:none;">
+      <p style="color:#666;font-size:0.85rem;">当前头像</p>
+    </div>
+    <hr class="divider">
+    <div class="source-section">
+      <input type="file" id="fileInput" accept="image/*">
+      <div class="url-input-row">
+        <input type="text" id="urlInput" placeholder="或输入图片URL加载…">
+        <button class="outline" onclick="loadFromURL()">加载</button>
+      </div>
+    </div>
+    <div class="crop-container" id="cropContainer">
+      <img id="cropImage" src="#" alt="裁剪图片">
+    </div>
+    <div class="btn-row" id="actionButtons" style="display:none;">
+      <button id="cropUploadBtn">裁剪并上传</button>
+      <button class="outline" onclick="resetCrop()">重新选择</button>
+    </div>
+    <div class="message" id="message"></div>
+    <hr class="divider">
+    <button class="outline" onclick="window.location.href='index.html'">← 返回主站</button>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.1/dist/cropper.min.js"></script>
+  <script>
+    const token = localStorage.getItem('swc_token');
+    const cropContainer = document.getElementById('cropContainer');
+    const cropImage = document.getElementById('cropImage');
+    const actionButtons = document.getElementById('actionButtons');
+    const cropUploadBtn = document.getElementById('cropUploadBtn');
+    const messageDiv = document.getElementById('message');
+    const currentAvatar = document.getElementById('currentAvatar');
+    const fileInput = document.getElementById('fileInput');
+    const urlInput = document.getElementById('urlInput');
+    let cropper = null;
+
+    async function loadCurrentIcon() {
+      if (!token) return;
+      try {
+        const res = await fetch('/api/upload-icon', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.ok) {
+          const blob = await res.blob();
+          currentAvatar.src = URL.createObjectURL(blob);
+          currentAvatar.style.display = 'inline-block';
+        }
+      } catch {}
+    }
+
+    function initCropper(img) {
+      if (cropper) { cropper.destroy(); cropper = null; }
+      cropContainer.style.display = 'block';
+      actionButtons.style.display = 'flex';
+      messageDiv.textContent = '';
+      cropper = new Cropper(img, {
+        aspectRatio: 1, viewMode: 1, autoCropArea: 0.8, responsive: true,
+        guides: true, center: true, background: false, modal: true,
+        movable: true, zoomable: true, rotatable: false, scalable: true
+      });
+    }
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => { cropImage.src = ev.target.result; initCropper(cropImage); };
+      reader.readAsDataURL(file);
+      urlInput.value = '';
+    });
+
+    window.loadFromURL = function() {
+      const url = urlInput.value.trim();
+      if (!url) { showMessage('请输入图片URL', 'error'); return; }
+      showMessage('正在加载图片…', '');
+      cropImage.crossOrigin = 'anonymous';
+      cropImage.onload = () => { initCropper(cropImage); showMessage('图片加载成功，请调整裁剪框', 'success'); };
+      cropImage.onerror = () => { showMessage('图片加载失败，请检查URL或尝试其他图片', 'error'); };
+      cropImage.src = url;
+      fileInput.value = '';
+    };
+
+    cropUploadBtn.addEventListener('click', async () => {
+      if (!cropper) { showMessage('请先选择图片', 'error'); return; }
+      if (!token) { showMessage('未登录，请先登录', 'error'); return; }
+      cropUploadBtn.disabled = true;
+      showMessage('正在上传…', '');
+      try {
+        const canvas = cropper.getCroppedCanvas({ width: 256, height: 256, fillColor: '#fff' });
+        const blob = await new Promise((resolve, reject) => {
+          canvas.toBlob((b) => { if (b) resolve(b); else reject(new Error('Canvas导出失败')); }, 'image/png');
+        });
+        const formData = new FormData();
+        formData.append('icon', blob, 'avatar.png');
+        const res = await fetch('/api/upload-icon', {
+          method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData
+        });
+        const data = await res.json();
+        if (res.ok) { showMessage('头像上传成功！', 'success'); loadCurrentIcon(); resetCrop(); }
+        else { showMessage(data.error || '上传失败', 'error'); }
+      } catch (err) { showMessage('上传出错: ' + err.message, 'error'); }
+      finally { cropUploadBtn.disabled = false; }
+    });
+
+    window.resetCrop = function() {
+      if (cropper) { cropper.destroy(); cropper = null; }
+      cropImage.src = '#'; cropContainer.style.display = 'none'; actionButtons.style.display = 'none';
+      fileInput.value = ''; urlInput.value = ''; messageDiv.textContent = '';
+    };
+
+    function showMessage(msg, type) { messageDiv.textContent = msg; messageDiv.className = 'message ' + (type || ''); }
+
+    loadCurrentIcon();
+  </script>
+</body>
+</html>
