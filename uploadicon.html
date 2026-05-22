@@ -126,14 +126,7 @@
     async function loadCurrentIcon() {
       if (!token) return;
       try {
-        let username = '';
-        const parts = token.split('.');
-        if (parts.length === 3) {
-          const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))));
-          username = payload.sub || '';
-        }
-        const url = username ? `/api/upload-icon?username=${encodeURIComponent(username)}` : '/api/upload-icon';
-        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+        const res = await fetch('/api/upload-icon', { headers: { 'Authorization': `Bearer ${token}` } });
         if (res.ok) {
           const blob = await res.blob();
           currentAvatar.src = URL.createObjectURL(blob);
@@ -167,14 +160,7 @@
       const url = urlInput.value.trim();
       if (!url) { showMessage('请输入图片URL', 'error'); return; }
       showMessage('正在加载图片…', '');
-
-      // ★★★ 唯一核心修复：Data URL不使用crossOrigin，避免Canvas被污染 ★★★
-      if (url.startsWith('data:')) {
-        cropImage.removeAttribute('crossorigin');
-      } else {
-        cropImage.crossOrigin = 'anonymous';
-      }
-
+      cropImage.crossOrigin = 'anonymous';
       cropImage.onload = () => { initCropper(cropImage); showMessage('图片加载成功，请调整裁剪框', 'success'); };
       cropImage.onerror = () => { showMessage('图片加载失败，请检查URL或尝试其他图片', 'error'); };
       cropImage.src = url;
