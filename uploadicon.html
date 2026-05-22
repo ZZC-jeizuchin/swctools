@@ -44,7 +44,6 @@
     .current-avatar {
       width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
       border: 2px solid #bdd1e6; margin-bottom: 8px;
-      background: #ccc;
     }
     .btn-row {
       display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 12px;
@@ -88,7 +87,7 @@
   <div class="container">
     <h2>上传头像</h2>
     <div>
-      <img id="currentAvatar" class="current-avatar" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt="当前头像">
+      <img id="currentAvatar" class="current-avatar" src="#" alt="当前头像" style="display:none;">
       <p style="color:#666;font-size:0.85rem;">当前头像</p>
     </div>
     <hr class="divider">
@@ -124,55 +123,24 @@
     const urlInput = document.getElementById('urlInput');
     let cropper = null;
 
-    const DEFAULT_AVATAR = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
-
     async function loadCurrentIcon() {
-      const token = localStorage.getItem('swc_token');
-      if (!token) {
-        currentAvatar.src = DEFAULT_AVATAR;
-        messageDiv.textContent = '未登录，请先登录。';
-        messageDiv.className = 'message error';
-        return;
-      }
-
-      let username = '';
+      if (!token) return;
       try {
+        // 修复：携带当前用户名，确保加载专属头像
+        let username = '';
         const parts = token.split('.');
         if (parts.length === 3) {
           const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))));
-          if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-            currentAvatar.src = DEFAULT_AVATAR;
-            messageDiv.textContent = '登录已过期，请重新登录。';
-            messageDiv.className = 'message error';
-            return;
-          }
-          username = payload.sub;
+          username = payload.sub || '';
         }
-      } catch (e) {
-        currentAvatar.src = DEFAULT_AVATAR;
-        messageDiv.textContent = 'token无效';
-        messageDiv.className = 'message error';
-        return;
-      }
-
-      if (!username) {
-        currentAvatar.src = DEFAULT_AVATAR;
-        return;
-      }
-
-      try {
-        const res = await fetch(`/api/upload-icon?username=${encodeURIComponent(username)}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const url = username ? `/api/upload-icon?username=${encodeURIComponent(username)}` : '/api/upload-icon';
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
         if (res.ok) {
           const blob = await res.blob();
           currentAvatar.src = URL.createObjectURL(blob);
-        } else {
-          currentAvatar.src = DEFAULT_AVATAR;
+          currentAvatar.style.display = 'inline-block';
         }
-      } catch {
-        currentAvatar.src = DEFAULT_AVATAR;
-      }
+      } catch {}
     }
 
     function initCropper(img) {
@@ -200,13 +168,9 @@
       const url = urlInput.value.trim();
       if (!url) { showMessage('请输入图片URL', 'error'); return; }
       showMessage('正在加载图片…', '');
-      // 清除旧的事件
-      cropImage.onload = null;
-      cropImage.onerror = null;
-      cropImage.src = '';
       cropImage.crossOrigin = 'anonymous';
       cropImage.onload = () => { initCropper(cropImage); showMessage('图片加载成功，请调整裁剪框', 'success'); };
-      cropImage.onerror = () => { showMessage('图片加载失败，可能是网络问题或该图片不支持跨域。请改用“选择文件”上传本地图片。', 'error'); };
+      cropImage.onerror = () => { showMessage('图片加载失败，请检查URL或尝试其他图片', 'error'); };
       cropImage.src = url;
       fileInput.value = '';
     };
@@ -219,14 +183,7 @@
       try {
         const canvas = cropper.getCroppedCanvas({ width: 256, height: 256, fillColor: '#fff' });
         const blob = await new Promise((resolve, reject) => {
-          try {
-            canvas.toBlob((b) => {
-              if (b) resolve(b);
-              else reject(new Error('Canvas导出失败'));
-            }, 'image/png');
-          } catch (err) {
-            reject(new Error('该图片不支持裁剪导出（跨域限制），请改用“选择文件”上传本地图片。'));
-          }
+          canvas.toBlob((b) => { if (b) resolve(b); else reject(new Error('Canvas导出失败')); }, 'image/png');
         });
         const formData = new FormData();
         formData.append('icon', blob, 'avatar.png');
