@@ -34,9 +34,7 @@ export async function onRequest(context) {
     if (userData) {
       items.push({ key: userKey, value: userData });
     }
-  } catch (e) {
-    // AUTH_KV 读取失败不影响后续
-  }
+  } catch (e) {}
 
   // 2. 从 CODE_KV 列出并读取所有以 code:<用户名>: 开头的键
   const codePrefix = `code:${username}:`;
@@ -48,9 +46,7 @@ export async function onRequest(context) {
         items.push({ key: key.name, value });
       }
     }
-  } catch (e) {
-    // CODE_KV 未绑定或读取失败时，忽略错误并继续返回已有数据
-  }
+  } catch (e) {}
 
   return new Response(JSON.stringify({ username, items }), {
     status: 200,
@@ -58,7 +54,7 @@ export async function onRequest(context) {
   });
 }
 
-// ========== 内联签名验证函数 ==========
+// ========== 内联签名验证函数（已修复中文解码） ==========
 async function verifyToken(token, secret) {
   try {
     const parts = token.split('.');
@@ -67,7 +63,9 @@ async function verifyToken(token, secret) {
     const unsigned = `${headerB64}.${payloadB64}`;
     const expectedSig = await sign(unsigned, secret);
     if (signatureB64 !== expectedSig) return null;
-    const payload = JSON.parse(atob(payloadB64));
+
+    const decoded = decodeURIComponent(escape(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'))));
+    const payload = JSON.parse(decoded);
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
     return payload;
   } catch {
@@ -84,5 +82,8 @@ async function sign(data, secret) {
     ['sign']
   );
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
-  return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=+$/, '');
+  return btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
