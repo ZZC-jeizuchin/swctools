@@ -437,7 +437,7 @@
   document.getElementById('baiduImageInput').addEventListener('keydown', e=> { if(e.key==='Enter') document.getElementById('baiduImageBtn').click(); });
   document.getElementById('searchEngineBtn').addEventListener('click', ()=>{
     const engine = document.getElementById('searchEngineSelect').value, query = document.getElementById('searchKeywordInput').value.trim(); if(!query) return;
-    const engines = { baidu: `https://www.baidu.com/s?wd=${encodeURIComponent(query)}`, google: `https://www.google.com/search?q=${encodeURIComponent(query)}`, yandex: `https://yandex.com/search/?text=${encodeURIComponent(query)}`, bing: `https://www.bing.com/search?q=${encodeURIComponent(query)}`, duckduckgo: `https://duckduckgo.com/?q=${encodeURIComponent(query)}` };
+    const engines = { baidu: `https://www.baidu.com/s?wd=${encodeURIComponent(query)}&tn=68018901_2_dg`, google: `https://www.google.com/search?q=${encodeURIComponent(query)}`, yandex: `https://yandex.com/search/?text=${encodeURIComponent(query)}`, bing: `https://www.bing.com/search?q=${encodeURIComponent(query)}`, duckduckgo: `https://duckduckgo.com/?q=${encodeURIComponent(query)}` };
     performJump(engines[engine] || engines.baidu, true);
   });
   document.getElementById('searchKeywordInput').addEventListener('keydown', e=> { if(e.key==='Enter') document.getElementById('searchEngineBtn').click(); });
