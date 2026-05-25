@@ -1,44 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <script>
-  (function() {
-    const token = localStorage.getItem('swc_token');
-    let needLogin = true;
-
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-          needLogin = true;
-        } else {
-          needLogin = false;
-        }
-      } catch (e) {
-        needLogin = true;
-      }
-    }
-
-    // 未登录时，进行机器人检测
-    if (needLogin) {
-      const notRobot = localStorage.getItem('not_robot');
-      if (notRobot !== '1') {
-        // 没有标记或标记为0，立即跳转到反爬虫页面
-        window.location.href = 'antirobot.html';
-        return; // 终止后续执行
-      } else {
-        // 标记为1，将其重置为0，然后弹出登录框
-        localStorage.setItem('not_robot', '0');
-        const loginBtn = document.getElementById('loginBtn');
-        if (loginBtn) loginBtn.click();
-      }
-    }
-    // 已登录用户什么都不需要做
-  })();
-  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Browser Shell - SwCTools</title>
+  <title>Browser Shell</title>
   <style>
     :root {
       --bar-bg: #1e293b;
@@ -57,7 +22,6 @@
       font-family: system-ui, -apple-system, sans-serif;
     }
 
-    /* 顶部工具栏 */
     .toolbar {
       display: flex;
       align-items: center;
@@ -129,26 +93,11 @@
       background: var(--btn-hover) !important;
     }
 
-    /* iframe 填满剩余空间 */
     .content-frame {
       flex: 1;
       width: 100%;
       border: none;
       background: #ffffff;
-    }
-
-    /* 错误提示（备用） */
-    .error-hint {
-      display: none;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0,0,0,0.8);
-      color: #fff;
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-size: 0.9rem;
     }
   </style>
 </head>
@@ -178,11 +127,11 @@
     const homeBtn = document.getElementById('homeBtn');
     const iframe = document.getElementById('contentFrame');
 
-    // 默认主页（可自行修改）
     const HOME_URL = 'https://www.google.com';
 
-    // 更新地址栏（仅同源时可读，跨域时忽略）
+    // 更新地址栏显示（仅在非编辑状态下）
     function updateAddressBar() {
+      if (document.activeElement === urlInput) return; // 正在编辑时不覆盖
       try {
         const doc = iframe.contentDocument;
         if (doc && doc.location) {
@@ -191,18 +140,15 @@
       } catch (e) {}
     }
 
-    // 导航到指定 URL
+    // 导航
     function navigate(rawUrl) {
       let finalUrl = rawUrl.trim();
       if (!finalUrl) return;
 
-      // 如果没写协议，且没有点号或包含空格，当作搜索
       if (!/^https?:\/\//i.test(finalUrl) && !finalUrl.startsWith('//')) {
         if (!finalUrl.includes('.') || finalUrl.includes(' ')) {
-          // 搜索词
           finalUrl = 'https://www.google.com/search?q=' + encodeURIComponent(finalUrl);
         } else {
-          // 纯域名
           finalUrl = 'https://' + finalUrl;
         }
       }
@@ -211,7 +157,7 @@
       iframe.src = finalUrl;
     }
 
-    // 事件绑定
+    // 事件
     goBtn.addEventListener('click', () => navigate(urlInput.value));
     urlInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') navigate(urlInput.value);
@@ -228,11 +174,35 @@
     });
     homeBtn.addEventListener('click', () => navigate(HOME_URL));
 
-    // 加载完成更新地址栏
+    // 监听 iframe 加载完更新地址栏
     iframe.addEventListener('load', updateAddressBar);
 
-    // 定时同步（仅对同源有效）
-    setInterval(updateAddressBar, 1000);
+    // 当用户点击地址栏准备编辑时，暂停定时更新；离开后再恢复
+    let updateInterval = null;
+
+    function startAutoUpdate() {
+      stopAutoUpdate();
+      updateInterval = setInterval(updateAddressBar, 1000);
+    }
+
+    function stopAutoUpdate() {
+      if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+      }
+    }
+
+    urlInput.addEventListener('focus', stopAutoUpdate);
+    urlInput.addEventListener('blur', () => {
+      // 失去焦点时延迟一会再更新，避免刚离开时刷新
+      setTimeout(() => {
+        updateAddressBar();
+        startAutoUpdate();
+      }, 200);
+    });
+
+    // 初始启动定时更新
+    startAutoUpdate();
 
     // 初始加载主页
     navigate(HOME_URL);
