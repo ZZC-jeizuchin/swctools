@@ -474,7 +474,7 @@
       return;
     }
 
-    // 从 JWT 中提取用户名
+    // 提取用户名（用于缓存键）
     let username;
     try {
       const parts = token.split('.');
@@ -496,19 +496,29 @@
       return;
     }
 
+    // ✅ 第一步：立即显示本地缓存的旧头像（如果有）
+    const cacheKey = `cached_avatar_${username}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      avatar.src = cached;          // 瞬间显示
+    } else {
+      avatar.src = defaultSrc;      // 无缓存则显示灰色背景
+    }
+
+    // ✅ 第二步：异步获取最新头像，成功后替换并更新缓存
     try {
-      // ✅ 唯一关键修改：加上时间戳破坏浏览器/CDN缓存
       const res = await fetch(`/api/upload-icon?t=${Date.now()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         const blob = await res.blob();
-        avatar.src = URL.createObjectURL(blob);
-      } else {
-        avatar.src = defaultSrc;
+        const dataUrl = await blobToDataURL(blob);
+        avatar.src = dataUrl;                       // 更新显示
+        localStorage.setItem(cacheKey, dataUrl);    // 更新缓存
       }
+      // 如果请求失败（如 404），保留已有的缓存头像，不做任何改动
     } catch {
-      avatar.src = defaultSrc;
+      // 网络错误时同样保留缓存
     }
   }
   function updateLoginButton() {
