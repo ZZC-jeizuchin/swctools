@@ -59,7 +59,7 @@ async function verifyAdmin() {
     document.getElementById('mainBox').style.display = 'block';
     const tbody = document.querySelector('#userTable tbody');
     tbody.innerHTML = '';
-    const token = localStorage.getItem('swc_token'); // 获取当前管理员 token
+    const token = localStorage.getItem('swc_token'); // 管理员 token
 
     data.users.forEach(user => {
       const row = document.createElement('tr');
@@ -72,7 +72,6 @@ async function verifyAdmin() {
       `;
       tbody.appendChild(row);
 
-      // 如果有 token，尝试加载头像
       if (token) {
         loadAvatarForUser(user.username, row.querySelector('.avatar-cell'), token);
       } else {
@@ -86,7 +85,7 @@ async function verifyAdmin() {
 
 async function loadAvatarForUser(username, td, token) {
   try {
-    const res = await fetch(`/api/upload-icon?t=${Date.now()}`, {
+    const res = await fetch(`/api/admin-get-icon?username=${encodeURIComponent(username)}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     if (res.ok) {
