@@ -5,14 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin - SwCTools</title>
   <style>
-    body { font-family: system-ui, sans-serif; background: #e8edf2; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-    #loginBox, #mainBox { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 500px; width: 90%; }
+    body { font-family: system-ui, sans-serif; background: #e8edf2; min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; padding: 20px; }
+    #loginBox, #mainBox { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 700px; width: 90%; }
     input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; }
     button { padding: 10px 20px; background: #4f7f9e; color: white; border: none; border-radius: 8px; cursor: pointer; }
+    button:hover { background: #3a6b8c; }
+    h3 { cursor: pointer; color: #4f7f9e; text-decoration: underline; margin-bottom: 10px; }
     table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; vertical-align: middle; }
     th { background: #f0f0f0; }
     .hash { font-family: monospace; font-size: 0.8em; word-break: break-all; }
+    .avatar-img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #ccc; background: #eee; }
+    .no-avatar { color: #999; font-size: 0.8em; }
   </style>
 </head>
 <body>
@@ -27,9 +31,17 @@
   <h3 onclick="location.href='index.html'">返回主站</h3>
   <h2>用户列表</h2>
   <table id="userTable">
-    <thead><tr><th>用户名</th><th>密码哈希</th><th>注册时间</th><th>最后登录</th></tr></thead>
+    <thead>
+      <tr>
+        <th>头像</th>
+        <th>用户名</th>
+        <th>密码哈希</th>
+        <th>注册时间</th>
+        <th>最后登录</th>
+      </tr>
+    </thead>
     <tbody></tbody>
-   </table>
+  </table>
 </div>
 <script>
 async function verifyAdmin() {
@@ -46,8 +58,13 @@ async function verifyAdmin() {
     document.getElementById('loginBox').style.display = 'none';
     document.getElementById('mainBox').style.display = 'block';
     const tbody = document.querySelector('#userTable tbody');
+    tbody.innerHTML = '';
     data.users.forEach(user => {
+      const avatarHTML = user.avatar
+        ? `<img class="avatar-img" src="${user.avatar}" alt="${user.username}的头像">`
+        : '<span class="no-avatar">无</span>';
       const row = `<tr>
+        <td>${avatarHTML}</td>
         <td>${user.username}</td>
         <td class="hash">${user.passwordHash}</td>
         <td>${new Date(user.createdAt).toLocaleString()}</td>
