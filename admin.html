@@ -6,7 +6,7 @@
   <title>Admin - SwCTools</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #e8edf2; min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; padding: 20px; }
-    #loginBox, #mainBox { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 700px; width: 90%; }
+    #loginBox, #mainBox { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 900px; width: 90%; }
     input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; }
     button { padding: 10px 20px; background: #4f7f9e; color: white; border: none; border-radius: 8px; cursor: pointer; }
     button:hover { background: #3a6b8c; }
@@ -59,21 +59,48 @@ async function verifyAdmin() {
     document.getElementById('mainBox').style.display = 'block';
     const tbody = document.querySelector('#userTable tbody');
     tbody.innerHTML = '';
+    const token = localStorage.getItem('swc_token'); // 获取当前管理员 token
+
     data.users.forEach(user => {
-      const avatarHTML = user.avatar
-        ? `<img class="avatar-img" src="${user.avatar}" alt="${user.username}的头像">`
-        : '<span class="no-avatar">无</span>';
-      const row = `<tr>
-        <td>${avatarHTML}</td>
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="avatar-cell">加载中…</td>
         <td>${user.username}</td>
         <td class="hash">${user.passwordHash}</td>
         <td>${new Date(user.createdAt).toLocaleString()}</td>
         <td>${user.lastLogin ? new Date(user.lastLogin).toLocaleString() : '从未登录'}</td>
-      </tr>`;
-      tbody.innerHTML += row;
+      `;
+      tbody.appendChild(row);
+
+      // 如果有 token，尝试加载头像
+      if (token) {
+        loadAvatarForUser(user.username, row.querySelector('.avatar-cell'), token);
+      } else {
+        row.querySelector('.avatar-cell').innerHTML = '<span class="no-avatar">无</span>';
+      }
     });
   } catch(e) {
     document.getElementById('error').textContent = '密码错误或网络异常';
+  }
+}
+
+async function loadAvatarForUser(username, td, token) {
+  try {
+    const res = await fetch(`/api/upload-icon?t=${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const blob = await res.blob();
+      const img = document.createElement('img');
+      img.className = 'avatar-img';
+      img.src = URL.createObjectURL(blob);
+      td.innerHTML = '';
+      td.appendChild(img);
+    } else {
+      td.innerHTML = '<span class="no-avatar">无</span>';
+    }
+  } catch {
+    td.innerHTML = '<span class="no-avatar">无</span>';
   }
 }
 </script>
