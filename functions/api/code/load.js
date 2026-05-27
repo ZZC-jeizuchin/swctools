@@ -8,7 +8,6 @@ export async function onRequest(context) {
     });
   }
 
-  // 1. 验证 token
   const authHeader = request.headers.get('Authorization');
   const token = authHeader ? authHeader.replace('Bearer ', '') : '';
   const user = await verifyToken(token, env.JWT_SECRET);
@@ -19,7 +18,6 @@ export async function onRequest(context) {
     });
   }
 
-  // 2. 获取查询参数
   const url = new URL(request.url);
   const type = url.searchParams.get('type');
   if (!type || (type !== 'cpp' && type !== 'py')) {
@@ -32,7 +30,6 @@ export async function onRequest(context) {
   const prefix = `code:${user}:${type}`;
   const indexKey = `${prefix}:files`;
 
-  // 3. 读取文件列表
   const rawIndex = await env.CODE_KV.get(indexKey);
   if (!rawIndex) {
     return new Response(JSON.stringify({ files: {}, updatedAt: null }), {
@@ -44,7 +41,6 @@ export async function onRequest(context) {
   let fileList = [];
   try { fileList = JSON.parse(rawIndex); } catch {}
 
-  // 4. 读取所有文件内容
   const files = {};
   let latestUpdate = 0;
   const readPromises = fileList.map(async (fname) => {
@@ -72,7 +68,7 @@ export async function onRequest(context) {
   });
 }
 
-// ---------- 签名与验证 ----------
+// ---------- 与 verify.js 完全一致的签名函数 ----------
 async function sign(data, secret) {
   const key = await crypto.subtle.importKey(
     'raw',
@@ -82,7 +78,10 @@ async function sign(data, secret) {
     ['sign']
   );
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
-  return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=+$/, '');
+  return btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
 
 async function verifyToken(token, secret) {
@@ -94,9 +93,10 @@ async function verifyToken(token, secret) {
     const unsigned = `${header}.${payload}`;
     const expected = await sign(unsigned, secret);
     if (signature !== expected) return null;
-    const decoded = JSON.parse(atob(payload));
-    if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) return null;
-    return decoded.sub;
+    const decoded = decodeURIComponent(escape(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))));
+    const payloadObj = JSON.parse(decoded);
+    if (payloadObj.exp && payloadObj.exp < Math.floor(Date.now() / 1000)) return null;
+    return payloadObj.sub;
   } catch {
     return null;
   }
