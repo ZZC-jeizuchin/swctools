@@ -1,128 +1,425 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <title>API 诊断 - XI Speech Synthesizer</title>
-    <style>
-        body { font-family: monospace; max-width: 650px; margin: 2rem auto; padding: 0 1rem; }
-        textarea { width: 100%; height: 80px; margin: 0.5rem 0; }
-        button { padding: 0.6rem 1.2rem; font-weight: bold; cursor: pointer; }
-        pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 8px; white-space: pre-wrap; }
-        .error { color: #dc2626; background: #fee2e2; padding: 0.7rem; border-radius: 8px; margin: 0.8rem 0; }
-        label { display: block; margin: 0.8rem 0 0.2rem; font-weight: 600; }
-        .hint { font-size: 0.9rem; color: #4b5563; margin-top: 0.2rem; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XI 语音合成 · 自建代理版</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f0f4f8;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    .container {
+      background: white;
+      border-radius: 1.8rem;
+      padding: 2rem;
+      width: 100%;
+      max-width: 680px;
+      box-shadow: 0 20px 35px rgba(0,0,0,0.08);
+    }
+    h1 { font-size: 1.8rem; color: #1a202c; margin-bottom: 0.2rem; }
+    .sub { color: #4a5568; margin-bottom: 1.4rem; font-size: 0.95rem; }
+    textarea {
+      width: 100%;
+      height: 110px;
+      padding: 0.8rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.9rem;
+      font-size: 1rem;
+      resize: vertical;
+      margin-bottom: 1rem;
+    }
+    .proxy-config {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 1rem;
+      padding: 1rem;
+      margin-bottom: 1.2rem;
+    }
+    .proxy-config label { font-weight: 600; display: block; margin-bottom: 0.3rem; }
+    select, input[type="text"] {
+      width: 100%;
+      padding: 0.65rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.7rem;
+      margin-bottom: 0.8rem;
+      font-size: 0.95rem;
+    }
+    .btn-group { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.8rem 0 1rem; }
+    button {
+      padding: 0.7rem 1.6rem;
+      border: none;
+      border-radius: 2rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+      transition: 0.2s;
+    }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    button.danger { background: #dc2626; }
+    button.secondary { background: #475569; }
+    .log-box {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 1rem;
+      padding: 1rem;
+      margin: 1.2rem 0;
+      font-family: monospace;
+      font-size: 0.85rem;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 0.5rem 0;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: #2563eb;
+      transition: width 0.3s;
+    }
+    audio { width: 100%; margin-top: 0.8rem; }
+    .hidden { display: none !important; }
+    .error-box {
+      color: #b91c1c;
+      background: #fee2e2;
+      padding: 0.7rem;
+      border-radius: 0.8rem;
+      margin: 0.8rem 0;
+    }
+    .info {
+      background: #e0f2fe;
+      color: #0369a1;
+      padding: 0.7rem;
+      border-radius: 0.8rem;
+      margin-top: 0.8rem;
+      font-size: 0.9rem;
+    }
+  </style>
 </head>
 <body>
-    <h1>🔍 API 连通性诊断</h1>
-    <p>目标：<code>POST https://xi-speech-synthesizer.herokuapp.com/task</code></p>
-    
-    <label for="bodyInput">请求体 (JSON)：</label>
-    <textarea id="bodyInput">{"text":"hello"}</textarea>
-    
-    <div style="margin: 0.8rem 0;">
-        <input type="checkbox" id="useProxy">
-        <label for="useProxy" style="display:inline; font-weight:normal;">通过 CORS 代理测试（绕过浏览器限制）</label>
-        <div class="hint">代理前缀：<code>https://corsproxy.io/?</code> （仅用于临时测试）</div>
+<div class="container">
+  <h1>🎙️ XI 语音合成</h1>
+  <p class="sub">自建代理版 · 稳定可靠 · 国内可用</p>
+
+  <label for="textInput">📝 输入文本（支持中文、拼音）</label>
+  <textarea id="textInput" placeholder="你好，世界。ni3 hao3, shi4 jie4.">你好，这是一个语音合成测试。</textarea>
+
+  <div class="proxy-config">
+    <label>🔁 代理方式</label>
+    <select id="proxyType">
+      <option value="worker">Cloudflare Worker（推荐）</option>
+      <option value="corsanywhere">CORS Anywhere（如 Railway 部署）</option>
+      <option value="none">无代理（直连，国内大概率失败）</option>
+    </select>
+    <div id="proxyUrlGroup">
+      <label for="proxyUrl">🌐 代理地址</label>
+      <input type="text" id="proxyUrl" placeholder="例如 https://your-worker.workers.dev">
+      <small style="color:#64748b;">Worker 模式输入根域名即可；CORS Anywhere 模式输入服务根地址</small>
     </div>
+  </div>
+
+  <div class="btn-group">
+    <button id="synthesizeBtn">🔊 开始合成</button>
+    <button id="deleteBtn" class="danger hidden">🗑 删除服务器音频</button>
+    <button id="clearLogBtn" class="secondary">🗒 清空日志</button>
+  </div>
+
+  <div class="log-box" id="logBox"></div>
+
+  <div id="progressContainer" class="hidden">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+  </div>
+
+  <div id="audioContainer" class="hidden">
+    <audio id="audioPlayer" controls></audio>
+  </div>
+
+  <div id="errorContainer" class="error-box hidden"></div>
+
+  <div class="info">
+    💡 <strong>提示：</strong>国内直接访问 Heroku 基本不通，请先部署自己的代理。<br>
+    👉 <strong>Worker 部署代码</strong>：见 <a href="https://github.com/xyhelper/xi-speech-synthesizer-proxy" target="_blank">GitHub 参考</a> （或自行搜索 “Cloudflare Worker xi-speech 代理”）<br>
+    👉 <strong>Railway 一键部署 cors-anywhere</strong>：<a href="https://railway.app/template/7Q2KsC" target="_blank">点此部署</a>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const API_BASE = 'https://xi-speech-synthesizer.herokuapp.com';
     
-    <button id="sendBtn">🚀 发送请求（超时 20 秒）</button>
-    <button id="clearBtn" style="margin-left:0.5rem;">清空日志</button>
+    // DOM
+    const textInput = document.getElementById('textInput');
+    const proxyType = document.getElementById('proxyType');
+    const proxyUrlInput = document.getElementById('proxyUrl');
+    const proxyUrlGroup = document.getElementById('proxyUrlGroup');
+    const synthesizeBtn = document.getElementById('synthesizeBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
+    const clearLogBtn = document.getElementById('clearLogBtn');
+    const logBox = document.getElementById('logBox');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressFill = document.getElementById('progressFill');
+    const audioContainer = document.getElementById('audioContainer');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const errorContainer = document.getElementById('errorContainer');
 
-    <h3>📋 诊断日志</h3>
-    <pre id="log">等待操作...</pre>
+    let currentTaskId = null;
+    let pollingTimer = null;
 
-    <script>
-        const logEl = document.getElementById('log');
-        const bodyInput = document.getElementById('bodyInput');
-        const sendBtn = document.getElementById('sendBtn');
-        const clearBtn = document.getElementById('clearBtn');
-        const useProxy = document.getElementById('useProxy');
+    // 日志
+    function log(msg, isError = false) {
+      const line = (isError ? '❌ ' : '📌 ') + msg;
+      logBox.textContent += line + '\n';
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+    function clearLog() { logBox.textContent = ''; }
+    clearLogBtn.addEventListener('click', clearLog);
 
-        function log(message, isError = false) {
-            logEl.innerHTML += (isError ? '\n❌ ' : '\n✅ ') + message;
-            logEl.scrollTop = logEl.scrollHeight;
+    // 错误显示
+    function showError(msg) {
+      errorContainer.textContent = '❌ ' + msg;
+      errorContainer.classList.remove('hidden');
+    }
+    function hideError() { errorContainer.classList.add('hidden'); }
+
+    // 界面控制
+    function hideAudio() { audioContainer.classList.add('hidden'); audioPlayer.src = ''; }
+    function showAudio() { audioContainer.classList.remove('hidden'); }
+    function hideProgress() { progressContainer.classList.add('hidden'); progressFill.style.width = '0%'; }
+    function showProgress() { progressContainer.classList.remove('hidden'); }
+    function showDeleteBtn() { deleteBtn.classList.remove('hidden'); }
+    function hideDeleteBtn() { deleteBtn.classList.add('hidden'); }
+
+    function stopPolling() {
+      if (pollingTimer) { clearTimeout(pollingTimer); pollingTimer = null; }
+    }
+
+    function resetUI() {
+      hideError();
+      hideAudio();
+      hideProgress();
+      hideDeleteBtn();
+      stopPolling();
+      currentTaskId = null;
+      synthesizeBtn.disabled = false;
+    }
+
+    // 代理类型切换显示
+    proxyType.addEventListener('change', () => {
+      if (proxyType.value === 'none') {
+        proxyUrlGroup.classList.add('hidden');
+      } else {
+        proxyUrlGroup.classList.remove('hidden');
+      }
+    });
+    // 初始状态
+    if (proxyType.value === 'none') proxyUrlGroup.classList.add('hidden');
+
+    // 构建完整 API URL
+    function buildUrl(path) {
+      const type = proxyType.value;
+      if (type === 'none') {
+        return API_BASE + path;
+      }
+      const proxyBase = proxyUrlInput.value.trim();
+      if (!proxyBase) {
+        throw new Error('请填写代理地址');
+      }
+      // 去除末尾斜杠
+      const base = proxyBase.replace(/\/+$/, '');
+      if (type === 'worker') {
+        // Worker 模式：只转发路径，代理地址后直接拼接 /task
+        return base + path;
+      } else if (type === 'corsanywhere') {
+        // CORS Anywhere 模式：代理地址后拼接完整原始 URL
+        return base + '/' + API_BASE + path;
+      }
+      throw new Error('未知代理类型');
+    }
+
+    // 通用请求（超时 30s）
+    async function apiFetch(url, options = {}) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        return res;
+      } catch (err) {
+        if (err.name === 'AbortError') throw new Error('请求超时（30秒）');
+        if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+          throw new Error('网络连接失败，请检查代理地址是否可访问');
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    // 1. 创建任务
+    async function createTask() {
+      const text = textInput.value.trim();
+      if (!text) { showError('请输入文本'); return; }
+
+      resetUI();
+      clearLog();
+      log('🚀 开始合成');
+      synthesizeBtn.disabled = true;
+
+      let url;
+      try { url = buildUrl('/task'); } catch (e) {
+        log(e.message, true);
+        showError(e.message);
+        synthesizeBtn.disabled = false;
+        return;
+      }
+
+      log('🔗 请求地址: ' + url);
+      log('📦 请求体: ' + JSON.stringify({ text }));
+
+      try {
+        const res = await apiFetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+        log('📥 响应: ' + JSON.stringify(data));
+
+        if (!data.request_successful || !data.id) {
+          throw new Error(data.message || '任务创建失败');
         }
 
-        clearBtn.addEventListener('click', () => {
-            logEl.textContent = '日志已清空';
-        });
+        currentTaskId = data.id;
+        log('✅ 任务创建成功，ID: ' + currentTaskId);
+        showDeleteBtn();
+        showProgress();
+        progressFill.style.width = '10%';
+        pollProgress();
+      } catch (err) {
+        log('创建任务失败: ' + err.message, true);
+        showError(err.message);
+        synthesizeBtn.disabled = false;
+      }
+    }
 
-        sendBtn.addEventListener('click', async () => {
-            logEl.textContent = '开始诊断...';
-            sendBtn.disabled = true;
+    // 2. 轮询进度
+    async function pollProgress() {
+      if (!currentTaskId) return;
+      let url;
+      try { url = buildUrl('/progress?id=' + currentTaskId); } catch (e) {
+        log('构建进度URL失败: ' + e.message, true);
+        return;
+      }
 
-            // 解析 JSON
-            let json;
-            try {
-                json = JSON.parse(bodyInput.value);
-            } catch (e) {
-                log('请求体 JSON 格式错误：' + e.message, true);
-                sendBtn.disabled = false;
-                return;
-            }
+      try {
+        const res = await apiFetch(url);
+        const data = await res.json();
+        if (!data.request_successful) throw new Error(data.message || '查询进度失败');
 
-            const baseUrl = 'https://xi-speech-synthesizer.herokuapp.com/task';
-            const url = useProxy.checked 
-                ? 'https://corsproxy.io/?' + encodeURIComponent(baseUrl)
-                : baseUrl;
+        const { finished, progress } = data.result;
+        const percent = Math.round((progress || 0) * 100);
+        progressFill.style.width = Math.min(10 + percent * 0.9, 100) + '%';
+        log(`⏳ 进度: ${percent}%`);
 
-            log('请求 URL: ' + url);
-            log('请求体: ' + JSON.stringify(json));
+        if (finished) {
+          progressFill.style.width = '100%';
+          log('🏁 合成完成，获取音频...');
+          await fetchAudio();
+        } else {
+          pollingTimer = setTimeout(pollProgress, 1500);
+        }
+      } catch (err) {
+        log('轮询失败: ' + err.message, true);
+        showError(err.message);
+        synthesizeBtn.disabled = false;
+        hideProgress();
+      }
+    }
 
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 20000); // 20秒超时
+    // 3. 获取音频
+    async function fetchAudio() {
+      if (!currentTaskId) return;
+      let url;
+      try { url = buildUrl('/result?id=' + currentTaskId); } catch (e) {
+        log('构建音频URL失败: ' + e.message, true);
+        return;
+      }
 
-            try {
-                const startTime = Date.now();
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(json),
-                    signal: controller.signal
-                });
-                clearTimeout(timeout);
+      try {
+        const res = await apiFetch(url);
+        const data = await res.json();
+        if (!data.request_successful) throw new Error(data.message || '获取音频失败');
 
-                const elapsed = Date.now() - startTime;
-                log(`响应到达，耗时 ${elapsed}ms`);
-                log(`HTTP 状态码: ${res.status} ${res.statusText}`);
+        const { audio, message } = data.result;
+        if (message && message.length) log('⚠️ 提示: ' + message.join(', '));
+        if (!audio) throw new Error('音频数据为空');
 
-                // 显示响应头
-                const headers = {};
-                res.headers.forEach((value, key) => headers[key] = value);
-                log('响应头: ' + JSON.stringify(headers, null, 2));
+        // Base64 解码
+        const byteChars = atob(audio);
+        const byteNums = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+        const blob = new Blob([byteNums], { type: 'audio/mpeg' });
+        audioPlayer.src = URL.createObjectURL(blob);
+        showAudio();
+        log('✅ 音频已就绪，可播放');
+        synthesizeBtn.disabled = false;
+        hideProgress();
+      } catch (err) {
+        log('获取音频失败: ' + err.message, true);
+        showError(err.message);
+        synthesizeBtn.disabled = false;
+        hideProgress();
+      }
+    }
 
-                // 读取响应文本
-                const text = await res.text();
-                log('响应正文:');
-                log(text);
+    // 4. 删除任务
+    async function deleteTask() {
+      if (!currentTaskId) return;
+      let url;
+      try { url = buildUrl('/result?id=' + currentTaskId); } catch (e) { return; }
 
-                // 检查 CORS 关键头
-                if (!headers['access-control-allow-origin'] && !useProxy.checked) {
-                    log('⚠️ 警告：响应中没有 Access-Control-Allow-Origin 头，这可能是因为 CORS 策略导致浏览器拦截，但当前请求成功可能是因为使用了 no-cors 模式或代理。如果没有使用代理且浏览器报错，请勾选“通过CORS代理”再试。');
-                }
+      try {
+        const res = await apiFetch(url, { method: 'DELETE' });
+        const data = await res.json();
+        log('🗑 删除响应: ' + JSON.stringify(data));
+        if (data.request_successful) {
+          log('✅ 已从服务器删除');
+          alert('删除成功');
+        } else {
+          log('删除提示: ' + (data.message || ''), true);
+        }
+        resetUI();
+        clearLog();
+      } catch (err) {
+        log('删除请求失败: ' + err.message, true);
+      }
+    }
 
-            } catch (err) {
-                clearTimeout(timeout);
-                if (err.name === 'AbortError') {
-                    log('⏰ 请求超时（20秒）！可能 Heroku 休眠唤醒缓慢，或网络不通。请稍后重试。', true);
-                } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-                    log('🌐 网络错误：请求无法发送。可能原因：', true);
-                    log('  1. 浏览器 CORS 策略拦截（请勾选“通过CORS代理”测试）');
-                    log('  2. 本地网络无法访问 Heroku（尝试 VPN 或切换网络）');
-                    log('  3. 浏览器插件阻止了请求');
-                    log('  完整错误信息：' + err.message);
-                } else {
-                    log('未知错误：' + err.message, true);
-                }
-            } finally {
-                sendBtn.disabled = false;
-            }
-        });
+    // 事件绑定
+    synthesizeBtn.addEventListener('click', createTask);
+    deleteBtn.addEventListener('click', () => {
+      if (confirm('确定删除服务器上的音频吗？')) deleteTask();
+    });
 
-        // 页面加载时显示提示
-        log('👋 请直接点击“发送请求”测试，或勾选代理后再试。\n' +
-            '   同时请打开浏览器开发者工具 (F12) 查看 Console 和 Network 标签页。');
-    </script>
+    // 初始日志
+    clearLog();
+    log('💡 请选择代理类型并输入地址，然后开始合成。');
+    log('推荐使用 Cloudflare Worker 代理，稳定且免费。');
+  })();
+</script>
 </body>
 </html>
