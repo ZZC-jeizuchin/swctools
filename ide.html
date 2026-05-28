@@ -136,6 +136,18 @@
 (function() {
   "use strict";
 
+  // ========== 专业日志 (无表情) ==========
+  function log(msg, level) {
+    const prefix = {
+      info: '[INFO]',
+      warn: '[WARN]',
+      error: '[ERROR]',
+      success: '[OK]',
+      network: '[NET]'
+    }[level] || '';
+    appendOutput(prefix + ' ' + msg);
+  }
+
   // ========== 主题 ==========
   const themeToggle = document.getElementById('themeToggle');
   const currentTheme = localStorage.getItem('swc_theme') || 'light';
@@ -217,7 +229,7 @@
   if (window.ResizeObserver) { new ResizeObserver(() => resizeEditor()).observe(editorContainer); }
   window.addEventListener('resize', resizeEditor);
 
-  // ========== 输出面板（控制台监听） ==========
+  // ========== 输出面板 (控制台监听) ==========
   const outputViewport = document.getElementById('outputViewport');
   const outputCanvas = document.getElementById('outputCanvas');
   const outputSpacer = document.getElementById('outputSpacer');
@@ -256,7 +268,6 @@
     }
   });
 
-  // 注入脚本，捕获 iframe 内的 console 并发送给父窗口
   function injectConsoleCapture(code) {
     const captureScript = `
 <script>
@@ -384,14 +395,14 @@
     const saved = localSave(name, editor.getValue());
     currentFile = saved; localStorage.setItem(CURRENT_FILE_KEY, saved);
     document.getElementById('currentFileName').textContent = saved;
-    appendOutput(`文件已保存: ${saved}`);
+    log('文件已保存: ' + saved, 'success');
   });
   document.getElementById('saveCurrentBtn').addEventListener('click', () => {
     if (currentFile) {
       localStorage.setItem(FILE_PREFIX + currentFile, editor.getValue());
       const files = getFileList();
       if (!files.includes(currentFile)) { files.push(currentFile); saveFileList(files); refreshFileSelect(); }
-      appendOutput(`文件 ${currentFile} 已保存`);
+      log('文件已保存: ' + currentFile, 'success');
     } else {
       document.getElementById('saveAsBtn').click();
     }
@@ -400,13 +411,13 @@
     const filename = document.getElementById('localFileSelect').value;
     if (!filename) return;
     const code = localStorage.getItem(FILE_PREFIX + filename);
-    if (code !== null) { setEditorContent(code, filename); appendOutput(`已打开: ${filename}`); }
+    if (code !== null) { setEditorContent(code, filename); log('已打开: ' + filename, 'info'); }
   });
   document.getElementById('localDeleteBtn').addEventListener('click', () => {
     const filename = document.getElementById('localFileSelect').value;
     if (!filename || !confirm(`确定删除 ${filename}？`)) return;
     localDelete(filename);
-    appendOutput(`已删除: ${filename}`);
+    log('已删除: ' + filename, 'info');
   });
   document.getElementById('diskOpenBtn').addEventListener('click', () => {
     document.getElementById('diskFileInput').click();
@@ -415,7 +426,7 @@
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => { setEditorContent(reader.result, file.name); appendOutput(`已从磁盘加载: ${file.name}`); };
+    reader.onload = () => { setEditorContent(reader.result, file.name); log('已从磁盘加载: ' + file.name, 'info'); };
     reader.readAsText(file);
     e.target.value = '';
   });
@@ -447,6 +458,8 @@
     window._saveTimer = setTimeout(saveCode, 800);
     if (previewContainer.style.display === 'block') updatePreview();
   });
+
+  // 运行按钮
   document.getElementById('runBtn').addEventListener('click', () => {
     saveCode();
     updatePreview();
@@ -459,7 +472,7 @@
   document.getElementById('saveBtn').addEventListener('click', saveCode);
   document.getElementById('resetBtn').addEventListener('click', resetCode);
 
-  // ========== 云端同步 ==========
+  // ========== 云端同步 (严格错误处理) ==========
   const CODE_TYPE = 'html';
   const UPLOAD_BTN = document.getElementById('uploadCloudBtn');
   const DOWNLOAD_BTN = document.getElementById('downloadCloudBtn');
@@ -483,31 +496,53 @@
 
   UPLOAD_BTN.addEventListener('click', async () => {
     const token = getToken();
-    if (!token) { appendOutput('❌ 请先登录'); return; }
+    if (!token) { log('请先登录', 'error'); return; }
     const files = {};
     getFileList().forEach(f => { const c = localStorage.getItem(FILE_PREFIX + f); if (c) files[f] = c; });
-    if (Object.keys(files).length === 0) { appendOutput('❌ 本地没有可上传的文件'); return; }
+    if (Object.keys(files).length === 0) { log('本地没有可上传的文件', 'warn'); return; }
     try {
       const resp = await fetch('/api/code/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ type: CODE_TYPE, files })
       });
-      if (resp.status === 401) { appendOutput('❌ 登录已过期，请重新登录'); return; }
+      if (resp.status === 401) {
+        log('登录已过期，请重新登录', 'error');
+        return;
+      }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        log(`上传失败: ${err.error || resp.statusText}`, 'error');
+        return;
+      }
       const data = await resp.json();
-      appendOutput(`✅ 已上传 ${data.count} 个文件至云端`);
-    } catch(e) { appendOutput('❌ 网络错误'); }
+      log(`已上传 ${data.count} 个文件至云端`, 'success');
+    } catch(e) {
+      log('网络错误，上传失败', 'error');
+    }
   });
+
   DOWNLOAD_BTN.addEventListener('click', async () => {
     const token = getToken();
-    if (!token) { appendOutput('❌ 请先登录'); return; }
+    if (!token) { log('请先登录', 'error'); return; }
     try {
       const resp = await fetch(`/api/code/load?type=${CODE_TYPE}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (resp.status === 401) { appendOutput('❌ 登录已过期，请重新登录'); return; }
+      if (resp.status === 401) {
+        log('登录已过期，请重新登录', 'error');
+        return;
+      }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        log(`下载失败: ${err.error || resp.statusText}`, 'error');
+        return;
+      }
       const data = await resp.json();
-      if (!data.files || Object.keys(data.files).length === 0) { appendOutput('📭 云端暂无文件'); return; }
+      if (!data.files || Object.keys(data.files).length === 0) {
+        log('云端暂无文件', 'info');
+        return;
+      }
       if (!confirm(`将从云端下载 ${Object.keys(data.files).length} 个文件，覆盖本地同名文件并创建新文件，继续？`)) return;
       const files = data.files;
       const existing = getFileList();
@@ -517,8 +552,10 @@
       }
       saveFileList(existing);
       refreshFileSelect();
-      appendOutput(`✅ 云端 ${Object.keys(files).length} 个文件已同步`);
-    } catch(e) { appendOutput('❌ 网络错误'); }
+      log(`已同步 ${Object.keys(files).length} 个文件`, 'success');
+    } catch(e) {
+      log('网络错误，下载失败', 'error');
+    }
   });
   window.addEventListener('storage', updateCloudButtons);
 
