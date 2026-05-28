@@ -30,7 +30,7 @@ export async function onRequest(context) {
     });
   }
 
-  if (type !== 'cpp' && type !== 'py') {
+  if (type !== 'cpp' && type !== 'py' && type !== 'html') {
     return new Response(JSON.stringify({ error: '不支持的文件类型' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' }
