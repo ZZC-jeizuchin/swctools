@@ -20,7 +20,7 @@ export async function onRequest(context) {
 
   const url = new URL(request.url);
   const type = url.searchParams.get('type');
-  if (!type || (type !== 'cpp' && type !== 'py')) {
+  if (!type || (type !== 'cpp' && type !== 'py' && type !== 'html')) {
     return new Response(JSON.stringify({ error: '缺少或无效的文件类型' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' }
