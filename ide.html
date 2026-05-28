@@ -2,14 +2,39 @@
 <html lang="zh">
 <head>
   <script>
-  if (!localStorage.getItem('swc_token')) {
-    alert('未登录!');
-    location.href='index.html';
-  }
+    (function() {
+      const token = localStorage.getItem('swc_token');
+      let needLogin = true;
+
+      if (token) {
+        try {
+          const parts = token.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))));
+            if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+              needLogin = true;
+            } else {
+              needLogin = false;
+            }
+          }
+        } catch (e) {
+          needLogin = true;
+        }
+      }
+
+      if (needLogin) {
+        const notRobot = localStorage.getItem('not_robot');
+        if (notRobot !== '1') {
+          window.location.href = 'antirobot.html';
+        } else {
+          localStorage.setItem('not_robot', '0');
+        }
+      }
+    })();
   </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
-  <title>SwC IDE · 增强编辑器</title>
+  <title>SwC IDE · HTML 编辑器</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
@@ -18,112 +43,91 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <link rel="stylesheet" href="swc-ide.css">
   <style>
-    :root {
-      --bg-body: #e8edf2;
-      --panel-bg: rgba(255, 255, 255, 0.85);
-      --panel-border: #bdd1e6;
-      --title-color: #1e4b6e;
-      --btn-bg: #d9e8f4;
-      --btn-border: #adc7e0;
-      --btn-color: #1a4059;
-      --btn-hover-bg: #c2d8ed;
-      --go-btn-bg: #4f7f9e;
-      --go-btn-hover-bg: #3a6b8c;
-      --corner-text-color: #3a6a8e;
-      --fps-bg: rgba(255, 255, 255, 0.6);
-      --tab-active-bg: #d9e8f4;
-      --editor-bg: #fbfdff;
-      --preview-bg: #ffffff;
-      --text-color: #173e58;
+    .preview-container {
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      overflow: hidden;
+      background: var(--preview-bg);
+      flex: 1;
+      min-height: 300px;
+      display: none;
     }
-
-    [data-theme="dark"] {
-      --bg-body: #0a0f14;
-      --panel-bg: rgba(13, 27, 42, 0.9);
-      --panel-border: #1e3a5a;
-      --title-color: #a0c4e8;
-      --btn-bg: #1e3a5a;
-      --btn-border: #2a5a8a;
-      --btn-color: #c0d8f0;
-      --btn-hover-bg: #2a5a8a;
-      --go-btn-bg: #2a6a9e;
-      --go-btn-hover-bg: #1a4a7a;
-      --corner-text-color: #7a9ab0;
-      --fps-bg: rgba(0, 0, 0, 0.5);
-      --tab-active-bg: #1e3a5a;
-      --editor-bg: #0d1b2a;
-      --preview-bg: #0a0f14;
-      --text-color: #c0d8f0;
+    .preview-container iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: white;
     }
-
-    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; }
-    body { background: var(--bg-body); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 12px; overflow: hidden; position: relative; }
-
-    .corner-tl { position: fixed; top: 12px; left: 16px; font-size: 0.75rem; color: var(--corner-text-color); opacity: 0.8; z-index: 3000; pointer-events: none; }
-    .corner-tr { position: fixed; top: 12px; right: 20px; font-size: 0.75rem; color: var(--corner-text-color); opacity: 0.8; z-index: 3000; pointer-events: none; background: var(--fps-bg); padding: 4px 12px; border-radius: 24px; border: 1px solid var(--panel-border); }
-    .corner-br { position: fixed; bottom: 12px; right: 20px; font-size: 0.75rem; color: var(--corner-text-color); opacity: 0.8; z-index: 3000; pointer-events: none; }
-    .theme-toggle {
-      position: fixed; bottom: 12px; left: 16px; font-size: 0.9rem; background: var(--btn-bg);
-      border: 1px solid var(--panel-border); color: var(--corner-text-color); padding: 5px 14px;
-      border-radius: 32px; cursor: pointer; opacity: 0.85; transition: 0.2s; z-index: 3000;
-      font-weight: 500; -webkit-tap-highlight-color: transparent;
+    [data-theme="dark"] .preview-container iframe {
+      background: #0a0f14;
     }
-    .theme-toggle:hover { opacity: 1; background: var(--btn-hover-bg); }
-
-    .main-panel { max-width: 1400px; width: 100%; background: var(--panel-bg); border-radius: 28px; box-shadow: 0 16px 30px -8px rgba(30, 65, 90, 0.18); border: 1px solid var(--panel-border); padding: 20px 24px 24px; display: flex; flex-direction: column; max-height: calc(100vh - 24px); overflow: hidden; }
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid var(--panel-border); flex-shrink: 0; }
-    .header h1 { font-weight: 550; font-size: 1.9rem; color: var(--title-color); }
-    .back-btn {
-      background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--btn-color);
-      padding: 8px 18px; border-radius: 36px; font-weight: 520; font-size: 0.95rem; text-decoration: none;
-      transition: 0.15s; -webkit-tap-highlight-color: transparent;
+    /* 输出区复用虚拟滚动结构，增加自定义样式 */
+    #outputViewport {
+      position: absolute; top:0; left:0; right:0; bottom:0;
+      overflow-y: scroll; padding: 16px; box-sizing: border-box;
+      border-radius: 0;
     }
-    .back-btn:hover { background: var(--btn-hover-bg); }
-
-    .tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--panel-border); padding-bottom: 8px; flex-shrink: 0; }
-    .tab { background: transparent; border: none; padding: 12px 28px; font-size: 1.15rem; font-weight: 550; color: var(--corner-text-color); cursor: pointer; border-radius: 40px 40px 0 0; transition: 0.15s; -webkit-tap-highlight-color: transparent; }
-    .tab.active { background: var(--tab-active-bg); color: var(--title-color); box-shadow: 0 -2px 6px rgba(0,0,0,0.02); border: 1px solid var(--panel-border); border-bottom: none; }
-    .tab:hover:not(.active) { background: rgba(224, 236, 246, 0.5); }
-
-    .editor-container { border: 1px solid var(--panel-border); border-radius: 24px; margin-bottom: 20px; background: var(--editor-bg); flex: 1; min-height: 0; overflow: auto !important; -webkit-overflow-scrolling: touch; }
-    .CodeMirror { height: auto; min-height: 100%; font-size: 15px; font-family: 'JetBrains Mono', monospace; background: transparent !important; color: var(--text-color); }
-    .CodeMirror-scroll { overflow: visible !important; height: auto; }
-    .cm-s-default .cm-tag { color: #d32f2f; } .cm-s-default .cm-bracket { color: #888; } .cm-s-default .cm-attribute { color: #f5a623; }
-    .cm-s-default .cm-string { color: #2e7d32; } .cm-s-default .cm-keyword { color: #2e7d32; } .cm-s-default .cm-variable { color: #2e7d32; }
-    .cm-s-default .cm-text { color: #000; } [data-theme="dark"] .cm-s-default .cm-text { color: #e0e8f0; }
-
-    .preview-container { border: 1px solid var(--panel-border); border-radius: 24px; overflow: hidden; background: var(--preview-bg); flex: 1; min-height: 300px; display: none; }
-    .preview-container iframe { width: 100%; height: 100%; border: none; background: white; overflow: auto; -webkit-overflow-scrolling: touch; }
-    [data-theme="dark"] .preview-container iframe { background: #0a0f14; }
-
-    .action-bar { display: flex; gap: 14px; margin-top: 12px; align-items: center; flex-shrink: 0; }
-    .nav-btn {
-      background: var(--go-btn-bg); border: none; color: white; padding: 14px 32px;
-      border-radius: 48px; font-weight: 600; font-size: 1.05rem; cursor: pointer;
-      box-shadow: 0 5px 10px rgba(46,84,112,0.15); transition: 0.15s;
-      -webkit-tap-highlight-color: transparent;
+    #outputViewport::-webkit-scrollbar { width: 30px; height: 30px; }
+    #outputViewport::-webkit-scrollbar-track { background: rgba(128,128,128,0.08); border-radius: 6px; }
+    #outputViewport::-webkit-scrollbar-thumb {
+      background: var(--panel-border); border-radius: 6px;
+      border: 6px solid transparent; background-clip: content-box; min-height: 40px;
     }
-    .nav-btn.secondary {
-      background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--btn-color);
-      padding: 12px 24px; box-shadow: none;
+    #outputViewport::-webkit-scrollbar-thumb:hover { background: var(--btn-border); }
+    #outputCanvas {
+      white-space: pre-wrap; word-break: break-word;
+      color: var(--text-color); background: transparent;
     }
-    .nav-btn:hover { background: var(--go-btn-hover-bg); }
-    .nav-btn.secondary:hover { background: var(--btn-hover-bg); }
-    .status { margin-left: auto; color: var(--corner-text-color); font-size: 0.9rem; opacity: 0.9; }
   </style>
 </head>
 <body>
 <div class="corner-tl">不自由毋宁死 · 不自由毋寧死 · Give me liberty or give me death · 自由か、死か</div>
 <div class="corner-tr" id="fpsDisplay">FPS: --</div>
 <div class="corner-br">made by ZZC-jeizuchin, Github</div>
-<button class="theme-toggle" id="themeToggle" aria-label="切换深色模式">深色</button>
+<button class="theme-toggle" id="themeToggle">深色</button>
 
 <div class="main-panel">
-  <div class="header"><h1>SwC IDE · 增强版</h1><a href="index.html" class="back-btn">← 返回主站</a></div>
-  <div class="tabs"><button class="tab active" data-tab="editor">编辑器</button><button class="tab" data-tab="preview">预览</button></div>
-  <div class="editor-container" id="editorContainer"><textarea id="htmlCode" style="display:none;"></textarea></div>
-  <div class="preview-container" id="previewContainer"><iframe id="previewFrame" sandbox="allow-scripts allow-same-origin" title="预览"></iframe></div>
+  <div class="header"><h1>SwC IDE · HTML 版</h1><a href="index.html" class="back-btn">← 返回主站</a></div>
+
+  <!-- 文件管理工具栏 -->
+  <div class="file-area" id="fileArea">
+    <select class="file-select" id="localFileSelect"><option value="">-- 本地存储文件 --</option></select>
+    <button class="file-btn" id="localOpenBtn" disabled>打开</button>
+    <button class="file-btn danger" id="localDeleteBtn" disabled>删除</button>
+    <button class="file-btn" id="saveAsBtn">另存为…</button>
+    <button class="file-btn" id="saveCurrentBtn">保存当前</button>
+    <input type="file" id="diskFileInput" accept=".html,.htm,.txt" style="display:none;">
+    <button class="file-btn" id="diskOpenBtn">打开本地文件</button>
+    <button class="file-btn" id="uploadCloudBtn" title="需先登录">上传所有本地文件</button>
+    <button class="file-btn" id="downloadCloudBtn" title="需先登录">下载云端文件</button>
+    <span class="current-file" id="currentFileName">未命名</span>
+  </div>
+
+  <div class="tab-bar">
+    <div class="tabs">
+      <button class="tab active" data-tab="editor">编辑器</button>
+      <button class="tab" data-tab="preview">预览</button>
+      <button class="tab" data-tab="output">输出</button>
+    </div>
+  </div>
+
+  <div class="editor-container" id="editorContainer">
+    <textarea id="htmlCode" style="display:none;"></textarea>
+  </div>
+
+  <div class="preview-container" id="previewContainer">
+    <iframe id="previewFrame" sandbox="allow-scripts" title="预览"></iframe>
+  </div>
+
+  <div class="output-container" id="outputContainer" style="display:none;">
+    <div id="outputViewport">
+      <div id="outputSpacer"></div>
+      <div id="outputCanvas"></div>
+    </div>
+  </div>
+
   <div class="action-bar">
     <button class="nav-btn" id="runBtn">运行并预览</button>
     <button class="nav-btn secondary" id="saveBtn">保存当前代码</button>
@@ -133,32 +137,52 @@
 </div>
 
 <script>
-  (function(){
-    "use strict";
-    const themeToggle = document.getElementById('themeToggle');
-    const currentTheme = localStorage.getItem('swc_theme') || 'light';
-    document.documentElement.setAttribute('data-theme', currentTheme);
-    themeToggle.textContent = currentTheme === 'light' ? '深色' : '亮色';
-    themeToggle.addEventListener('click', () => {
-      const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', newTheme);
-      localStorage.setItem('swc_theme', newTheme);
-      themeToggle.textContent = newTheme === 'light' ? '深色' : '亮色';
-    });
+(function() {
+  "use strict";
 
-    const fpsDisplay = document.getElementById('fpsDisplay');
-    let frameCount = 0, lastFpsUpdate = performance.now();
-    function updateFPS() { frameCount++; const now = performance.now(); if(now - lastFpsUpdate >= 1000) { fpsDisplay.textContent = `FPS: ${Math.round((frameCount * 1000) / (now - lastFpsUpdate))}`; frameCount = 0; lastFpsUpdate = now; } requestAnimationFrame(updateFPS); }
+  // ========== 主题 ==========
+  const themeToggle = document.getElementById('themeToggle');
+  const currentTheme = localStorage.getItem('swc_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  themeToggle.textContent = currentTheme === 'light' ? '深色' : '亮色';
+  themeToggle.addEventListener('click', () => {
+    const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('swc_theme', next);
+    themeToggle.textContent = next === 'light' ? '深色' : '亮色';
+    editor.refresh();
+  });
+
+  // FPS
+  const fpsDisplay = document.getElementById('fpsDisplay');
+  let frameCount = 0, lastFpsUpdate = performance.now();
+  function updateFPS() {
+    frameCount++;
+    const now = performance.now();
+    if (now - lastFpsUpdate >= 1000) {
+      fpsDisplay.textContent = `FPS: ${Math.round(frameCount * 1000 / (now - lastFpsUpdate))}`;
+      frameCount = 0; lastFpsUpdate = now;
+    }
     requestAnimationFrame(updateFPS);
+  }
+  requestAnimationFrame(updateFPS);
 
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    const VOID_TAGS = new Set(['area','base','br','col','command','embed','hr','img','input','keygen','link','meta','param','source','track','wbr']);
-    const textarea = document.getElementById('htmlCode');
-    const editor = CodeMirror.fromTextArea(textarea, {
-      mode: 'htmlmixed', theme: 'default', lineNumbers: true, autoCloseTags: true, autoCloseBrackets: true, matchTags: { bothTags: true },
-      indentUnit: 4, tabSize: 4, indentWithTabs: false, smartIndent: true, lineWrapping: true, styleActiveLine: true,
-      gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'], foldGutter: true, inputStyle: isMobile ? 'textarea' : 'contenteditable',
-      extraKeys: { 'Enter': function(cm) {
+  // ========== 编辑器 ==========
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const VOID_TAGS = new Set(['area','base','br','col','command','embed','hr','img','input','keygen','link','meta','param','source','track','wbr']);
+  const DEFAULT_CODE = `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n  <title>新页面</title>\n  <style>\n    body { font-family: sans-serif; padding: 20px; background: #f0f4f8; }\n    h1 { color: #1e4b6e; }\n  </style>\n</head>\n<body>\n  <h1>Hello, SwC!</h1>\n  <p>开始编辑你的 HTML 吧～</p>\n</body>\n</html>`;
+
+  const textarea = document.getElementById('htmlCode');
+  const editorContainer = document.getElementById('editorContainer');
+  const editor = CodeMirror.fromTextArea(textarea, {
+    mode: 'htmlmixed', theme: 'default', lineNumbers: true,
+    autoCloseTags: true, autoCloseBrackets: true, matchTags: { bothTags: true },
+    indentUnit: 4, tabSize: 4, indentWithTabs: false, smartIndent: true, lineWrapping: true,
+    styleActiveLine: true,
+    gutters: ['CodeMirror-linenumbers'],
+    inputStyle: isMobile ? 'textarea' : 'contenteditable',
+    extraKeys: {
+      'Enter': function(cm) {
         const cursor = cm.getCursor(), line = cm.getLine(cursor.line), ch = cursor.ch;
         if(ch > 0 && line.charAt(ch-1) === '>') {
           const before = line.substring(0, ch), tag = before.match(/<(\w+)(?:\s[^>]*)?>$/);
@@ -167,28 +191,346 @@
             cm.replaceSelection('\n' + inner + '\n' + indent + '</' + tag[1] + '>');
             cm.setCursor({ line: cursor.line+1, ch: inner.length }); return;
           }
-        } cm.execCommand('newlineAndIndent');
-      }}
-    });
-    editor.setSize(null, '100%');
-    editor.on('beforeChange', (cm, change) => { if(change.origin==='+input' && change.text.length===1 && change.text[0]==='<') { change.cancel(); const c=cm.getCursor(); cm.replaceRange('<>',c,c); cm.setCursor({line:c.line,ch:c.ch+1}); } });
-    if(isMobile) editor.on('keydown', (cm, e) => { if(e.key==='Backspace'||e.key==='Delete') { const c=cm.getCursor(), l=cm.getLine(c.line), empty=l.trim()==='', atStart=c.ch===0, atEnd=c.ch===l.length; if((e.key==='Backspace'&&atStart&&empty)||(e.key==='Delete'&&atEnd&&empty)) { e.preventDefault(); cm.lineCount()>1?cm.replaceRange('',{line:c.line,ch:0},{line:c.line+1,ch:0}):cm.replaceRange('',{line:c.line,ch:0},{line:c.line,ch:l.length}); cm.focus(); } else setTimeout(()=>cm.focus(),10); } });
+        }
+        cm.execCommand('newlineAndIndent');
+      }
+    }
+  });
 
-    const STORAGE_KEY = 'swc_standalone_ide_code', DEFAULT_CODE = `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n  <title>新页面</title>\n  <style>\n    body { font-family: sans-serif; padding: 20px; background: #f0f4f8; }\n    h1 { color: #1e4b6e; }\n  </style>\n</head>\n<body>\n  <h1>Hello, SwC!</h1>\n  <p>开始编辑你的 HTML 吧～</p>\n</body>\n</html>`;
-    const previewFrame = document.getElementById('previewFrame'), previewContainer = document.getElementById('previewContainer'), editorContainer = document.getElementById('editorContainer');
-    const runBtn = document.getElementById('runBtn'), saveBtn = document.getElementById('saveBtn'), resetBtn = document.getElementById('resetBtn'), statusMsg = document.getElementById('statusMsg');
-    const tabs = document.querySelectorAll('.tab');
-    tabs.forEach(t => t.addEventListener('click', () => { const target = t.dataset.tab; tabs.forEach(b=>b.classList.remove('active')); t.classList.add('active'); if(target==='editor'){ editorContainer.style.display='block'; previewContainer.style.display='none'; editor.refresh(); } else { editorContainer.style.display='none'; previewContainer.style.display='block'; updatePreview(); } }));
-    function updatePreview() { const code = editor.getValue(), doc = previewFrame.contentDocument || previewFrame.contentWindow.document; doc.open(); doc.write(code); doc.close(); }
-    function loadCode() { try { editor.setValue(localStorage.getItem(STORAGE_KEY) || DEFAULT_CODE); updatePreview(); statusMsg.textContent='已加载'; setTimeout(()=>statusMsg.textContent='',1500); } catch { editor.setValue(DEFAULT_CODE); } }
-    function saveCode() { try { localStorage.setItem(STORAGE_KEY, editor.getValue()); statusMsg.textContent='已保存'; setTimeout(()=>statusMsg.textContent='',1500); } catch { statusMsg.textContent='保存失败'; } }
-    function resetCode() { editor.setValue(DEFAULT_CODE); updatePreview(); statusMsg.textContent='已重置'; setTimeout(()=>statusMsg.textContent='',1500); }
-    editor.on('change', () => { clearTimeout(window._saveTimer); window._saveTimer = setTimeout(()=>{ saveCode(); if(previewContainer.style.display==='block') updatePreview(); }, 800); });
-    runBtn.addEventListener('click', ()=>{ saveCode(); updatePreview(); tabs.forEach(t=>t.classList.remove('active')); document.querySelector('[data-tab="preview"]').classList.add('active'); editorContainer.style.display='none'; previewContainer.style.display='block'; });
-    saveBtn.addEventListener('click', saveCode); resetBtn.addEventListener('click', resetCode);
-    loadCode(); editorContainer.style.display='block'; previewContainer.style.display='none';
-    window.addEventListener('resize', ()=> editor.refresh());
-  })();
+  // 智能补全 <
+  editor.on('beforeChange', (cm, change) => {
+    if (change.origin === '+input' && change.text.length === 1) {
+      if (change.text[0] === '<') {
+        change.cancel();
+        const cursor = cm.getCursor();
+        cm.replaceRange('<>', cursor, cursor);
+        cm.setCursor({ line: cursor.line, ch: cursor.ch + 1 });
+      }
+    }
+  });
+
+  function resizeEditor() {
+    if (editorContainer.style.display === 'none') return;
+    const height = editorContainer.clientHeight;
+    if (height > 0) {
+      editor.getWrapperElement().style.height = height + 'px';
+      editor.refresh();
+    }
+  }
+  setTimeout(resizeEditor, 50);
+  if (window.ResizeObserver) { new ResizeObserver(() => resizeEditor()).observe(editorContainer); }
+  window.addEventListener('resize', resizeEditor);
+
+  // ========== 输出面板（控制台监听） ==========
+  const outputViewport = document.getElementById('outputViewport');
+  const outputCanvas = document.getElementById('outputCanvas');
+  const outputSpacer = document.getElementById('outputSpacer');
+  const outputContainer = document.getElementById('outputContainer');
+  const LINE_HEIGHT = 21;
+  const outputLines = [];
+  let outputScrolledUp = false;
+
+  function appendOutput(text) {
+    outputLines.push(text);
+    outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
+    // 仅渲染最新部分（简单处理：显示最后 200 行，也可全部渲染但可能有性能问题）
+    const visible = outputLines.slice(-200);
+    outputCanvas.textContent = visible.join('\n');
+    outputCanvas.style.transform = `translateY(${Math.max(0, outputLines.length - 200) * LINE_HEIGHT}px)`;
+    if (!outputScrolledUp) {
+      outputViewport.scrollTop = outputViewport.scrollHeight;
+    }
+  }
+
+  outputViewport.addEventListener('scroll', () => {
+    const atBottom = outputViewport.scrollTop + outputViewport.clientHeight >= outputViewport.scrollHeight - 10;
+    outputScrolledUp = !atBottom;
+  });
+
+  // 接收预览 iframe 的控制台消息
+  window.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'console') {
+      const method = e.data.method || 'log';
+      const args = JSON.parse(e.data.args || '[]');
+      const formatted = args.map(a => {
+        if (a === undefined) return 'undefined';
+        if (a === null) return 'null';
+        return a.toString();
+      }).join(' ');
+      appendOutput(`[iframe ${method}] ${formatted}`);
+    }
+  });
+
+  // 注入脚本，捕获 iframe 内的 console 并发送给父窗口
+  function injectConsoleCapture(code) {
+    const captureScript = `
+<script>
+(function(){
+  const _console = {};
+  ['log','warn','error','info'].forEach(function(m){
+    _console[m] = console[m];
+    console[m] = function(){
+      var args = Array.prototype.slice.call(arguments);
+      try {
+        parent.postMessage({
+          type: 'console',
+          method: m,
+          args: JSON.stringify(args.map(function(a){
+            if (typeof a === 'object') {
+              try { return JSON.stringify(a); } catch(e) { return String(a); }
+            }
+            return String(a);
+          }))
+        }, '*');
+      } catch(e) {}
+      _console[m].apply(console, args);
+    };
+  });
+})();
+</script>`;
+    // 将捕获脚本插入到 <head> 之前（如果存在）或整个 HTML 之前
+    if (code.includes('<head>')) {
+      return code.replace('<head>', '<head>' + captureScript);
+    } else {
+      return captureScript + code;
+    }
+  }
+
+  // ========== 预览 ==========
+  const previewFrame = document.getElementById('previewFrame');
+  const previewContainer = document.getElementById('previewContainer');
+  function updatePreview() {
+    const rawCode = editor.getValue();
+    const codeWithCapture = injectConsoleCapture(rawCode);
+    const doc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+    doc.open();
+    doc.write(codeWithCapture);
+    doc.close();
+  }
+
+  // ========== 标签切换 ==========
+  const tabs = document.querySelectorAll('.tab');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    const target = t.dataset.tab;
+    tabs.forEach(b => b.classList.remove('active'));
+    t.classList.add('active');
+    editorContainer.style.display = 'none';
+    previewContainer.style.display = 'none';
+    outputContainer.style.display = 'none';
+    if (target === 'editor') {
+      editorContainer.style.display = 'block';
+      resizeEditor();
+    } else if (target === 'preview') {
+      previewContainer.style.display = 'block';
+      updatePreview();
+    } else if (target === 'output') {
+      outputContainer.style.display = 'block';
+    }
+  }));
+
+  // ========== 文件管理（本地） ==========
+  const FILE_PREFIX = 'swc_file_html_';
+  const FILE_LIST_KEY = 'swc_filelist_html';
+  const CURRENT_FILE_KEY = 'swc_current_html_file';
+  let currentFile = localStorage.getItem(CURRENT_FILE_KEY) || '';
+
+  function sanitizeFilename(name) {
+    return name.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fff]/g, '').substring(0, 60);
+  }
+  function getFullFilename(baseName) {
+    const sanitized = sanitizeFilename(baseName);
+    return sanitized + (sanitized.endsWith('.html') ? '' : '.html');
+  }
+  function getFileList() {
+    try { return JSON.parse(localStorage.getItem(FILE_LIST_KEY) || '[]'); } catch { return []; }
+  }
+  function saveFileList(list) {
+    localStorage.setItem(FILE_LIST_KEY, JSON.stringify(list));
+  }
+  function refreshFileSelect() {
+    const select = document.getElementById('localFileSelect');
+    const files = getFileList();
+    select.innerHTML = '<option value="">-- 本地存储文件 --</option>';
+    files.forEach(f => {
+      const opt = document.createElement('option'); opt.value = f; opt.textContent = f; select.appendChild(opt);
+    });
+    document.getElementById('localOpenBtn').disabled = files.length === 0;
+    document.getElementById('localDeleteBtn').disabled = files.length === 0;
+    document.getElementById('currentFileName').textContent = currentFile || '未命名';
+  }
+  function setEditorContent(code, filename) {
+    editor.setValue(code);
+    editor.clearHistory();
+    currentFile = filename;
+    localStorage.setItem(CURRENT_FILE_KEY, filename);
+    document.getElementById('currentFileName').textContent = filename || '未命名';
+    localStorage.setItem('swc_standalone_html_code', code);
+  }
+  function localSave(filename, code) {
+    const full = getFullFilename(filename);
+    const files = getFileList();
+    if (!files.includes(full)) { files.push(full); saveFileList(files); }
+    localStorage.setItem(FILE_PREFIX + full, code);
+    refreshFileSelect();
+    return full;
+  }
+  function localDelete(filename) {
+    localStorage.removeItem(FILE_PREFIX + filename);
+    const files = getFileList().filter(f => f !== filename);
+    saveFileList(files);
+    if (currentFile === filename) { currentFile = ''; localStorage.removeItem(CURRENT_FILE_KEY); }
+    refreshFileSelect();
+  }
+
+  document.getElementById('saveAsBtn').addEventListener('click', () => {
+    const name = prompt('请输入文件名（自动添加 .html）：', currentFile.replace('.html', '') || '');
+    if (!name) return;
+    const full = getFullFilename(name);
+    if (getFileList().includes(full)) { if (!confirm(`文件 ${full} 已存在，是否覆盖？`)) return; }
+    const saved = localSave(name, editor.getValue());
+    currentFile = saved; localStorage.setItem(CURRENT_FILE_KEY, saved);
+    document.getElementById('currentFileName').textContent = saved;
+  });
+  document.getElementById('saveCurrentBtn').addEventListener('click', () => {
+    if (currentFile) {
+      localStorage.setItem(FILE_PREFIX + currentFile, editor.getValue());
+      const files = getFileList();
+      if (!files.includes(currentFile)) { files.push(currentFile); saveFileList(files); refreshFileSelect(); }
+    } else {
+      document.getElementById('saveAsBtn').click();
+    }
+  });
+  document.getElementById('localOpenBtn').addEventListener('click', () => {
+    const filename = document.getElementById('localFileSelect').value;
+    if (!filename) return;
+    const code = localStorage.getItem(FILE_PREFIX + filename);
+    if (code !== null) setEditorContent(code, filename);
+  });
+  document.getElementById('localDeleteBtn').addEventListener('click', () => {
+    const filename = document.getElementById('localFileSelect').value;
+    if (!filename || !confirm(`确定删除 ${filename}？`)) return;
+    localDelete(filename);
+  });
+  document.getElementById('diskOpenBtn').addEventListener('click', () => {
+    document.getElementById('diskFileInput').click();
+  });
+  document.getElementById('diskFileInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setEditorContent(reader.result, file.name);
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 's') { e.preventDefault(); document.getElementById('saveCurrentBtn').click(); }
+  });
+  refreshFileSelect();
+  if (currentFile) {
+    const code = localStorage.getItem(FILE_PREFIX + currentFile);
+    if (code !== null) editor.setValue(code);
+    else currentFile = '';
+  }
+
+  // 自动保存草稿
+  const STORAGE_KEY = 'swc_standalone_html_code';
+  function loadCode() {
+    try { editor.setValue(localStorage.getItem(STORAGE_KEY) || DEFAULT_CODE); } catch { editor.setValue(DEFAULT_CODE); }
+    updatePreview();
+  }
+  function saveCode() {
+    localStorage.setItem(STORAGE_KEY, editor.getValue());
+  }
+  function resetCode() {
+    editor.setValue(DEFAULT_CODE);
+    updatePreview();
+  }
+  editor.on('change', () => {
+    clearTimeout(window._saveTimer);
+    window._saveTimer = setTimeout(saveCode, 800);
+    if (previewContainer.style.display === 'block') updatePreview();
+  });
+  document.getElementById('runBtn').addEventListener('click', () => {
+    saveCode();
+    updatePreview();
+    tabs.forEach(b => b.classList.remove('active'));
+    document.querySelector('[data-tab="preview"]').classList.add('active');
+    editorContainer.style.display = 'none';
+    previewContainer.style.display = 'block';
+    outputContainer.style.display = 'none';
+  });
+  document.getElementById('saveBtn').addEventListener('click', saveCode);
+  document.getElementById('resetBtn').addEventListener('click', resetCode);
+
+  // ========== 云端同步（需后端支持 html 类型） ==========
+  const CODE_TYPE = 'html';
+  const UPLOAD_BTN = document.getElementById('uploadCloudBtn');
+  const DOWNLOAD_BTN = document.getElementById('downloadCloudBtn');
+  function getToken() { return localStorage.getItem('swc_token') || ''; }
+  function tokenIsValid() {
+    const token = getToken();
+    if (!token) return false;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.exp * 1000 > Date.now();
+    } catch { return false; }
+  }
+  function updateCloudButtons() {
+    const loggedIn = tokenIsValid();
+    UPLOAD_BTN.disabled = !loggedIn;
+    DOWNLOAD_BTN.disabled = !loggedIn;
+    UPLOAD_BTN.title = loggedIn ? '上传所有本地文件至云端' : '需要登录才能上传';
+    DOWNLOAD_BTN.title = loggedIn ? '从云端下载并覆盖/创建本地文件' : '需要登录才能下载';
+  }
+  updateCloudButtons();
+
+  UPLOAD_BTN.addEventListener('click', async () => {
+    const token = getToken();
+    if (!token) { appendOutput('❌ 请先登录'); return; }
+    const files = {};
+    getFileList().forEach(f => { const c = localStorage.getItem(FILE_PREFIX + f); if (c) files[f] = c; });
+    if (Object.keys(files).length === 0) { appendOutput('❌ 本地没有可上传的文件'); return; }
+    try {
+      const resp = await fetch('/api/code/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ type: CODE_TYPE, files })
+      });
+      if (resp.status === 401) { appendOutput('❌ 登录已过期'); return; }
+      const data = await resp.json();
+      appendOutput(`✅ 已上传 ${data.count} 个文件至云端`);
+    } catch(e) { appendOutput('❌ 网络错误'); }
+  });
+  DOWNLOAD_BTN.addEventListener('click', async () => {
+    const token = getToken();
+    if (!token) { appendOutput('❌ 请先登录'); return; }
+    try {
+      const resp = await fetch(`/api/code/load?type=${CODE_TYPE}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resp.status === 401) { appendOutput('❌ 登录已过期'); return; }
+      const data = await resp.json();
+      if (!data.files || Object.keys(data.files).length === 0) { appendOutput('📭 云端暂无文件'); return; }
+      if (!confirm(`将从云端下载 ${Object.keys(data.files).length} 个文件，覆盖本地同名文件并创建新文件，继续？`)) return;
+      const files = data.files;
+      const existing = getFileList();
+      for (const fname of Object.keys(files)) {
+        localStorage.setItem(FILE_PREFIX + fname, files[fname]);
+        if (!existing.includes(fname)) existing.push(fname);
+      }
+      saveFileList(existing);
+      refreshFileSelect();
+      appendOutput(`✅ 云端 ${Object.keys(files).length} 个文件已同步`);
+    } catch(e) { appendOutput('❌ 网络错误'); }
+  });
+  window.addEventListener('storage', updateCloudButtons);
+
+  // 初始化
+  loadCode();
+  editorContainer.style.display = 'block';
+  previewContainer.style.display = 'none';
+  outputContainer.style.display = 'none';
+})();
 </script>
 </body>
 </html>
