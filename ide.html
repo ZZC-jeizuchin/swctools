@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
+  <meta charset="UTF-8">
   <script>
     (function() {
       const token = localStorage.getItem('swc_token');
       let needLogin = true;
-
       if (token) {
         try {
           const parts = token.split('.');
@@ -21,7 +21,6 @@
           needLogin = true;
         }
       }
-
       if (needLogin) {
         const notRobot = localStorage.getItem('not_robot');
         if (notRobot !== '1') {
@@ -32,7 +31,6 @@
       }
     })();
   </script>
-  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <title>SwC IDE · HTML 编辑器</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
@@ -63,7 +61,6 @@
     [data-theme="dark"] .preview-container iframe {
       background: #0a0f14;
     }
-    /* 输出区复用虚拟滚动结构，增加自定义样式 */
     #outputViewport {
       position: absolute; top:0; left:0; right:0; bottom:0;
       overflow-y: scroll; padding: 16px; box-sizing: border-box;
@@ -91,7 +88,6 @@
 <div class="main-panel">
   <div class="header"><h1>SwC IDE · HTML 版</h1><a href="index.html" class="back-btn">← 返回主站</a></div>
 
-  <!-- 文件管理工具栏 -->
   <div class="file-area" id="fileArea">
     <select class="file-select" id="localFileSelect"><option value="">-- 本地存储文件 --</option></select>
     <button class="file-btn" id="localOpenBtn" disabled>打开</button>
@@ -153,7 +149,7 @@
     editor.refresh();
   });
 
-  // FPS
+  // ========== FPS ==========
   const fpsDisplay = document.getElementById('fpsDisplay');
   let frameCount = 0, lastFpsUpdate = performance.now();
   function updateFPS() {
@@ -233,7 +229,6 @@
   function appendOutput(text) {
     outputLines.push(text);
     outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
-    // 仅渲染最新部分（简单处理：显示最后 200 行，也可全部渲染但可能有性能问题）
     const visible = outputLines.slice(-200);
     outputCanvas.textContent = visible.join('\n');
     outputCanvas.style.transform = `translateY(${Math.max(0, outputLines.length - 200) * LINE_HEIGHT}px)`;
@@ -287,8 +282,7 @@
     };
   });
 })();
-</script>`;
-    // 将捕获脚本插入到 <head> 之前（如果存在）或整个 HTML 之前
+<\/script>`;
     if (code.includes('<head>')) {
       return code.replace('<head>', '<head>' + captureScript);
     } else {
@@ -390,12 +384,14 @@
     const saved = localSave(name, editor.getValue());
     currentFile = saved; localStorage.setItem(CURRENT_FILE_KEY, saved);
     document.getElementById('currentFileName').textContent = saved;
+    appendOutput(`文件已保存: ${saved}`);
   });
   document.getElementById('saveCurrentBtn').addEventListener('click', () => {
     if (currentFile) {
       localStorage.setItem(FILE_PREFIX + currentFile, editor.getValue());
       const files = getFileList();
       if (!files.includes(currentFile)) { files.push(currentFile); saveFileList(files); refreshFileSelect(); }
+      appendOutput(`文件 ${currentFile} 已保存`);
     } else {
       document.getElementById('saveAsBtn').click();
     }
@@ -404,12 +400,13 @@
     const filename = document.getElementById('localFileSelect').value;
     if (!filename) return;
     const code = localStorage.getItem(FILE_PREFIX + filename);
-    if (code !== null) setEditorContent(code, filename);
+    if (code !== null) { setEditorContent(code, filename); appendOutput(`已打开: ${filename}`); }
   });
   document.getElementById('localDeleteBtn').addEventListener('click', () => {
     const filename = document.getElementById('localFileSelect').value;
     if (!filename || !confirm(`确定删除 ${filename}？`)) return;
     localDelete(filename);
+    appendOutput(`已删除: ${filename}`);
   });
   document.getElementById('diskOpenBtn').addEventListener('click', () => {
     document.getElementById('diskFileInput').click();
@@ -418,7 +415,7 @@
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => setEditorContent(reader.result, file.name);
+    reader.onload = () => { setEditorContent(reader.result, file.name); appendOutput(`已从磁盘加载: ${file.name}`); };
     reader.readAsText(file);
     e.target.value = '';
   });
@@ -462,7 +459,7 @@
   document.getElementById('saveBtn').addEventListener('click', saveCode);
   document.getElementById('resetBtn').addEventListener('click', resetCode);
 
-  // ========== 云端同步（需后端支持 html 类型） ==========
+  // ========== 云端同步 ==========
   const CODE_TYPE = 'html';
   const UPLOAD_BTN = document.getElementById('uploadCloudBtn');
   const DOWNLOAD_BTN = document.getElementById('downloadCloudBtn');
@@ -496,7 +493,7 @@
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ type: CODE_TYPE, files })
       });
-      if (resp.status === 401) { appendOutput('❌ 登录已过期'); return; }
+      if (resp.status === 401) { appendOutput('❌ 登录已过期，请重新登录'); return; }
       const data = await resp.json();
       appendOutput(`✅ 已上传 ${data.count} 个文件至云端`);
     } catch(e) { appendOutput('❌ 网络错误'); }
@@ -508,7 +505,7 @@
       const resp = await fetch(`/api/code/load?type=${CODE_TYPE}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (resp.status === 401) { appendOutput('❌ 登录已过期'); return; }
+      if (resp.status === 401) { appendOutput('❌ 登录已过期，请重新登录'); return; }
       const data = await resp.json();
       if (!data.files || Object.keys(data.files).length === 0) { appendOutput('📭 云端暂无文件'); return; }
       if (!confirm(`将从云端下载 ${Object.keys(data.files).length} 个文件，覆盖本地同名文件并创建新文件，继续？`)) return;
