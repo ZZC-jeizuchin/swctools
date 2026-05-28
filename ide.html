@@ -260,7 +260,7 @@
   if (window.ResizeObserver) { new ResizeObserver(() => resizeEditor()).observe(editorContainer); }
   window.addEventListener('resize', resizeEditor);
 
-  // ========== 预览与控制台监听 ==========
+  // ========== 预览 (Blob URL 方案，解决跨域问题) ==========
   const previewFrame = document.getElementById('previewFrame');
   const previewContainer = document.getElementById('previewContainer');
 
@@ -303,12 +303,15 @@
   }
 
   function updatePreview() {
-    const rawCode = editor.getValue();
-    const codeWithCapture = injectConsoleCapture(rawCode);
-    const doc = previewFrame.contentDocument || previewFrame.contentWindow.document;
-    doc.open();
-    doc.write(codeWithCapture);
-    doc.close();
+    let rawCode = editor.getValue();
+    if (!rawCode || rawCode.trim() === '') {
+      rawCode = DEFAULT_CODE;
+    }
+    rawCode = injectConsoleCapture(rawCode);
+    const blob = new Blob([rawCode], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    previewFrame.onload = () => URL.revokeObjectURL(url);
+    previewFrame.src = url;
   }
 
   // ========== 标签切换 ==========
