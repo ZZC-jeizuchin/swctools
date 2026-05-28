@@ -136,44 +136,78 @@
 (function() {
   "use strict";
 
-  // ========== 专业日志 (无表情) ==========
-  function log(msg, level) {
+  // ========== 正式日志输出 ==========
+  function nowTime() {
+    const d = new Date();
+    return d.toTimeString().split(' ')[0];
+  }
+
+  const outputViewport = document.getElementById('outputViewport');
+  const outputCanvas = document.getElementById('outputCanvas');
+  const outputSpacer = document.getElementById('outputSpacer');
+  const outputContainer = document.getElementById('outputContainer');
+  const LINE_HEIGHT = 21;
+  const outputLines = [];
+  let outputScrolledUp = false;
+
+  function appendOutput(text) {
+    outputLines.push(text);
+    outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
+    const visible = outputLines.slice(-200);
+    outputCanvas.textContent = visible.join('\n');
+    outputCanvas.style.transform = `translateY(${Math.max(0, outputLines.length - 200) * LINE_HEIGHT}px)`;
+    if (!outputScrolledUp) {
+      outputViewport.scrollTop = outputViewport.scrollHeight;
+    }
+  }
+
+  outputViewport.addEventListener('scroll', () => {
+    const atBottom = outputViewport.scrollTop + outputViewport.clientHeight >= outputViewport.scrollHeight - 10;
+    outputScrolledUp = !atBottom;
+  });
+
+  function log(level, message) {
+    const time = nowTime();
     const prefix = {
-      info: '[INFO]',
-      warn: '[WARN]',
-      error: '[ERROR]',
-      success: '[OK]',
-      network: '[NET]'
-    }[level] || '';
-    appendOutput(prefix + ' ' + msg);
+      info:    ' INFO',
+      warn:    ' WARN',
+      error:   'ERROR',
+      success: '   OK',
+      net:     '  NET'
+    }[level] || '     ';
+    const formatted = `[${time}] [${prefix}] ${message}`;
+    appendOutput(formatted);
   }
 
   // ========== 主题 ==========
   const themeToggle = document.getElementById('themeToggle');
-  const currentTheme = localStorage.getItem('swc_theme') || 'light';
-  document.documentElement.setAttribute('data-theme', currentTheme);
-  themeToggle.textContent = currentTheme === 'light' ? '深色' : '亮色';
-  themeToggle.addEventListener('click', () => {
-    const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('swc_theme', next);
-    themeToggle.textContent = next === 'light' ? '深色' : '亮色';
-    editor.refresh();
-  });
+  if (themeToggle) {
+    const currentTheme = localStorage.getItem('swc_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    themeToggle.textContent = currentTheme === 'light' ? '深色' : '亮色';
+    themeToggle.addEventListener('click', () => {
+      const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('swc_theme', next);
+      themeToggle.textContent = next === 'light' ? '深色' : '亮色';
+      editor.refresh();
+    });
+  }
 
   // ========== FPS ==========
   const fpsDisplay = document.getElementById('fpsDisplay');
-  let frameCount = 0, lastFpsUpdate = performance.now();
-  function updateFPS() {
-    frameCount++;
-    const now = performance.now();
-    if (now - lastFpsUpdate >= 1000) {
-      fpsDisplay.textContent = `FPS: ${Math.round(frameCount * 1000 / (now - lastFpsUpdate))}`;
-      frameCount = 0; lastFpsUpdate = now;
-    }
-    requestAnimationFrame(updateFPS);
+  if (fpsDisplay) {
+    let frameCount = 0, lastFpsUpdate = performance.now();
+    (function updateFPS() {
+      frameCount++;
+      const now = performance.now();
+      if (now - lastFpsUpdate >= 1000) {
+        fpsDisplay.textContent = `FPS: ${Math.round(frameCount * 1000 / (now - lastFpsUpdate))}`;
+        frameCount = 0; lastFpsUpdate = now;
+      }
+      requestAnimationFrame(updateFPS);
+    })();
   }
-  requestAnimationFrame(updateFPS);
 
   // ========== 编辑器 ==========
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -205,15 +239,12 @@
     }
   });
 
-  // 智能补全 <
   editor.on('beforeChange', (cm, change) => {
-    if (change.origin === '+input' && change.text.length === 1) {
-      if (change.text[0] === '<') {
-        change.cancel();
-        const cursor = cm.getCursor();
-        cm.replaceRange('<>', cursor, cursor);
-        cm.setCursor({ line: cursor.line, ch: cursor.ch + 1 });
-      }
+    if (change.origin === '+input' && change.text.length === 1 && change.text[0] === '<') {
+      change.cancel();
+      const cursor = cm.getCursor();
+      cm.replaceRange('<>', cursor, cursor);
+      cm.setCursor({ line: cursor.line, ch: cursor.ch + 1 });
     }
   });
 
@@ -229,32 +260,10 @@
   if (window.ResizeObserver) { new ResizeObserver(() => resizeEditor()).observe(editorContainer); }
   window.addEventListener('resize', resizeEditor);
 
-  // ========== 输出面板 (控制台监听) ==========
-  const outputViewport = document.getElementById('outputViewport');
-  const outputCanvas = document.getElementById('outputCanvas');
-  const outputSpacer = document.getElementById('outputSpacer');
-  const outputContainer = document.getElementById('outputContainer');
-  const LINE_HEIGHT = 21;
-  const outputLines = [];
-  let outputScrolledUp = false;
+  // ========== 预览与控制台监听 ==========
+  const previewFrame = document.getElementById('previewFrame');
+  const previewContainer = document.getElementById('previewContainer');
 
-  function appendOutput(text) {
-    outputLines.push(text);
-    outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
-    const visible = outputLines.slice(-200);
-    outputCanvas.textContent = visible.join('\n');
-    outputCanvas.style.transform = `translateY(${Math.max(0, outputLines.length - 200) * LINE_HEIGHT}px)`;
-    if (!outputScrolledUp) {
-      outputViewport.scrollTop = outputViewport.scrollHeight;
-    }
-  }
-
-  outputViewport.addEventListener('scroll', () => {
-    const atBottom = outputViewport.scrollTop + outputViewport.clientHeight >= outputViewport.scrollHeight - 10;
-    outputScrolledUp = !atBottom;
-  });
-
-  // 接收预览 iframe 的控制台消息
   window.addEventListener('message', (e) => {
     if (e.data && e.data.type === 'console') {
       const method = e.data.method || 'log';
@@ -262,15 +271,14 @@
       const formatted = args.map(a => {
         if (a === undefined) return 'undefined';
         if (a === null) return 'null';
-        return a.toString();
+        try { return JSON.stringify(a); } catch { return String(a); }
       }).join(' ');
-      appendOutput(`[iframe ${method}] ${formatted}`);
+      log('info', `[iframe ${method}] ${formatted}`);
     }
   });
 
   function injectConsoleCapture(code) {
-    const captureScript = `
-<script>
+    const captureScript = `<script>
 (function(){
   const _console = {};
   ['log','warn','error','info'].forEach(function(m){
@@ -282,10 +290,7 @@
           type: 'console',
           method: m,
           args: JSON.stringify(args.map(function(a){
-            if (typeof a === 'object') {
-              try { return JSON.stringify(a); } catch(e) { return String(a); }
-            }
-            return String(a);
+            try { return JSON.stringify(a); } catch(e) { return String(a); }
           }))
         }, '*');
       } catch(e) {}
@@ -294,16 +299,9 @@
   });
 })();
 <\/script>`;
-    if (code.includes('<head>')) {
-      return code.replace('<head>', '<head>' + captureScript);
-    } else {
-      return captureScript + code;
-    }
+    return code.replace(/<head>/i, '<head>' + captureScript);
   }
 
-  // ========== 预览 ==========
-  const previewFrame = document.getElementById('previewFrame');
-  const previewContainer = document.getElementById('previewContainer');
   function updatePreview() {
     const rawCode = editor.getValue();
     const codeWithCapture = injectConsoleCapture(rawCode);
@@ -315,10 +313,10 @@
 
   // ========== 标签切换 ==========
   const tabs = document.querySelectorAll('.tab');
-  tabs.forEach(t => t.addEventListener('click', () => {
-    const target = t.dataset.tab;
+  function switchTab(target) {
     tabs.forEach(b => b.classList.remove('active'));
-    t.classList.add('active');
+    const activeTab = document.querySelector(`.tab[data-tab="${target}"]`);
+    if (activeTab) activeTab.classList.add('active');
     editorContainer.style.display = 'none';
     previewContainer.style.display = 'none';
     outputContainer.style.display = 'none';
@@ -331,9 +329,10 @@
     } else if (target === 'output') {
       outputContainer.style.display = 'block';
     }
-  }));
+  }
+  tabs.forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
 
-  // ========== 文件管理（本地） ==========
+  // ========== 文件管理 ==========
   const FILE_PREFIX = 'swc_file_html_';
   const FILE_LIST_KEY = 'swc_filelist_html';
   const CURRENT_FILE_KEY = 'swc_current_html_file';
@@ -354,21 +353,26 @@
   }
   function refreshFileSelect() {
     const select = document.getElementById('localFileSelect');
+    if (!select) return;
     const files = getFileList();
     select.innerHTML = '<option value="">-- 本地存储文件 --</option>';
     files.forEach(f => {
       const opt = document.createElement('option'); opt.value = f; opt.textContent = f; select.appendChild(opt);
     });
-    document.getElementById('localOpenBtn').disabled = files.length === 0;
-    document.getElementById('localDeleteBtn').disabled = files.length === 0;
-    document.getElementById('currentFileName').textContent = currentFile || '未命名';
+    const openBtn = document.getElementById('localOpenBtn');
+    const delBtn = document.getElementById('localDeleteBtn');
+    if (openBtn) openBtn.disabled = files.length === 0;
+    if (delBtn) delBtn.disabled = files.length === 0;
+    const cf = document.getElementById('currentFileName');
+    if (cf) cf.textContent = currentFile || '未命名';
   }
   function setEditorContent(code, filename) {
     editor.setValue(code);
     editor.clearHistory();
     currentFile = filename;
     localStorage.setItem(CURRENT_FILE_KEY, filename);
-    document.getElementById('currentFileName').textContent = filename || '未命名';
+    const cf = document.getElementById('currentFileName');
+    if (cf) cf.textContent = filename || '未命名';
     localStorage.setItem('swc_standalone_html_code', code);
   }
   function localSave(filename, code) {
@@ -395,30 +399,34 @@
     const saved = localSave(name, editor.getValue());
     currentFile = saved; localStorage.setItem(CURRENT_FILE_KEY, saved);
     document.getElementById('currentFileName').textContent = saved;
-    log('文件已保存: ' + saved, 'success');
+    log('success', '文件已保存: ' + saved);
   });
+
   document.getElementById('saveCurrentBtn').addEventListener('click', () => {
     if (currentFile) {
       localStorage.setItem(FILE_PREFIX + currentFile, editor.getValue());
       const files = getFileList();
       if (!files.includes(currentFile)) { files.push(currentFile); saveFileList(files); refreshFileSelect(); }
-      log('文件已保存: ' + currentFile, 'success');
+      log('success', '文件已保存: ' + currentFile);
     } else {
       document.getElementById('saveAsBtn').click();
     }
   });
+
   document.getElementById('localOpenBtn').addEventListener('click', () => {
     const filename = document.getElementById('localFileSelect').value;
     if (!filename) return;
     const code = localStorage.getItem(FILE_PREFIX + filename);
-    if (code !== null) { setEditorContent(code, filename); log('已打开: ' + filename, 'info'); }
+    if (code !== null) { setEditorContent(code, filename); log('info', '已打开: ' + filename); }
   });
+
   document.getElementById('localDeleteBtn').addEventListener('click', () => {
     const filename = document.getElementById('localFileSelect').value;
     if (!filename || !confirm(`确定删除 ${filename}？`)) return;
     localDelete(filename);
-    log('已删除: ' + filename, 'info');
+    log('info', '已删除: ' + filename);
   });
+
   document.getElementById('diskOpenBtn').addEventListener('click', () => {
     document.getElementById('diskFileInput').click();
   });
@@ -426,53 +434,40 @@
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => { setEditorContent(reader.result, file.name); log('已从磁盘加载: ' + file.name, 'info'); };
+    reader.onload = () => { setEditorContent(reader.result, file.name); log('info', '已从磁盘加载: ' + file.name); };
     reader.readAsText(file);
     e.target.value = '';
   });
+
   document.addEventListener('keydown', e => {
     if (e.ctrlKey && e.key === 's') { e.preventDefault(); document.getElementById('saveCurrentBtn').click(); }
   });
-  refreshFileSelect();
-  if (currentFile) {
-    const code = localStorage.getItem(FILE_PREFIX + currentFile);
-    if (code !== null) editor.setValue(code);
-    else currentFile = '';
-  }
 
-  // 自动保存草稿
-  const STORAGE_KEY = 'swc_standalone_html_code';
-  function loadCode() {
-    try { editor.setValue(localStorage.getItem(STORAGE_KEY) || DEFAULT_CODE); } catch { editor.setValue(DEFAULT_CODE); }
-    updatePreview();
-  }
-  function saveCode() {
-    localStorage.setItem(STORAGE_KEY, editor.getValue());
-  }
-  function resetCode() {
+  // ========== 运行按钮 ==========
+  document.getElementById('runBtn').addEventListener('click', () => {
+    log('info', '正在运行并预览...');
+    try {
+      localStorage.setItem('swc_standalone_html_code', editor.getValue());
+      updatePreview();
+      switchTab('preview');
+      log('success', '预览已更新');
+    } catch (err) {
+      log('error', '运行失败: ' + err.message);
+    }
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    localStorage.setItem('swc_standalone_html_code', editor.getValue());
+    log('success', '代码已保存');
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
     editor.setValue(DEFAULT_CODE);
     updatePreview();
-  }
-  editor.on('change', () => {
-    clearTimeout(window._saveTimer);
-    window._saveTimer = setTimeout(saveCode, 800);
-    if (previewContainer.style.display === 'block') updatePreview();
+    log('info', '已重置为默认代码');
   });
 
-  // 运行按钮
-  document.getElementById('runBtn').addEventListener('click', () => {
-    saveCode();
-    updatePreview();
-    tabs.forEach(b => b.classList.remove('active'));
-    document.querySelector('[data-tab="preview"]').classList.add('active');
-    editorContainer.style.display = 'none';
-    previewContainer.style.display = 'block';
-    outputContainer.style.display = 'none';
-  });
-  document.getElementById('saveBtn').addEventListener('click', saveCode);
-  document.getElementById('resetBtn').addEventListener('click', resetCode);
-
-  // ========== 云端同步 (严格错误处理) ==========
+  // ========== 云端同步 ==========
   const CODE_TYPE = 'html';
   const UPLOAD_BTN = document.getElementById('uploadCloudBtn');
   const DOWNLOAD_BTN = document.getElementById('downloadCloudBtn');
@@ -486,6 +481,7 @@
     } catch { return false; }
   }
   function updateCloudButtons() {
+    if (!UPLOAD_BTN || !DOWNLOAD_BTN) return;
     const loggedIn = tokenIsValid();
     UPLOAD_BTN.disabled = !loggedIn;
     DOWNLOAD_BTN.disabled = !loggedIn;
@@ -496,10 +492,10 @@
 
   UPLOAD_BTN.addEventListener('click', async () => {
     const token = getToken();
-    if (!token) { log('请先登录', 'error'); return; }
+    if (!token) { log('error', '请先登录'); return; }
     const files = {};
     getFileList().forEach(f => { const c = localStorage.getItem(FILE_PREFIX + f); if (c) files[f] = c; });
-    if (Object.keys(files).length === 0) { log('本地没有可上传的文件', 'warn'); return; }
+    if (Object.keys(files).length === 0) { log('warn', '本地没有可上传的文件'); return; }
     try {
       const resp = await fetch('/api/code/save', {
         method: 'POST',
@@ -507,40 +503,40 @@
         body: JSON.stringify({ type: CODE_TYPE, files })
       });
       if (resp.status === 401) {
-        log('登录已过期，请重新登录', 'error');
+        log('error', '登录已过期，请重新登录');
         return;
       }
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        log(`上传失败: ${err.error || resp.statusText}`, 'error');
+        log('error', `上传失败: ${err.error || resp.statusText}`);
         return;
       }
       const data = await resp.json();
-      log(`已上传 ${data.count} 个文件至云端`, 'success');
+      log('success', `已上传 ${data.count} 个文件至云端`);
     } catch(e) {
-      log('网络错误，上传失败', 'error');
+      log('error', '网络错误，上传失败');
     }
   });
 
   DOWNLOAD_BTN.addEventListener('click', async () => {
     const token = getToken();
-    if (!token) { log('请先登录', 'error'); return; }
+    if (!token) { log('error', '请先登录'); return; }
     try {
       const resp = await fetch(`/api/code/load?type=${CODE_TYPE}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (resp.status === 401) {
-        log('登录已过期，请重新登录', 'error');
+        log('error', '登录已过期，请重新登录');
         return;
       }
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        log(`下载失败: ${err.error || resp.statusText}`, 'error');
+        log('error', `下载失败: ${err.error || resp.statusText}`);
         return;
       }
       const data = await resp.json();
       if (!data.files || Object.keys(data.files).length === 0) {
-        log('云端暂无文件', 'info');
+        log('info', '云端暂无文件');
         return;
       }
       if (!confirm(`将从云端下载 ${Object.keys(data.files).length} 个文件，覆盖本地同名文件并创建新文件，继续？`)) return;
@@ -552,18 +548,22 @@
       }
       saveFileList(existing);
       refreshFileSelect();
-      log(`已同步 ${Object.keys(files).length} 个文件`, 'success');
+      log('success', `已同步 ${Object.keys(files).length} 个文件`);
     } catch(e) {
-      log('网络错误，下载失败', 'error');
+      log('error', '网络错误，下载失败');
     }
   });
   window.addEventListener('storage', updateCloudButtons);
 
-  // 初始化
+  // ========== 初始化 ==========
+  function loadCode() {
+    const saved = localStorage.getItem('swc_standalone_html_code') || DEFAULT_CODE;
+    editor.setValue(saved);
+    updatePreview();
+  }
   loadCode();
-  editorContainer.style.display = 'block';
-  previewContainer.style.display = 'none';
-  outputContainer.style.display = 'none';
+  refreshFileSelect();
+  switchTab('editor');
 })();
 </script>
 </body>
