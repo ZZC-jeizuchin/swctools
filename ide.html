@@ -49,7 +49,7 @@
       overflow: hidden;
       background: var(--preview-bg);
       flex: 1;
-      min-height: 300px;
+      min-height: 0;
       display: none;
     }
     .preview-container iframe {
@@ -60,6 +60,15 @@
     }
     [data-theme="dark"] .preview-container iframe {
       background: #0a0f14;
+    }
+    /* 确保编辑器、预览、输出都能填满可用高度 */
+    .editor-container {
+      flex: 1;
+      min-height: 0;
+    }
+    .output-container {
+      flex: 1;
+      min-height: 0;
     }
     #outputViewport {
       position: absolute; top:0; left:0; right:0; bottom:0;
@@ -153,9 +162,11 @@
   function appendOutput(text) {
     outputLines.push(text);
     outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
+    // 仅渲染最后200行，避免性能问题
     const visible = outputLines.slice(-200);
     outputCanvas.textContent = visible.join('\n');
     outputCanvas.style.transform = `translateY(${Math.max(0, outputLines.length - 200) * LINE_HEIGHT}px)`;
+    // 如果用户没有手动滚动，自动滚动到底部
     if (!outputScrolledUp) {
       outputViewport.scrollTop = outputViewport.scrollHeight;
     }
@@ -177,6 +188,13 @@
     }[level] || '     ';
     const formatted = `[${time}] [${prefix}] ${message}`;
     appendOutput(formatted);
+  }
+
+  // 方便在切换到输出标签时强制刷新滚动
+  function refreshOutputScroll() {
+    if (!outputScrolledUp) {
+      outputViewport.scrollTop = outputViewport.scrollHeight;
+    }
   }
 
   // ========== 主题 ==========
@@ -331,6 +349,8 @@
       updatePreview();
     } else if (target === 'output') {
       outputContainer.style.display = 'block';
+      // 切换到输出时刷新滚动
+      refreshOutputScroll();
     }
   }
   tabs.forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
