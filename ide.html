@@ -43,14 +43,23 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
   <link rel="stylesheet" href="swc-ide.css">
   <style>
-    .preview-container {
-      border: 1px solid var(--panel-border);
-      border-radius: 16px;
-      overflow: hidden;
-      background: var(--preview-bg);
-      flex: 1;
+    /* 主面板不允许滚动，内部子面板自行滚动 */
+    .main-panel {
+      overflow: hidden !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+    /* 所有可见面板均等分配空间 */
+    .editor-container,
+    .preview-container,
+    .output-container {
+      flex: 1 1 0;
       min-height: 0;
       display: none;
+      position: relative; /* 为内部绝对定位提供参考 */
+    }
+    .editor-container {
+      display: block; /* 默认显示编辑器 */
     }
     .preview-container iframe {
       width: 100%;
@@ -61,19 +70,11 @@
     [data-theme="dark"] .preview-container iframe {
       background: #0a0f14;
     }
-    /* 确保编辑器、预览、输出都能填满可用高度 */
-    .editor-container {
-      flex: 1;
-      min-height: 0;
-    }
-    .output-container {
-      flex: 1;
-      min-height: 0;
-    }
+
+    /* 输出面板内部绝对定位 */
     #outputViewport {
       position: absolute; top:0; left:0; right:0; bottom:0;
-      overflow-y: scroll; padding: 16px; box-sizing: border-box;
-      border-radius: 0;
+      overflow-y: auto; padding: 16px; box-sizing: border-box;
     }
     #outputViewport::-webkit-scrollbar { width: 30px; height: 30px; }
     #outputViewport::-webkit-scrollbar-track { background: rgba(128,128,128,0.08); border-radius: 6px; }
@@ -85,6 +86,23 @@
     #outputCanvas {
       white-space: pre-wrap; word-break: break-word;
       color: var(--text-color); background: transparent;
+    }
+
+    /* 拖拽分隔条 */
+    .splitter {
+      flex: 0 0 8px;
+      background: var(--panel-border);
+      cursor: row-resize;
+      position: relative;
+      z-index: 10;
+    }
+    .splitter:hover {
+      background: var(--btn-border);
+    }
+
+    /* 编辑器需要自适应高度 */
+    .CodeMirror {
+      height: 100% !important;
     }
   </style>
 </head>
@@ -122,6 +140,9 @@
     <textarea id="htmlCode" style="display:none;"></textarea>
   </div>
 
+  <!-- 分隔条 (仅当编辑器与预览/输出共存时显示) -->
+  <div class="splitter" id="splitter" title="拖动调整高度"></div>
+
   <div class="preview-container" id="previewContainer">
     <iframe id="previewFrame" sandbox="allow-scripts" title="预览"></iframe>
   </div>
@@ -155,18 +176,15 @@
   const outputCanvas = document.getElementById('outputCanvas');
   const outputSpacer = document.getElementById('outputSpacer');
   const outputContainer = document.getElementById('outputContainer');
-  const LINE_HEIGHT = 21;
   const outputLines = [];
   let outputScrolledUp = false;
 
   function appendOutput(text) {
     outputLines.push(text);
-    outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
-    // 仅渲染最后200行，避免性能问题
+    outputSpacer.style.height = (outputLines.length * 21) + 'px';
     const visible = outputLines.slice(-200);
     outputCanvas.textContent = visible.join('\n');
-    outputCanvas.style.transform = `translateY(${Math.max(0, outputLines.length - 200) * LINE_HEIGHT}px)`;
-    // 如果用户没有手动滚动，自动滚动到底部
+    outputCanvas.style.transform = `translateY(${Math.max(0, outputLines.length - 200) * 21}px)`;
     if (!outputScrolledUp) {
       outputViewport.scrollTop = outputViewport.scrollHeight;
     }
@@ -186,15 +204,7 @@
       success: '   OK',
       net:     '  NET'
     }[level] || '     ';
-    const formatted = `[${time}] [${prefix}] ${message}`;
-    appendOutput(formatted);
-  }
-
-  // 方便在切换到输出标签时强制刷新滚动
-  function refreshOutputScroll() {
-    if (!outputScrolledUp) {
-      outputViewport.scrollTop = outputViewport.scrollHeight;
-    }
+    appendOutput(`[${time}] [${prefix}] ${message}`);
   }
 
   // ========== 主题 ==========
@@ -275,10 +285,9 @@
     }
   }
   setTimeout(resizeEditor, 50);
-  if (window.ResizeObserver) { new ResizeObserver(() => resizeEditor()).observe(editorContainer); }
   window.addEventListener('resize', resizeEditor);
 
-  // ========== 预览 (Blob URL 方案，解决跨域问题) ==========
+  // ========== 预览 (Blob URL) ==========
   const previewFrame = document.getElementById('previewFrame');
   const previewContainer = document.getElementById('previewContainer');
 
@@ -322,9 +331,7 @@
 
   function updatePreview() {
     let rawCode = editor.getValue();
-    if (!rawCode || rawCode.trim() === '') {
-      rawCode = DEFAULT_CODE;
-    }
+    if (!rawCode || rawCode.trim() === '') rawCode = DEFAULT_CODE;
     rawCode = injectConsoleCapture(rawCode);
     const blob = new Blob([rawCode], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
@@ -332,28 +339,113 @@
     previewFrame.src = url;
   }
 
-  // ========== 标签切换 ==========
+  // ========== 标签切换与布局控制 ==========
   const tabs = document.querySelectorAll('.tab');
+  const splitter = document.getElementById('splitter');
+  let splitPercent = 50; // 编辑器占高度百分比
+
+  function applySplit() {
+    const mainPanel = document.querySelector('.main-panel');
+    const availableHeight = mainPanel.clientHeight - (splitter.offsetHeight || 8);
+    const editorHeight = Math.floor(availableHeight * splitPercent / 100);
+    editorContainer.style.flex = '0 0 ' + editorHeight + 'px';
+    const rest = availableHeight - editorHeight;
+    if (previewContainer.style.display !== 'none') {
+      previewContainer.style.flex = '1 1 0';
+      outputContainer.style.flex = '0 0 0';
+    } else if (outputContainer.style.display !== 'none') {
+      outputContainer.style.flex = '1 1 0';
+      previewContainer.style.flex = '0 0 0';
+    } else {
+      // 两个都隐藏？仅编辑器显示时给编辑器全部高度
+      editorContainer.style.flex = '1 1 0';
+      previewContainer.style.flex = '0 0 0';
+      outputContainer.style.flex = '0 0 0';
+      return;
+    }
+    resizeEditor();
+  }
+
   function switchTab(target) {
     tabs.forEach(b => b.classList.remove('active'));
     const activeTab = document.querySelector(`.tab[data-tab="${target}"]`);
     if (activeTab) activeTab.classList.add('active');
+
     editorContainer.style.display = 'none';
     previewContainer.style.display = 'none';
     outputContainer.style.display = 'none';
+
     if (target === 'editor') {
       editorContainer.style.display = 'block';
-      resizeEditor();
+      // 隐藏预览和输出，但依然显示编辑器并占满
     } else if (target === 'preview') {
+      editorContainer.style.display = 'block';
       previewContainer.style.display = 'block';
       updatePreview();
     } else if (target === 'output') {
+      editorContainer.style.display = 'block';
       outputContainer.style.display = 'block';
-      // 切换到输出时刷新滚动
-      refreshOutputScroll();
+      if (!outputScrolledUp) outputViewport.scrollTop = outputViewport.scrollHeight;
     }
+    applySplit();
   }
+
   tabs.forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
+
+  // 拖拽分隔条
+  (function initSplitter() {
+    let dragging = false;
+    let startY = 0;
+    let startHeight = 0;
+
+    function onMouseDown(e) {
+      e.preventDefault();
+      dragging = true;
+      startY = e.clientY;
+      startHeight = editorContainer.clientHeight;
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    function onMouseMove(e) {
+      if (!dragging) return;
+      const delta = e.clientY - startY;
+      const newHeight = startHeight + delta;
+      const mainPanel = document.querySelector('.main-panel');
+      const maxHeight = mainPanel.clientHeight - splitter.offsetHeight;
+      const clamped = Math.max(80, Math.min(newHeight, maxHeight - 80));
+      splitPercent = Math.round((clamped / (mainPanel.clientHeight - splitter.offsetHeight)) * 100);
+      applySplit();
+    }
+
+    function onMouseUp() {
+      dragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+
+    splitter.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    // 触摸支持
+    splitter.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      dragging = true;
+      startY = e.touches[0].clientY;
+      startHeight = editorContainer.clientHeight;
+    });
+    document.addEventListener('touchmove', (e) => {
+      if (!dragging) return;
+      const delta = e.touches[0].clientY - startY;
+      const newHeight = startHeight + delta;
+      const mainPanel = document.querySelector('.main-panel');
+      const maxHeight = mainPanel.clientHeight - splitter.offsetHeight;
+      const clamped = Math.max(80, Math.min(newHeight, maxHeight - 80));
+      splitPercent = Math.round((clamped / (mainPanel.clientHeight - splitter.offsetHeight)) * 100);
+      applySplit();
+    });
+    document.addEventListener('touchend', () => { dragging = false; });
+  })();
 
   // ========== 文件管理 ==========
   const FILE_PREFIX = 'swc_file_html_';
@@ -424,7 +516,6 @@
     document.getElementById('currentFileName').textContent = saved;
     log('success', '文件已保存: ' + saved);
   });
-
   document.getElementById('saveCurrentBtn').addEventListener('click', () => {
     if (currentFile) {
       localStorage.setItem(FILE_PREFIX + currentFile, editor.getValue());
@@ -435,24 +526,19 @@
       document.getElementById('saveAsBtn').click();
     }
   });
-
   document.getElementById('localOpenBtn').addEventListener('click', () => {
     const filename = document.getElementById('localFileSelect').value;
     if (!filename) return;
     const code = localStorage.getItem(FILE_PREFIX + filename);
     if (code !== null) { setEditorContent(code, filename); log('info', '已打开: ' + filename); }
   });
-
   document.getElementById('localDeleteBtn').addEventListener('click', () => {
     const filename = document.getElementById('localFileSelect').value;
     if (!filename || !confirm(`确定删除 ${filename}？`)) return;
     localDelete(filename);
     log('info', '已删除: ' + filename);
   });
-
-  document.getElementById('diskOpenBtn').addEventListener('click', () => {
-    document.getElementById('diskFileInput').click();
-  });
+  document.getElementById('diskOpenBtn').addEventListener('click', () => { document.getElementById('diskFileInput').click(); });
   document.getElementById('diskFileInput').addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
@@ -461,12 +547,11 @@
     reader.readAsText(file);
     e.target.value = '';
   });
-
   document.addEventListener('keydown', e => {
     if (e.ctrlKey && e.key === 's') { e.preventDefault(); document.getElementById('saveCurrentBtn').click(); }
   });
 
-  // ========== 运行按钮 ==========
+  // ========== 运行/保存/重置按钮 ==========
   document.getElementById('runBtn').addEventListener('click', () => {
     log('info', '正在运行并预览...');
     try {
@@ -478,12 +563,10 @@
       log('error', '运行失败: ' + err.message);
     }
   });
-
   document.getElementById('saveBtn').addEventListener('click', () => {
     localStorage.setItem('swc_standalone_html_code', editor.getValue());
     log('success', '代码已保存');
   });
-
   document.getElementById('resetBtn').addEventListener('click', () => {
     editor.setValue(DEFAULT_CODE);
     updatePreview();
@@ -525,10 +608,7 @@
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ type: CODE_TYPE, files })
       });
-      if (resp.status === 401) {
-        log('error', '登录已过期，请重新登录');
-        return;
-      }
+      if (resp.status === 401) { log('error', '登录已过期，请重新登录'); return; }
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
         log('error', `上传失败: ${err.error || resp.statusText}`);
@@ -536,32 +616,22 @@
       }
       const data = await resp.json();
       log('success', `已上传 ${data.count} 个文件至云端`);
-    } catch(e) {
-      log('error', '网络错误，上传失败');
-    }
+    } catch(e) { log('error', '网络错误，上传失败'); }
   });
 
   DOWNLOAD_BTN.addEventListener('click', async () => {
     const token = getToken();
     if (!token) { log('error', '请先登录'); return; }
     try {
-      const resp = await fetch(`/api/code/load?type=${CODE_TYPE}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (resp.status === 401) {
-        log('error', '登录已过期，请重新登录');
-        return;
-      }
+      const resp = await fetch(`/api/code/load?type=${CODE_TYPE}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (resp.status === 401) { log('error', '登录已过期，请重新登录'); return; }
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
         log('error', `下载失败: ${err.error || resp.statusText}`);
         return;
       }
       const data = await resp.json();
-      if (!data.files || Object.keys(data.files).length === 0) {
-        log('info', '云端暂无文件');
-        return;
-      }
+      if (!data.files || Object.keys(data.files).length === 0) { log('info', '云端暂无文件'); return; }
       if (!confirm(`将从云端下载 ${Object.keys(data.files).length} 个文件，覆盖本地同名文件并创建新文件，继续？`)) return;
       const files = data.files;
       const existing = getFileList();
@@ -572,9 +642,7 @@
       saveFileList(existing);
       refreshFileSelect();
       log('success', `已同步 ${Object.keys(files).length} 个文件`);
-    } catch(e) {
-      log('error', '网络错误，下载失败');
-    }
+    } catch(e) { log('error', '网络错误，下载失败'); }
   });
   window.addEventListener('storage', updateCloudButtons);
 
