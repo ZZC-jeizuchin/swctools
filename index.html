@@ -1,42 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <script>
-  (function() {
-    const token = localStorage.getItem('swc_token');
-    let needLogin = true;
-
-    if (token) {
-      try {
-        const parts = token.split('.');
-        if (parts.length === 3) {
-          // 使用安全 Base64URL 解码，支持中文用户名
-          const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))));
-          if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-            needLogin = true;   // 过期了需要重新登录
-          } else {
-            needLogin = false;  // 有效 token，已登录
-          }
-        }
-      } catch (e) {
-        needLogin = true;
-      }
-    }
-
-    // 未登录时，进行机器人检测
-    if (needLogin) {
-      const notRobot = localStorage.getItem('not_robot');
-      if (notRobot !== '1') {
-        // 没有标记或标记为0，立即跳转到反爬虫页面
-        window.location.href = 'antirobot.html';
-      } else {
-        // 标记为1，将其重置为0，下次再访问时需重新验证
-        localStorage.setItem('not_robot', '1');
-      }
-    }
-    // 已登录用户什么都不需要做，直接放行
-  })();
-  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
