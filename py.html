@@ -1,47 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <script>
-  (function() {
-    const token = localStorage.getItem('swc_token');
-    let needLogin = true;
-
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-          needLogin = true;
-        } else {
-          needLogin = false;
-        }
-      } catch (e) {
-        needLogin = true;
-      }
-    }
-
-    // 未登录时，进行机器人检测
-    if (needLogin) {
-      const notRobot = localStorage.getItem('not_robot');
-      if (notRobot !== '1') {
-        // 没有标记或标记为0，立即跳转到反爬虫页面
-        window.location.href = 'antirobot.html';
-        return; // 终止后续执行
-      } else {
-        // 标记为1，将其重置为0，然后弹出登录框
-        localStorage.setItem('not_robot', '0');
-        const loginBtn = document.getElementById('loginBtn');
-        if (loginBtn) loginBtn.click();
-      }
-    }
-    // 已登录用户什么都不需要做
-  })();
-  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <title>SwC IDE · Python 运行环境</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
@@ -59,6 +21,7 @@
 <div class="main-panel">
   <div class="header"><h1>SwC IDE · Python 版</h1><a href="index.html" class="back-btn">← 返回主站</a></div>
 
+  <!-- 文件管理 + 云端同步工具栏（无表情符号） -->
   <div class="file-area" id="fileArea">
     <select class="file-select" id="localFileSelect"><option value="">-- 本地存储文件 --</option></select>
     <button class="file-btn" id="localOpenBtn" disabled>打开</button>
@@ -95,8 +58,8 @@
 
   <div class="action-bar">
     <button class="nav-btn" id="runBtn" disabled>运行代码</button>
+    <button class="nav-btn secondary" id="copyOutputBtn" title="仅复制程序输出，不含系统信息">复制输出</button>
     <button class="nav-btn secondary" id="saveBtn">保存当前代码</button>
-    <!-- 重置为默认按钮已安全移除 -->
     <button class="nav-btn danger" id="stopBtn" style="display:none;">终止运行</button>
     <span class="status" id="statusMsg">准备中…</span>
   </div>
@@ -106,7 +69,7 @@
 (function(){
   "use strict";
 
-  // 日志
+  // ======================== 日志系统（仅用于开发者调试，不会干扰输出） ========================
   const logBuffer = []; let logReady = false;
   function flushLogs() { if (logReady && logBuffer.length) { logBuffer.forEach(m => appendOutput(m)); logBuffer.length = 0; } }
   function log(msg, isError) {
@@ -118,7 +81,7 @@
 
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-  // 主题
+  // ======================== 主题 ========================
   const themeToggle = document.getElementById('themeToggle');
   const currentTheme = localStorage.getItem('swc_theme') || 'light';
   document.documentElement.setAttribute('data-theme', currentTheme);
@@ -138,14 +101,14 @@
     frameCount++;
     const now = performance.now();
     if (now - lastFpsUpdate >= 1000) {
-      fpsDisplay.textContent = `FPS: ${Math.round((frameCount * 1000) / (now - lastFpsUpdate))}`;
+      fpsDisplay.textContent = `FPS: ${Math.round(frameCount * 1000 / (now - lastFpsUpdate))}`;
       frameCount = 0; lastFpsUpdate = now;
     }
     requestAnimationFrame(updateFPS);
   }
   requestAnimationFrame(updateFPS);
 
-  // 编辑器
+  // ======================== 编辑器 ========================
   const DEFAULT_CODE = `# 欢迎使用 SwC Python 环境
 from time import sleep
 
@@ -220,18 +183,18 @@ print("Done.")
     });
   }
 
-  // UI 元素
+  // ======================== UI 元素 ========================
   const outputViewport = document.getElementById('outputViewport');
   const outputCanvas = document.getElementById('outputCanvas');
   const outputSpacer = document.getElementById('outputSpacer');
   const outputContainer = document.getElementById('outputContainer');
   const runBtn = document.getElementById('runBtn');
   const saveBtn = document.getElementById('saveBtn');
-  const resetBtn = document.getElementById('resetBtn'); // 可能不存在
   const stopBtn = document.getElementById('stopBtn');
   const statusMsg = document.getElementById('statusMsg');
   const stdinContainer = document.getElementById('stdinContainer');
   const stdinData = document.getElementById('stdinData');
+  const copyOutputBtn = document.getElementById('copyOutputBtn');
 
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
     const target = t.dataset.tab;
@@ -245,7 +208,7 @@ print("Done.")
     }
   }));
 
-  // 文件管理
+  // ======================== 文件管理 ========================
   const FILE_PREFIX = 'swc_file_py_';
   const FILE_LIST_KEY = 'swc_filelist_py';
   const CURRENT_FILE_KEY = 'swc_current_py_file';
@@ -414,25 +377,23 @@ print("Done.")
     saveCode(); statusMsg.textContent = '已重置';
     setTimeout(() => { statusMsg.textContent = workerReady ? 'Python 就绪' : '准备中…'; }, 1500);
   }
-  // 安全绑定重置按钮
-  if (resetBtn) {
-    resetBtn.addEventListener('click', resetCode);
-  }
-
   editor.on('change', () => {
     clearTimeout(window._saveTimer);
     window._saveTimer = setTimeout(saveCode, 800);
   });
 
-  // 虚拟滚动 + 行缓冲
+  // ======================== 虚拟滚动 + 行缓冲 + 用户输出分离 ========================
   const LINE_HEIGHT = 21;
   const outputLines = [];
+  const userOutputLines = [];   // 仅存储程序 stdout/stderr 的内容
   let userScrolledUp = false, needsRender = false, pendingScrollBottom = false, renderRaf = null, isProgrammaticScroll = false;
   let lineBuffer = '';
 
   function flushLineBuffer() {
     if (lineBuffer.length > 0) {
       outputLines.push(lineBuffer);
+      // 行缓冲的残留内容也是程序输出
+      userOutputLines.push(lineBuffer);
       lineBuffer = '';
       outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
       if (!userScrolledUp) pendingScrollBottom = true;
@@ -445,7 +406,21 @@ print("Done.")
     lineBuffer += text;
     const lines = lineBuffer.split('\n');
     lineBuffer = lines.pop();
-    for (const line of lines) outputLines.push(line);
+    for (const line of lines) {
+      outputLines.push(line);
+      userOutputLines.push(line);   // 每行同时记录到用户输出
+    }
+    outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
+    if (!userScrolledUp) pendingScrollBottom = true;
+    scheduleRender();
+  }
+
+  // 系统消息不记录到 userOutputLines
+  function appendSystemMessage(text) {
+    const lines = text.split('\n');
+    for (const line of lines) {
+      outputLines.push(line);
+    }
     outputSpacer.style.height = (outputLines.length * LINE_HEIGHT) + 'px';
     if (!userScrolledUp) pendingScrollBottom = true;
     scheduleRender();
@@ -486,6 +461,7 @@ print("Done.")
   });
   function resetOutput() {
     outputLines.length = 0; lineBuffer = '';
+    userOutputLines.length = 0;
     outputSpacer.style.height = '0px';
     outputCanvas.textContent = ''; outputCanvas.style.transform = 'translateY(0px)';
     userScrolledUp = false; pendingScrollBottom = false;
@@ -493,9 +469,30 @@ print("Done.")
     isProgrammaticScroll = false;
   }
 
+  // ======================== 复制输出（仅程序输出） ========================
+  function copyAllOutput() {
+    if (userOutputLines.length === 0) {
+      log('输出区没有程序输出可复制', true);
+      return;
+    }
+    const text = userOutputLines.join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      log('已复制程序输出到剪贴板');
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      log('已复制程序输出（降级方式）');
+    });
+  }
+  copyOutputBtn.addEventListener('click', copyAllOutput);
+
   logReady = true; flushLogs();
 
-  // Service Worker
+  // ======================== Service Worker ========================
   let swReady = false;
   async function initServiceWorker() {
     if (!('serviceWorker' in navigator)) { log('浏览器不支持 Service Worker，无法离线', true); statusMsg.textContent = '无 SW'; return false; }
@@ -528,7 +525,7 @@ print("Done.")
     } catch (err) { log(`清除缓存失败: ${err.message}`, true); }
   }
 
-  // Worker 管理 (含自动加载第三方库)
+  // ======================== Worker 管理 (含自动加载第三方库) ========================
   let worker = null, workerReady = false, running = false, runStartTime = 0;
   let initTimer = null, isInitializing = false;
 
@@ -580,22 +577,26 @@ print("Done.")
       case 'ready':
         workerReady = true; isInitializing = false;
         runBtn.disabled = false; statusMsg.textContent = 'Python 就绪';
-        log('Python 环境就绪');
+        // 系统消息不记录到 userOutputLines
+        appendSystemMessage('Python 环境就绪。');
         break;
-      case 'stdout': case 'stderr': feedOutput(msg.text); break;
+      case 'stdout':
+      case 'stderr':
+        feedOutput(msg.text);   // 会自动记录到 userOutputLines
+        break;
       case 'done':
         flushLineBuffer();
-        running = false;
-        runBtn.disabled = false;
-        stopBtn.style.display = 'none';
+        running = false; runBtn.disabled = false; stopBtn.style.display = 'none';
         const elapsed = performance.now() - runStartTime;
-        feedOutput('\n--- 运行完成 ---\n');
-        feedOutput(`感知总耗时：${elapsed.toFixed(0)} ms\n`);
-        log('运行完成');
+        // 运行完成的系统消息只显示，不记录到 userOutputLines
+        appendSystemMessage('--- 运行完成 ---');
+        appendSystemMessage(`感知总耗时：${elapsed.toFixed(0)} ms`);
         break;
       case 'error':
         flushLineBuffer();
-        feedOutput('[错误] ' + msg.error + '\n');
+        // 错误信息也属于程序输出的一部分（stderr），但错误类型消息是系统级的？这里保持与 C++ 一致：程序错误本身（msg.error）已通过 stderr 输出，这里只显示系统级错误包装。
+        // 但如果 Worker 直接抛出错误，我们在这里展示并记录为系统消息。
+        appendSystemMessage('[错误] ' + msg.error);
         running = false; runBtn.disabled = false; stopBtn.style.display = 'none';
         if (msg.error.includes('Failed to fetch') || msg.error.includes('NetworkError')) {
           if (!isInitializing) {
@@ -619,7 +620,8 @@ print("Done.")
     workerReady = false; running = false;
     runBtn.disabled = true; stopBtn.style.display = 'none';
     statusMsg.textContent = '启动中...';
-    log('===== 初始化 =====');
+    // 初始化日志属于系统消息
+    appendSystemMessage('===== 初始化 =====');
 
     const swOk = await initServiceWorker();
     if (!swOk && !forceOnline) log('SW 不可用，将依赖在线模式');
@@ -665,9 +667,8 @@ print("Done.")
   });
 
   saveBtn.addEventListener('click', saveCode);
-  // 重置按钮已安全处理，不再额外调用
 
-  // 云端同步 (无表情)
+  // ======================== 云端同步 (无表情) ========================
   const CODE_TYPE = 'py';
   const UPLOAD_BTN = document.getElementById('uploadCloudBtn');
   const DOWNLOAD_BTN = document.getElementById('downloadCloudBtn');
