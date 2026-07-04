@@ -16,7 +16,7 @@
     #log-panel {
       background: #0d1117;
       color: #c9d1d9;
-      flex: 0 0 180px;
+      flex: 0 0 150px;
       overflow-y: auto;
       padding: 12px;
       border-bottom: 2px solid #2a3a4a;
@@ -34,7 +34,7 @@
       flex: 1;
       position: relative;
       background: #000;
-      min-height: 400px; /* 强制最小高度 */
+      min-height: 400px;
     }
     #screen {
       width: 100%;
@@ -43,6 +43,24 @@
       position: absolute;
       top: 0;
       left: 0;
+    }
+    .touch-input {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      background: transparent;
+      border: none;
+      resize: none;
+      font-size: 16px;
+      color: transparent;
+      caret-color: transparent;
+      z-index: 20;
+    }
+    .touch-input:focus {
+      outline: none;
     }
     .overlay-hint {
       position: absolute;
@@ -54,16 +72,7 @@
       background: rgba(0,0,0,0.6);
       padding: 8px 20px;
       border-radius: 6px;
-      z-index: 10;
-    }
-    .click-area {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.01);
-      cursor: pointer;
-      z-index: 5;
+      z-index: 30;
     }
   </style>
 </head>
@@ -73,8 +82,8 @@
   </div>
   <div id="screen-container">
     <div id="screen"></div>
-    <div class="click-area" id="clickArea" title="点击此处捕获键盘"></div>
-    <div class="overlay-hint" id="overlay">点我以捕获键盘 · 按 Esc 释放</div>
+    <textarea class="touch-input" id="touchInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+    <div class="overlay-hint" id="overlay">点我以弹出键盘</div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/v86@latest/build/libv86.js"></script>
@@ -83,7 +92,7 @@
       const logPanel = document.getElementById('log-panel');
       const screenDiv = document.getElementById('screen');
       const screenContainer = document.getElementById('screen-container');
-      const clickArea = document.getElementById('clickArea');
+      const touchInput = document.getElementById('touchInput');
       const overlay = document.getElementById('overlay');
 
       function log(msg, type = 'info') {
@@ -124,61 +133,108 @@
       emulator.add_listener("emulator-loaded", () => {
         log('模拟器已启动！命令行就绪。', 'success');
         log('当前系统：Buildroot Linux · 登录：root / 空密码', 'info');
-
-        // 自动锁定鼠标，确保可以输入
-        setTimeout(() => {
-          try {
-            emulator.lock_mouse();
-            overlay.style.display = 'none';
-            clickArea.style.display = 'none';
-            log('键盘已自动捕获，现在可以输入了', 'info');
-          } catch (e) {
-            log('自动捕获键盘失败，请点击屏幕中央', 'error');
-            overlay.textContent = '请点击此处，然后开始输入';
-          }
-        }, 1000);
+        overlay.style.display = 'none';
       });
 
       emulator.add_listener("error", (e) => {
         log('模拟器错误: ' + (e.message || e), 'error');
       });
 
-      // 处理键盘捕获
-      function lockMouse() {
-        try {
-          emulator.lock_mouse();
-          overlay.style.display = 'none';
-          clickArea.style.display = 'none';
-          log('键盘已捕获', 'info');
-        } catch (e) {
-          log('捕获键盘失败，请重试点击', 'error');
-        }
-      }
+      // 触屏键盘输入处理
+      let textareaFocused = false;
 
-      clickArea.addEventListener('click', lockMouse);
-      screenDiv.addEventListener('click', lockMouse);
-
-      // 按 Esc 释放键盘
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          try {
-            emulator.unlock_mouse();
-            overlay.style.display = 'block';
-            clickArea.style.display = 'block';
-            log('键盘已释放', 'info');
-          } catch (e) {}
-        }
+      // 点击屏幕容器时，让 textarea 获得焦点，从而弹出软键盘
+      screenContainer.addEventListener('click', () => {
+        touchInput.focus();
+        textareaFocused = true;
+        log('键盘已弹出，现在可以输入', 'info');
       });
 
-      // 确保容器尺寸足够
-      function resizeHandler() {
-        if (screenContainer.clientHeight < 200) {
-          screenContainer.style.minHeight = '400px';
-          log('强制设置屏幕最小高度 400px', 'info');
+      // 处理 textarea 的输入，将字符发送给 v86
+      touchInput.addEventListener('input', (e) => {
+        if (!emulator) return;
+        const value = touchInput.value;
+        const addedChar = value[value.length - 1];
+        // 清除 textarea 内容，避免重复
+        touchInput.value = '';
+
+        // 模拟键盘事件并派发到 screen 容器，这样 v86 可以捕获
+        const keyCode = addedChar.charCodeAt(0);
+        const keyDownEvent = new KeyboardEvent('keydown', {
+          key: addedChar,
+          code: 'Key' + addedChar.toUpperCase(),
+          keyCode: keyCode,
+          which: keyCode,
+          bubbles: true,
+          cancelable: true
+        });
+        const keyPressEvent = new KeyboardEvent('keypress', {
+          key: addedChar,
+          code: 'Key' + addedChar.toUpperCase(),
+          keyCode: keyCode,
+          which: keyCode,
+          bubbles: true,
+          cancelable: true
+        });
+        const keyUpEvent = new KeyboardEvent('keyup', {
+          key: addedChar,
+          code: 'Key' + addedChar.toUpperCase(),
+          keyCode: keyCode,
+          which: keyCode,
+          bubbles: true,
+          cancelable: true
+        });
+        screenDiv.dispatchEvent(keyDownEvent);
+        screenDiv.dispatchEvent(keyPressEvent);
+        screenDiv.dispatchEvent(keyUpEvent);
+      });
+
+      // 对于 Enter、Backspace 等特殊键，我们通过监听 keydown 事件在 textarea 上直接转发
+      touchInput.addEventListener('keydown', (e) => {
+        if (!emulator) return;
+        // 阻止默认行为，防止换行等
+        e.preventDefault();
+        const event = new KeyboardEvent('keydown', {
+          key: e.key,
+          code: e.code,
+          keyCode: e.keyCode,
+          which: e.which,
+          bubbles: true,
+          cancelable: true
+        });
+        screenDiv.dispatchEvent(event);
+        // 也发送 keypress 和 keyup 以保持兼容
+        const keypressEvent = new KeyboardEvent('keypress', {
+          key: e.key,
+          code: e.code,
+          keyCode: e.keyCode,
+          which: e.which,
+          bubbles: true,
+          cancelable: true
+        });
+        screenDiv.dispatchEvent(keypressEvent);
+        const keyupEvent = new KeyboardEvent('keyup', {
+          key: e.key,
+          code: e.code,
+          keyCode: e.keyCode,
+          which: e.which,
+          bubbles: true,
+          cancelable: true
+        });
+        screenDiv.dispatchEvent(keyupEvent);
+        // 清空 textarea，防止积累字符
+        touchInput.value = '';
+      });
+
+      // 处理 Esc 键释放焦点
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          touchInput.blur();
+          textareaFocused = false;
+          overlay.style.display = 'block';
+          log('键盘已释放', 'info');
         }
-      }
-      resizeHandler();
-      window.addEventListener('resize', resizeHandler);
+      });
 
       log('初始化完成', 'success');
     })();
