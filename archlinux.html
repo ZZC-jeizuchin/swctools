@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-  <title>SwC Arch Linux 终端</title>
+  <title>SwC Linux 终端</title>
   <style>
     body {
       margin: 0;
@@ -29,18 +29,20 @@
     .log-error { color: #f85149; }
     .log-success { color: #3fb950; }
     .log-info { color: #58a6ff; }
-    .log-warn { color: #d2991d; }
 
     #screen-container {
       flex: 1;
       position: relative;
       background: #000;
-      display: none;
+      min-height: 400px; /* 强制最小高度 */
     }
     #screen {
       width: 100%;
       height: 100%;
       border: none;
+      position: absolute;
+      top: 0;
+      left: 0;
     }
     .overlay-hint {
       position: absolute;
@@ -52,16 +54,27 @@
       background: rgba(0,0,0,0.6);
       padding: 8px 20px;
       border-radius: 6px;
+      z-index: 10;
+    }
+    .click-area {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.01);
+      cursor: pointer;
+      z-index: 5;
     }
   </style>
 </head>
 <body>
   <div id="log-panel">
-    <div class="log-item log-info">[系统] 初始化日志面板 · 简化版（需 SharedArrayBuffer）</div>
+    <div class="log-item log-info">[系统] 初始化中...</div>
   </div>
   <div id="screen-container">
     <div id="screen"></div>
-    <div class="overlay-hint" id="overlay">点击屏幕以捕获键盘 · 按 Esc 释放</div>
+    <div class="click-area" id="clickArea" title="点击此处捕获键盘"></div>
+    <div class="overlay-hint" id="overlay">点我以捕获键盘 · 按 Esc 释放</div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/v86@latest/build/libv86.js"></script>
@@ -70,6 +83,7 @@
       const logPanel = document.getElementById('log-panel');
       const screenDiv = document.getElementById('screen');
       const screenContainer = document.getElementById('screen-container');
+      const clickArea = document.getElementById('clickArea');
       const overlay = document.getElementById('overlay');
 
       function log(msg, type = 'info') {
@@ -80,101 +94,93 @@
         logPanel.scrollTop = logPanel.scrollHeight;
       }
 
-      // 关键检查：SharedArrayBuffer
-      if (typeof SharedArrayBuffer === 'undefined') {
-        log('FATAL: SharedArrayBuffer 不可用，v86 无法启动。', 'error');
-        log('请网站管理员在服务器上添加以下 HTTP 响应头（Cloudflare Pages 可用 _headers 文件）：', 'warn');
-        log('  Cross-Origin-Opener-Policy: same-origin', 'warn');
-        log('  Cross-Origin-Embedder-Policy: require-corp', 'warn');
-        log('添加后刷新页面即可。', 'info');
-        return; // 不再继续，因为根本不能跑
-      }
-      log('SharedArrayBuffer 可用', 'success');
-
       if (typeof V86 === 'undefined') {
-        log('FATAL: V86 库加载失败', 'error');
+        log('V86 库加载失败', 'error');
         return;
       }
       log('V86 库加载成功', 'success');
 
-      const BIOS_URL = "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/seabios.bin";
-      const VGA_BIOS_URL = "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/vgabios.bin";
-      // 使用 Buildroot Linux 作为默认镜像，若你需要 Arch Linux，可替换 CDROM_URL
-      const CDROM_URL = "https://cdn.jsdelivr.net/gh/copy/images@master/linux.iso";
+      const config = {
+        screen_container: screenDiv,
+        bios: { url: "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/seabios.bin" },
+        vga_bios: { url: "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/vgabios.bin" },
+        cdrom: { url: "https://cdn.jsdelivr.net/gh/copy/images@master/linux.iso" },
+        wasm_path: "https://cdn.jsdelivr.net/npm/v86@latest/build/v86.wasm",
+        autostart: true,
+        disable_keyboard: false,
+        disable_speaker: true,
+        acpi: true,
+      };
 
-      // 简单的资源验证（非必须，但可提供反馈）
-      async function verify(url) {
-        try {
-          const resp = await fetch(url, { method: 'HEAD', mode: 'cors' });
-          return resp.ok;
-        } catch { return false; }
+      let emulator;
+      try {
+        emulator = new V86(config);
+        log('模拟器实例已创建', 'success');
+      } catch (e) {
+        log('创建模拟器实例失败: ' + e.message, 'error');
+        return;
       }
 
-      async function start() {
-        log('正在验证资源可访问性…', 'info');
-        const biosOk = await verify(BIOS_URL);
-        log(`BIOS: ${biosOk ? '可访问' : '不可访问'}`, biosOk ? 'success' : 'error');
-        const vgaOk = await verify(VGA_BIOS_URL);
-        log(`VGA BIOS: ${vgaOk ? '可访问' : '不可访问'}`, vgaOk ? 'success' : 'error');
-        const isoOk = await verify(CDROM_URL);
-        log(`系统镜像: ${isoOk ? '可访问' : '不可访问'}`, isoOk ? 'success' : 'error');
+      emulator.add_listener("emulator-loaded", () => {
+        log('模拟器已启动！命令行就绪。', 'success');
+        log('当前系统：Buildroot Linux · 登录：root / 空密码', 'info');
 
-        if (!biosOk || !vgaOk || !isoOk) {
-          log('资源验证失败，无法继续。', 'error');
-          return;
-        }
+        // 自动锁定鼠标，确保可以输入
+        setTimeout(() => {
+          try {
+            emulator.lock_mouse();
+            overlay.style.display = 'none';
+            clickArea.style.display = 'none';
+            log('键盘已自动捕获，现在可以输入了', 'info');
+          } catch (e) {
+            log('自动捕获键盘失败，请点击屏幕中央', 'error');
+            overlay.textContent = '请点击此处，然后开始输入';
+          }
+        }, 1000);
+      });
 
-        log('正在创建模拟器实例…', 'info');
-        const config = {
-          screen_container: screenDiv,
-          bios: { url: BIOS_URL },
-          vga_bios: { url: VGA_BIOS_URL },
-          cdrom: { url: CDROM_URL },
-          autostart: true,
-          disable_keyboard: false,
-          disable_speaker: true,
-          acpi: true,
-        };
+      emulator.add_listener("error", (e) => {
+        log('模拟器错误: ' + (e.message || e), 'error');
+      });
 
-        let emulator;
+      // 处理键盘捕获
+      function lockMouse() {
         try {
-          emulator = new V86(config);
-          screenContainer.style.display = 'flex';
-          log('模拟器实例已创建', 'success');
-        } catch (e) {
-          log(`创建模拟器失败: ${e.message}`, 'error');
-          return;
-        }
-
-        let startupTimeout = setTimeout(() => {
-          log('模拟器启动超时（60秒）。若未报错，可能是镜像引导问题。', 'warn');
-        }, 60000);
-
-        emulator.add_listener("emulator-started", () => {
-          clearTimeout(startupTimeout);
-          log('模拟器已启动！命令行就绪。', 'success');
-          log('登录信息：用户名 root，密码为空。', 'info');
-        });
-
-        emulator.add_listener("error", (e) => {
-          clearTimeout(startupTimeout);
-          log('模拟器运行时错误: ' + e, 'error');
-        });
-
-        screenDiv.addEventListener('click', () => {
           emulator.lock_mouse();
           overlay.style.display = 'none';
-        });
-        document.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape') {
-            emulator.unlock_mouse();
-            overlay.style.display = 'block';
-          }
-        });
-        setTimeout(() => { overlay.style.display = 'block'; }, 3000);
+          clickArea.style.display = 'none';
+          log('键盘已捕获', 'info');
+        } catch (e) {
+          log('捕获键盘失败，请重试点击', 'error');
+        }
       }
 
-      start();
+      clickArea.addEventListener('click', lockMouse);
+      screenDiv.addEventListener('click', lockMouse);
+
+      // 按 Esc 释放键盘
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          try {
+            emulator.unlock_mouse();
+            overlay.style.display = 'block';
+            clickArea.style.display = 'block';
+            log('键盘已释放', 'info');
+          } catch (e) {}
+        }
+      });
+
+      // 确保容器尺寸足够
+      function resizeHandler() {
+        if (screenContainer.clientHeight < 200) {
+          screenContainer.style.minHeight = '400px';
+          log('强制设置屏幕最小高度 400px', 'info');
+        }
+      }
+      resizeHandler();
+      window.addEventListener('resize', resizeHandler);
+
+      log('初始化完成', 'success');
     })();
   </script>
 </body>
