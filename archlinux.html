@@ -5,239 +5,139 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
   <title>SwC Linux 终端</title>
   <style>
-    body {
-      margin: 0;
-      background: #1a1e2b;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    #log-panel {
-      background: #0d1117;
-      color: #c9d1d9;
-      flex: 0 0 150px;
-      overflow-y: auto;
-      padding: 12px;
-      border-bottom: 2px solid #2a3a4a;
-      font-size: 0.8rem;
-      line-height: 1.4;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-    .log-item { margin-bottom: 4px; }
-    .log-error { color: #f85149; }
-    .log-success { color: #3fb950; }
-    .log-info { color: #58a6ff; }
-
-    #screen-container {
-      flex: 1;
-      position: relative;
-      background: #000;
-      min-height: 400px;
-    }
-    #screen {
-      width: 100%;
-      height: 100%;
-      border: none;
-      position: absolute;
-      top: 0;
-      left: 0;
-    }
-    .touch-input {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      background: transparent;
-      border: none;
-      resize: none;
-      font-size: 16px;
-      color: transparent;
-      caret-color: transparent;
-      z-index: 20;
-    }
-    .touch-input:focus {
-      outline: none;
-    }
-    .overlay-hint {
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      color: #c9d1d9;
-      font-size: 1.2rem;
-      pointer-events: none;
-      background: rgba(0,0,0,0.6);
-      padding: 8px 20px;
-      border-radius: 6px;
-      z-index: 30;
-    }
+    body { margin:0; background:#1a1e2b; display:flex; flex-direction:column; height:100vh; font-family:'JetBrains Mono',monospace; }
+    #log-panel { background:#0d1117; color:#c9d1d9; flex:0 0 150px; overflow-y:auto; padding:12px; border-bottom:2px solid #2a3a4a; font-size:0.8rem; line-height:1.4; white-space:pre-wrap; word-break:break-all; }
+    .log-item { margin-bottom:4px; }
+    .log-error { color:#f85149; }
+    .log-success { color:#3fb950; }
+    .log-info { color:#58a6ff; }
+    #screen-container { flex:1; position:relative; background:#000; min-height:400px; }
+    #screen { width:100%; height:100%; border:none; position:absolute; top:0; left:0; }
+    .touch-input { position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; background:transparent; border:none; resize:none; font-size:16px; color:transparent; caret-color:transparent; z-index:20; }
+    .touch-input:focus { outline:none; }
+    .overlay-hint { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#c9d1d9; font-size:1.2rem; pointer-events:none; background:rgba(0,0,0,0.6); padding:8px 20px; border-radius:6px; z-index:30; }
   </style>
 </head>
 <body>
-  <div id="log-panel">
-    <div class="log-item log-info">[系统] 初始化中...</div>
-  </div>
-  <div id="screen-container">
-    <div id="screen"></div>
-    <textarea class="touch-input" id="touchInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
-    <div class="overlay-hint" id="overlay">点我以弹出键盘</div>
-  </div>
+<div id="log-panel"><div class="log-item log-info">[系统] 初始化中...</div></div>
+<div id="screen-container">
+  <div id="screen"></div>
+  <textarea class="touch-input" id="touchInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+  <div class="overlay-hint" id="overlay">点我以弹出键盘</div>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/v86@latest/build/libv86.js"></script>
-  <script>
-    (function() {
-      const logPanel = document.getElementById('log-panel');
-      const screenDiv = document.getElementById('screen');
-      const screenContainer = document.getElementById('screen-container');
-      const touchInput = document.getElementById('touchInput');
-      const overlay = document.getElementById('overlay');
+<script src="https://cdn.jsdelivr.net/npm/v86@latest/build/libv86.js"></script>
+<script>
+(function() {
+  const logPanel = document.getElementById('log-panel');
+  const screenDiv = document.getElementById('screen');
+  const screenContainer = document.getElementById('screen-container');
+  const touchInput = document.getElementById('touchInput');
+  const overlay = document.getElementById('overlay');
 
-      function log(msg, type = 'info') {
-        const item = document.createElement('div');
-        item.className = `log-item log-${type}`;
-        item.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-        logPanel.appendChild(item);
-        logPanel.scrollTop = logPanel.scrollHeight;
-      }
+  function log(msg, type='info') {
+    const item = document.createElement('div');
+    item.className = `log-item log-${type}`;
+    item.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    logPanel.appendChild(item);
+    logPanel.scrollTop = logPanel.scrollHeight;
+  }
 
-      if (typeof V86 === 'undefined') {
-        log('V86 库加载失败', 'error');
-        return;
-      }
-      log('V86 库加载成功', 'success');
+  if(typeof V86 === 'undefined') { log('V86 库加载失败','error'); return; }
+  log('V86 库加载成功','success');
 
-      const config = {
-        screen_container: screenDiv,
-        bios: { url: "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/seabios.bin" },
-        vga_bios: { url: "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/vgabios.bin" },
-        cdrom: { url: "https://cdn.jsdelivr.net/gh/copy/images@master/linux.iso" },
-        wasm_path: "https://cdn.jsdelivr.net/npm/v86@latest/build/v86.wasm",
-        autostart: true,
-        disable_keyboard: false,
-        disable_speaker: true,
-        acpi: true,
-      };
+  const config = {
+    screen_container: screenDiv,
+    bios: { url:"https://cdn.jsdelivr.net/gh/copy/v86@master/bios/seabios.bin" },
+    vga_bios: { url:"https://cdn.jsdelivr.net/gh/copy/v86@master/bios/vgabios.bin" },
+    cdrom: { url:"https://cdn.jsdelivr.net/gh/copy/images@master/linux.iso" },
+    wasm_path: "https://cdn.jsdelivr.net/npm/v86@latest/build/v86.wasm",
+    autostart: true,
+    disable_keyboard: false,
+    disable_speaker: true,
+    acpi: true,
+  };
 
-      let emulator;
-      try {
-        emulator = new V86(config);
-        log('模拟器实例已创建', 'success');
-      } catch (e) {
-        log('创建模拟器实例失败: ' + e.message, 'error');
-        return;
-      }
+  let emulator;
+  try {
+    emulator = new V86(config);
+    log('模拟器实例已创建','success');
+  } catch(e) {
+    log('创建模拟器实例失败: '+e.message,'error');
+    return;
+  }
 
-      emulator.add_listener("emulator-loaded", () => {
-        log('模拟器已启动！命令行就绪。', 'success');
-        log('当前系统：Buildroot Linux · 登录：root / 空密码', 'info');
-        overlay.style.display = 'none';
-      });
+  emulator.add_listener("emulator-loaded", () => {
+    log('模拟器已启动！命令行就绪。','success');
+    log('当前系统：Buildroot Linux · 登录：root / 空密码','info');
+    overlay.style.display = 'none';
+  });
 
-      emulator.add_listener("error", (e) => {
-        log('模拟器错误: ' + (e.message || e), 'error');
-      });
+  emulator.add_listener("error", (e) => log('模拟器错误: '+(e.message||e),'error'));
 
-      // 触屏键盘输入处理
-      let textareaFocused = false;
+  // 弹出键盘
+  screenContainer.addEventListener('click', () => {
+    touchInput.focus();
+  });
 
-      // 点击屏幕容器时，让 textarea 获得焦点，从而弹出软键盘
-      screenContainer.addEventListener('click', () => {
-        touchInput.focus();
-        textareaFocused = true;
-        log('键盘已弹出，现在可以输入', 'info');
-      });
+  // 将软键盘输入转发给 v86
+  touchInput.addEventListener('input', (e) => {
+    if(!emulator) return;
+    const added = touchInput.value;      // 新增的文本（可能包含多个字符）
+    touchInput.value = '';               // 立即清空，避免干扰
+    for(const ch of added) {
+      const keyCode = ch.charCodeAt(0);
+      const eventInit = { key:ch, code:'Key'+ch.toUpperCase(), keyCode:keyCode, which:keyCode, bubbles:true, cancelable:true };
+      screenDiv.dispatchEvent(new KeyboardEvent('keydown', eventInit));
+      // 为兼容可能需要 keypress 的库，再发一个
+      const kp = new KeyboardEvent('keypress', eventInit);
+      Object.defineProperty(kp, 'charCode', {value:keyCode});
+      screenDiv.dispatchEvent(kp);
+      screenDiv.dispatchEvent(new KeyboardEvent('keyup', eventInit));
+    }
+  });
 
-      // 处理 textarea 的输入，将字符发送给 v86
-      touchInput.addEventListener('input', (e) => {
-        if (!emulator) return;
-        const value = touchInput.value;
-        const addedChar = value[value.length - 1];
-        // 清除 textarea 内容，避免重复
-        touchInput.value = '';
+  // 特殊键（回车、空格、退格等）不会触发 input，必须通过 keydown 转发
+  touchInput.addEventListener('keydown', (e) => {
+    if(!emulator) return;
+    // 需要转发的特殊键列表（可扩展）
+    const specialKeys = ['Enter','Backspace','Delete','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab','Escape','PageUp','PageDown','Home','End'];
+    const isSpecial = specialKeys.includes(e.key) || e.key === ' ';   // 空格也特殊处理
+    if(!isSpecial) return;   // 普通字符已经由 input 事件处理
 
-        // 模拟键盘事件并派发到 screen 容器，这样 v86 可以捕获
-        const keyCode = addedChar.charCodeAt(0);
-        const keyDownEvent = new KeyboardEvent('keydown', {
-          key: addedChar,
-          code: 'Key' + addedChar.toUpperCase(),
-          keyCode: keyCode,
-          which: keyCode,
-          bubbles: true,
-          cancelable: true
-        });
-        const keyPressEvent = new KeyboardEvent('keypress', {
-          key: addedChar,
-          code: 'Key' + addedChar.toUpperCase(),
-          keyCode: keyCode,
-          which: keyCode,
-          bubbles: true,
-          cancelable: true
-        });
-        const keyUpEvent = new KeyboardEvent('keyup', {
-          key: addedChar,
-          code: 'Key' + addedChar.toUpperCase(),
-          keyCode: keyCode,
-          which: keyCode,
-          bubbles: true,
-          cancelable: true
-        });
-        screenDiv.dispatchEvent(keyDownEvent);
-        screenDiv.dispatchEvent(keyPressEvent);
-        screenDiv.dispatchEvent(keyUpEvent);
-      });
+    e.preventDefault();       // 阻止默认行为（如空格上卷、回车换行）
+    const keyCode = e.keyCode || e.which;
+    const code = e.code || (e.key===' ' ? 'Space' : e.key);
+    const eventInit = { key:e.key, code:code, keyCode:keyCode, which:keyCode, bubbles:true, cancelable:true };
 
-      // 对于 Enter、Backspace 等特殊键，我们通过监听 keydown 事件在 textarea 上直接转发
-      touchInput.addEventListener('keydown', (e) => {
-        if (!emulator) return;
-        // 阻止默认行为，防止换行等
-        e.preventDefault();
-        const event = new KeyboardEvent('keydown', {
-          key: e.key,
-          code: e.code,
-          keyCode: e.keyCode,
-          which: e.which,
-          bubbles: true,
-          cancelable: true
-        });
-        screenDiv.dispatchEvent(event);
-        // 也发送 keypress 和 keyup 以保持兼容
-        const keypressEvent = new KeyboardEvent('keypress', {
-          key: e.key,
-          code: e.code,
-          keyCode: e.keyCode,
-          which: e.which,
-          bubbles: true,
-          cancelable: true
-        });
-        screenDiv.dispatchEvent(keypressEvent);
-        const keyupEvent = new KeyboardEvent('keyup', {
-          key: e.key,
-          code: e.code,
-          keyCode: e.keyCode,
-          which: e.which,
-          bubbles: true,
-          cancelable: true
-        });
-        screenDiv.dispatchEvent(keyupEvent);
-        // 清空 textarea，防止积累字符
-        touchInput.value = '';
-      });
+    const keydown = new KeyboardEvent('keydown', eventInit);
+    screenDiv.dispatchEvent(keydown);
 
-      // 处理 Esc 键释放焦点
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          touchInput.blur();
-          textareaFocused = false;
-          overlay.style.display = 'block';
-          log('键盘已释放', 'info');
-        }
-      });
+    // 对于回车，keypress 也需要 charCode 13
+    if(e.key === 'Enter') {
+      const kp = new KeyboardEvent('keypress', eventInit);
+      Object.defineProperty(kp, 'charCode', {value:13});
+      screenDiv.dispatchEvent(kp);
+    } else if(e.key === ' ') {
+      const kp = new KeyboardEvent('keypress', eventInit);
+      Object.defineProperty(kp, 'charCode', {value:32});
+      screenDiv.dispatchEvent(kp);
+    }
 
-      log('初始化完成', 'success');
-    })();
-  </script>
+    screenDiv.dispatchEvent(new KeyboardEvent('keyup', eventInit));
+    touchInput.value = '';   // 保持干净
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') {
+      touchInput.blur();
+      overlay.style.display = 'block';
+      log('键盘已释放','info');
+    }
+  });
+
+  log('初始化完成','success');
+})();
+</script>
 </body>
 </html>
