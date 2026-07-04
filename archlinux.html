@@ -14,16 +14,17 @@
       font-family: 'JetBrains Mono', monospace;
       user-select: none;
       -webkit-user-select: none;
+      overflow: hidden;
     }
     #log-panel {
       background: #0d1117;
       color: #c9d1d9;
-      flex: 0 0 120px;
+      flex: 0 0 80px;
       overflow-y: auto;
       padding: 6px 10px;
       border-bottom: 2px solid #2a3a4a;
-      font-size: 0.75rem;
-      line-height: 1.4;
+      font-size: 0.7rem;
+      line-height: 1.3;
       white-space: pre-wrap;
       word-break: break-all;
     }
@@ -31,13 +32,13 @@
     .log-error { color: #f85149; }
     .log-success { color: #3fb950; }
     .log-info { color: #58a6ff; }
-    .log-debug { color: #c9d1d9; }
+    .log-debug { color: #aaa; }
 
     #screen-container {
       flex: 1;
       position: relative;
       background: #000;
-      min-height: 0;
+      min-height: 200px;
       overflow: hidden;
     }
     #screen {
@@ -49,47 +50,71 @@
       left: 0;
     }
 
-    /* 虚拟键盘 */
+    /* 浮动键盘 */
     #keyboard {
-      background: #2a2e3b;
-      padding: 6px 4px;
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(42, 46, 59, 0.95);
+      backdrop-filter: blur(5px);
+      padding: 8px 6px;
+      border-radius: 12px;
       display: flex;
       flex-direction: column;
       gap: 4px;
-      border-top: 2px solid #4a4e5b;
-      flex-shrink: 0;
-      z-index: 50;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+      z-index: 100;
+      min-width: 320px;
+      max-width: 95vw;
+      touch-action: none;
+    }
+    .keyboard-header {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 2px 0 4px;
+      cursor: grab;
+    }
+    .keyboard-header:active {
+      cursor: grabbing;
+    }
+    .drag-handle {
+      width: 40px;
+      height: 6px;
+      background: #5a5e6b;
+      border-radius: 3px;
     }
     .key-row {
       display: flex;
       justify-content: center;
       gap: 3px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
     }
     .key-btn {
       background: #3a3e4b;
       border: 1px solid #5a5e6b;
       color: #e0e0e0;
-      padding: 8px 0;
-      border-radius: 4px;
-      font-size: 0.85rem;
+      padding: 10px 4px;
+      border-radius: 5px;
+      font-size: 0.8rem;
       font-weight: 600;
       cursor: pointer;
-      min-width: 28px;
       text-align: center;
       transition: background 0.1s;
-      touch-action: manipulation;
       flex: 0 0 auto;
+      min-width: 22px;
+      touch-action: manipulation;
     }
     .key-btn:active {
       background: #5a5e7b;
     }
     .key-btn.wide {
-      min-width: 50px;
+      min-width: 45px;
     }
     .key-btn.space {
       flex: 1;
-      min-width: 80px;
+      min-width: 70px;
     }
     .key-btn.active {
       background: #6a8e4b;
@@ -108,6 +133,9 @@
   <div id="screen"></div>
 </div>
 <div id="keyboard">
+  <div class="keyboard-header" id="dragHandle">
+    <div class="drag-handle"></div>
+  </div>
   <!-- 键盘由JS动态生成 -->
 </div>
 
@@ -116,8 +144,8 @@
 (function() {
   const logPanel = document.getElementById('log-panel');
   const screenDiv = document.getElementById('screen');
-  const screenContainer = document.getElementById('screen-container');
   const keyboardDiv = document.getElementById('keyboard');
+  const dragHandle = document.getElementById('dragHandle');
 
   function log(msg, type = 'info') {
     const item = document.createElement('div');
@@ -130,7 +158,6 @@
   if (typeof V86 === 'undefined') { log('V86 库加载失败', 'error'); return; }
   log('V86 库加载成功', 'success');
 
-  // 注意：disable_keyboard: false 允许 v86 捕获键盘事件，但物理键盘不在，我们用虚拟键盘发送事件
   const config = {
     screen_container: screenDiv,
     bios: { url: "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/seabios.bin" },
@@ -138,7 +165,7 @@
     cdrom: { url: "https://cdn.jsdelivr.net/gh/copy/images@master/linux.iso" },
     wasm_path: "https://cdn.jsdelivr.net/npm/v86@latest/build/v86.wasm",
     autostart: true,
-    disable_keyboard: false,   // 必须为 false，否则 v86 不会监听 keyboard 事件
+    disable_keyboard: false,
     disable_speaker: true,
     acpi: true,
   };
@@ -154,74 +181,78 @@
 
   emulator.add_listener("emulator-loaded", () => {
     log('模拟器已启动！命令行就绪。', 'success');
-    log('点击下方虚拟键盘输入', 'info');
+    log('拖动键盘顶部手柄移动位置', 'info');
   });
-
   emulator.add_listener("error", (e) => log('模拟器错误: ' + (e.message || e), 'error'));
 
-  // 虚拟键盘按键定义
-  const keys = [
+  // ========== 虚拟键盘定义 ==========
+  const keyRows = [
+    // 第一行：数字/符号
     [
-      {label:'`', code:'Backquote', key:'`', shiftKey:'~', keyCode:192},
-      {label:'1', code:'Digit1', key:'1', shiftKey:'!', keyCode:49},
-      {label:'2', code:'Digit2', key:'2', shiftKey:'@', keyCode:50},
-      {label:'3', code:'Digit3', key:'3', shiftKey:'#', keyCode:51},
-      {label:'4', code:'Digit4', key:'4', shiftKey:'$', keyCode:52},
-      {label:'5', code:'Digit5', key:'5', shiftKey:'%', keyCode:53},
-      {label:'6', code:'Digit6', key:'6', shiftKey:'^', keyCode:54},
-      {label:'7', code:'Digit7', key:'7', shiftKey:'&', keyCode:55},
-      {label:'8', code:'Digit8', key:'8', shiftKey:'*', keyCode:56},
-      {label:'9', code:'Digit9', key:'9', shiftKey:'(', keyCode:57},
-      {label:'0', code:'Digit0', key:'0', shiftKey:')', keyCode:48},
-      {label:'-', code:'Minus', key:'-', shiftKey:'_', keyCode:173},
-      {label:'=', code:'Equal', key:'=', shiftKey:'+', keyCode:61},
-      {label:'Back', code:'Backspace', key:'Backspace', keyCode:8, wide:true}
+      {label:'`', shiftLabel:'~', code:'Backquote', key:'`', shiftKey:'~', keyCode:192},
+      {label:'1', shiftLabel:'!', code:'Digit1', key:'1', shiftKey:'!', keyCode:49},
+      {label:'2', shiftLabel:'@', code:'Digit2', key:'2', shiftKey:'@', keyCode:50},
+      {label:'3', shiftLabel:'#', code:'Digit3', key:'3', shiftKey:'#', keyCode:51},
+      {label:'4', shiftLabel:'$', code:'Digit4', key:'4', shiftKey:'$', keyCode:52},
+      {label:'5', shiftLabel:'%', code:'Digit5', key:'5', shiftKey:'%', keyCode:53},
+      {label:'6', shiftLabel:'^', code:'Digit6', key:'6', shiftKey:'^', keyCode:54},
+      {label:'7', shiftLabel:'&', code:'Digit7', key:'7', shiftKey:'&', keyCode:55},
+      {label:'8', shiftLabel:'*', code:'Digit8', key:'8', shiftKey:'*', keyCode:56},
+      {label:'9', shiftLabel:'(', code:'Digit9', key:'9', shiftKey:'(', keyCode:57},
+      {label:'0', shiftLabel:')', code:'Digit0', key:'0', shiftKey:')', keyCode:48},
+      {label:'-', shiftLabel:'_', code:'Minus', key:'-', shiftKey:'_', keyCode:173},
+      {label:'=', shiftLabel:'+', code:'Equal', key:'=', shiftKey:'+', keyCode:61},
+      {label:'⌫', shiftLabel:'⌫', code:'Backspace', key:'Backspace', keyCode:8, wide:true}
     ],
+    // 第二行：QWERTY
     [
       {label:'Tab', code:'Tab', key:'Tab', keyCode:9, wide:true},
-      {label:'q', code:'KeyQ', key:'q', shiftKey:'Q', keyCode:81},
-      {label:'w', code:'KeyW', key:'w', shiftKey:'W', keyCode:87},
-      {label:'e', code:'KeyE', key:'e', shiftKey:'E', keyCode:69},
-      {label:'r', code:'KeyR', key:'r', shiftKey:'R', keyCode:82},
-      {label:'t', code:'KeyT', key:'t', shiftKey:'T', keyCode:84},
-      {label:'y', code:'KeyY', key:'y', shiftKey:'Y', keyCode:89},
-      {label:'u', code:'KeyU', key:'u', shiftKey:'U', keyCode:85},
-      {label:'i', code:'KeyI', key:'i', shiftKey:'I', keyCode:73},
-      {label:'o', code:'KeyO', key:'o', shiftKey:'O', keyCode:79},
-      {label:'p', code:'KeyP', key:'p', shiftKey:'P', keyCode:80},
-      {label:'[', code:'BracketLeft', key:'[', shiftKey:'{', keyCode:219},
-      {label:']', code:'BracketRight', key:']', shiftKey:'}', keyCode:221},
-      {label:'\\', code:'Backslash', key:'\\', shiftKey:'|', keyCode:220}
+      {label:'q', shiftLabel:'Q', code:'KeyQ', key:'q', shiftKey:'Q', keyCode:81},
+      {label:'w', shiftLabel:'W', code:'KeyW', key:'w', shiftKey:'W', keyCode:87},
+      {label:'e', shiftLabel:'E', code:'KeyE', key:'e', shiftKey:'E', keyCode:69},
+      {label:'r', shiftLabel:'R', code:'KeyR', key:'r', shiftKey:'R', keyCode:82},
+      {label:'t', shiftLabel:'T', code:'KeyT', key:'t', shiftKey:'T', keyCode:84},
+      {label:'y', shiftLabel:'Y', code:'KeyY', key:'y', shiftKey:'Y', keyCode:89},
+      {label:'u', shiftLabel:'U', code:'KeyU', key:'u', shiftKey:'U', keyCode:85},
+      {label:'i', shiftLabel:'I', code:'KeyI', key:'i', shiftKey:'I', keyCode:73},
+      {label:'o', shiftLabel:'O', code:'KeyO', key:'o', shiftKey:'O', keyCode:79},
+      {label:'p', shiftLabel:'P', code:'KeyP', key:'p', shiftKey:'P', keyCode:80},
+      {label:'[', shiftLabel:'{', code:'BracketLeft', key:'[', shiftKey:'{', keyCode:219},
+      {label:']', shiftLabel:'}', code:'BracketRight', key:']', shiftKey:'}', keyCode:221},
+      {label:'\\', shiftLabel:'|', code:'Backslash', key:'\\', shiftKey:'|', keyCode:220}
     ],
+    // 第三行：ASDF
     [
       {label:'Caps', code:'CapsLock', key:'CapsLock', keyCode:20, wide:true, caps:true},
-      {label:'a', code:'KeyA', key:'a', shiftKey:'A', keyCode:65},
-      {label:'s', code:'KeyS', key:'s', shiftKey:'S', keyCode:83},
-      {label:'d', code:'KeyD', key:'d', shiftKey:'D', keyCode:68},
-      {label:'f', code:'KeyF', key:'f', shiftKey:'F', keyCode:70},
-      {label:'g', code:'KeyG', key:'g', shiftKey:'G', keyCode:71},
-      {label:'h', code:'KeyH', key:'h', shiftKey:'H', keyCode:72},
-      {label:'j', code:'KeyJ', key:'j', shiftKey:'J', keyCode:74},
-      {label:'k', code:'KeyK', key:'k', shiftKey:'K', keyCode:75},
-      {label:'l', code:'KeyL', key:'l', shiftKey:'L', keyCode:76},
-      {label:';', code:'Semicolon', key:';', shiftKey:':', keyCode:186},
-      {label:"'", code:'Quote', key:"'", shiftKey:'"', keyCode:222},
+      {label:'a', shiftLabel:'A', code:'KeyA', key:'a', shiftKey:'A', keyCode:65},
+      {label:'s', shiftLabel:'S', code:'KeyS', key:'s', shiftKey:'S', keyCode:83},
+      {label:'d', shiftLabel:'D', code:'KeyD', key:'d', shiftKey:'D', keyCode:68},
+      {label:'f', shiftLabel:'F', code:'KeyF', key:'f', shiftKey:'F', keyCode:70},
+      {label:'g', shiftLabel:'G', code:'KeyG', key:'g', shiftKey:'G', keyCode:71},
+      {label:'h', shiftLabel:'H', code:'KeyH', key:'h', shiftKey:'H', keyCode:72},
+      {label:'j', shiftLabel:'J', code:'KeyJ', key:'j', shiftKey:'J', keyCode:74},
+      {label:'k', shiftLabel:'K', code:'KeyK', key:'k', shiftKey:'K', keyCode:75},
+      {label:'l', shiftLabel:'L', code:'KeyL', key:'l', shiftKey:'L', keyCode:76},
+      {label:';', shiftLabel:':', code:'Semicolon', key:';', shiftKey:':', keyCode:186},
+      {label:"'", shiftLabel:'"', code:'Quote', key:"'", shiftKey:'"', keyCode:222},
       {label:'Enter', code:'Enter', key:'Enter', keyCode:13, wide:true}
     ],
+    // 第四行：ZXCV
     [
       {label:'Shift', code:'ShiftLeft', key:'Shift', keyCode:16, wide:true, shift:true},
-      {label:'z', code:'KeyZ', key:'z', shiftKey:'Z', keyCode:90},
-      {label:'x', code:'KeyX', key:'x', shiftKey:'X', keyCode:88},
-      {label:'c', code:'KeyC', key:'c', shiftKey:'C', keyCode:67},
-      {label:'v', code:'KeyV', key:'v', shiftKey:'V', keyCode:86},
-      {label:'b', code:'KeyB', key:'b', shiftKey:'B', keyCode:66},
-      {label:'n', code:'KeyN', key:'n', shiftKey:'N', keyCode:78},
-      {label:'m', code:'KeyM', key:'m', shiftKey:'M', keyCode:77},
-      {label:',', code:'Comma', key:',', shiftKey:'<', keyCode:188},
-      {label:'.', code:'Period', key:'.', shiftKey:'>', keyCode:190},
-      {label:'/', code:'Slash', key:'/', shiftKey:'?', keyCode:191},
+      {label:'z', shiftLabel:'Z', code:'KeyZ', key:'z', shiftKey:'Z', keyCode:90},
+      {label:'x', shiftLabel:'X', code:'KeyX', key:'x', shiftKey:'X', keyCode:88},
+      {label:'c', shiftLabel:'C', code:'KeyC', key:'c', shiftKey:'C', keyCode:67},
+      {label:'v', shiftLabel:'V', code:'KeyV', key:'v', shiftKey:'V', keyCode:86},
+      {label:'b', shiftLabel:'B', code:'KeyB', key:'b', shiftKey:'B', keyCode:66},
+      {label:'n', shiftLabel:'N', code:'KeyN', key:'n', shiftKey:'N', keyCode:78},
+      {label:'m', shiftLabel:'M', code:'KeyM', key:'m', shiftKey:'M', keyCode:77},
+      {label:',', shiftLabel:'<', code:'Comma', key:',', shiftKey:'<', keyCode:188},
+      {label:'.', shiftLabel:'>', code:'Period', key:'.', shiftKey:'>', keyCode:190},
+      {label:'/', shiftLabel:'?', code:'Slash', key:'/', shiftKey:'?', keyCode:191},
       {label:'Ctrl', code:'ControlLeft', key:'Control', keyCode:17, wide:true},
     ],
+    // 第五行：空格、方向等
     [
       {label:'Alt', code:'AltLeft', key:'Alt', keyCode:18, wide:true},
       {label:'Space', code:'Space', key:' ', keyCode:32, space:true},
@@ -235,31 +266,21 @@
 
   let shiftActive = false;
   let capsActive = false;
+  let allButtons = []; // 存储所有按键DOM元素以便更新标签
 
-  function buildKeyboard() {
-    keyboardDiv.innerHTML = '';
-    keys.forEach(row => {
-      const rowDiv = document.createElement('div');
-      rowDiv.className = 'key-row';
-      row.forEach(k => {
-        const btn = document.createElement('button');
-        btn.className = 'key-btn';
-        if (k.wide) btn.classList.add('wide');
-        if (k.space) btn.classList.add('space');
-        btn.textContent = k.label;
-        btn.setAttribute('data-code', k.code);
-        btn._keyData = k;
-        btn.addEventListener('pointerdown', (e) => {
-          e.preventDefault(); // 防止触屏时的默认行为
-          handleKeyPress(k, btn);
-        });
-        // 防止快速点击时重复
-        btn.addEventListener('click', (e) => e.preventDefault());
-        rowDiv.appendChild(btn);
-      });
-      keyboardDiv.appendChild(rowDiv);
+  function updateAllButtonLabels() {
+    allButtons.forEach(btn => {
+      const kd = btn._keyData;
+      if (!kd) return;
+      if (kd.shift) {
+        btn.textContent = shiftActive ? '▲ Shift' : 'Shift';
+      } else if (kd.caps) {
+        btn.textContent = capsActive ? '▲ Caps' : 'Caps';
+      } else {
+        const showShift = (shiftActive && !kd.special) || (capsActive && kd.shiftKey && kd.code && kd.code.startsWith('Key'));
+        btn.textContent = showShift && kd.shiftLabel ? kd.shiftLabel : kd.label;
+      }
     });
-    log('虚拟键盘已构建', 'debug');
   }
 
   function sendKeyEvent(type, keyData, key) {
@@ -279,19 +300,18 @@
       isComposing: false,
     };
     const event = new KeyboardEvent(type, init);
-    // 为某些浏览器设置 charCode
     Object.defineProperty(event, 'charCode', { value: keyCode });
     screenDiv.dispatchEvent(event);
-    log(`发送事件: ${type} key=${key} code=${code} keyCode=${keyCode}`, 'debug');
   }
 
   function handleKeyPress(keyData, btn) {
-    // 处理修饰键
+    // 修饰键
     if (keyData.shift) {
       shiftActive = !shiftActive;
       btn.classList.toggle('active', shiftActive);
       sendKeyEvent('keydown', keyData, 'Shift');
       sendKeyEvent('keyup', keyData, 'Shift');
+      updateAllButtonLabels();
       return;
     }
     if (keyData.caps) {
@@ -299,37 +319,123 @@
       btn.classList.toggle('active', capsActive);
       sendKeyEvent('keydown', keyData, 'CapsLock');
       sendKeyEvent('keyup', keyData, 'CapsLock');
+      updateAllButtonLabels();
       return;
     }
 
     let key = keyData.key;
-    // 处理字母大小写
-    if (keyData.shiftKey && (shiftActive || capsActive)) {
-      key = keyData.shiftKey;
-    } else if (keyData.shiftKey && shiftActive) {
-      key = keyData.shiftKey;
+    const isLetter = keyData.code && keyData.code.startsWith('Key') && keyData.code.length === 4;
+    if (isLetter) {
+      if ((shiftActive || capsActive) && keyData.shiftKey) {
+        key = keyData.shiftKey;
+      }
+    } else {
+      if (shiftActive && keyData.shiftKey) {
+        key = keyData.shiftKey;
+      }
     }
 
-    // 发送键事件
     sendKeyEvent('keydown', keyData, key);
     sendKeyEvent('keyup', keyData, key);
 
-    // 自动取消 Shift
+    // 按下普通键后自动取消 Shift（模拟物理键盘行为）
     if (shiftActive) {
       shiftActive = false;
       document.querySelectorAll('[data-code="ShiftLeft"]').forEach(b => b.classList.remove('active'));
+      updateAllButtonLabels();
     }
   }
 
-  buildKeyboard();
-  log('虚拟键盘初始化完成', 'success');
+  function buildKeyboard() {
+    const container = keyboardDiv.querySelector('.key-row') ? keyboardDiv : keyboardDiv;
+    // 移除旧的按键行（保留拖拽手柄）
+    const rows = keyboardDiv.querySelectorAll('.key-row');
+    rows.forEach(r => r.remove());
 
-  // 监控屏幕点击（如果需要物理键盘时可以使用）
-  screenContainer.addEventListener('click', () => {
-    if (emulator && !emulator.keyboard_locked) {
-      emulator.lock_mouse();
-    }
-  });
+    keyRows.forEach(row => {
+      const rowDiv = document.createElement('div');
+      rowDiv.className = 'key-row';
+      row.forEach(k => {
+        const btn = document.createElement('button');
+        btn.className = 'key-btn';
+        if (k.wide) btn.classList.add('wide');
+        if (k.space) btn.classList.add('space');
+        btn.textContent = k.label;
+        btn.setAttribute('data-code', k.code);
+        btn._keyData = k;
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          handleKeyPress(k, btn);
+        });
+        rowDiv.appendChild(btn);
+        allButtons.push(btn);
+      });
+      keyboardDiv.appendChild(rowDiv);
+    });
+  }
+
+  buildKeyboard();
+  log('虚拟键盘已就绪', 'success');
+
+  // ========== 键盘拖动 ==========
+  let dragging = false;
+  let startX, startY, startLeft, startTop;
+
+  function onDragStart(e) {
+    e.preventDefault();
+    const touch = e.touches ? e.touches[0] : e;
+    dragging = true;
+    startX = touch.clientX;
+    startY = touch.clientY;
+    const rect = keyboardDiv.getBoundingClientRect();
+    startLeft = rect.left;
+    startTop = rect.top;
+    keyboardDiv.style.transition = 'none';
+    keyboardDiv.style.transform = 'none';
+    keyboardDiv.style.left = startLeft + 'px';
+    keyboardDiv.style.top = startTop + 'px';
+    keyboardDiv.style.bottom = 'auto';
+  }
+
+  function onDragMove(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    const touch = e.touches ? e.touches[0] : e;
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+    let newLeft = startLeft + dx;
+    let newTop = startTop + dy;
+    // 边界限制
+    const maxLeft = window.innerWidth - keyboardDiv.offsetWidth;
+    const maxTop = window.innerHeight - keyboardDiv.offsetHeight;
+    newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+    newTop = Math.max(0, Math.min(newTop, maxTop));
+    keyboardDiv.style.left = newLeft + 'px';
+    keyboardDiv.style.top = newTop + 'px';
+  }
+
+  function onDragEnd(e) {
+    dragging = false;
+    keyboardDiv.style.transition = '';
+  }
+
+  dragHandle.addEventListener('touchstart', onDragStart);
+  document.addEventListener('touchmove', onDragMove, { passive: false });
+  document.addEventListener('touchend', onDragEnd);
+
+  dragHandle.addEventListener('mousedown', onDragStart);
+  document.addEventListener('mousemove', onDragMove);
+  document.addEventListener('mouseup', onDragEnd);
+
+  // 初始位置：底部居中
+  function positionKeyboard() {
+    keyboardDiv.style.left = '50%';
+    keyboardDiv.style.transform = 'translateX(-50%)';
+    keyboardDiv.style.bottom = '20px';
+    keyboardDiv.style.top = 'auto';
+  }
+  positionKeyboard();
+  window.addEventListener('resize', positionKeyboard);
 
 })();
 </script>
