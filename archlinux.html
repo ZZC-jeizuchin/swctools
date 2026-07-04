@@ -18,12 +18,12 @@
     #log-panel {
       background: #0d1117;
       color: #c9d1d9;
-      flex: 0 0 80px;
+      flex: 0 0 120px;
       overflow-y: auto;
       padding: 6px 10px;
       border-bottom: 2px solid #2a3a4a;
-      font-size: 0.7rem;
-      line-height: 1.3;
+      font-size: 0.75rem;
+      line-height: 1.4;
       white-space: pre-wrap;
       word-break: break-all;
     }
@@ -31,12 +31,14 @@
     .log-error { color: #f85149; }
     .log-success { color: #3fb950; }
     .log-info { color: #58a6ff; }
+    .log-debug { color: #c9d1d9; }
 
     #screen-container {
       flex: 1;
       position: relative;
       background: #000;
-      min-height: 200px;
+      min-height: 0;
+      overflow: hidden;
     }
     #screen {
       width: 100%;
@@ -56,11 +58,13 @@
       gap: 4px;
       border-top: 2px solid #4a4e5b;
       flex-shrink: 0;
+      z-index: 50;
     }
     .key-row {
       display: flex;
       justify-content: center;
       gap: 3px;
+      flex-wrap: wrap;
     }
     .key-btn {
       background: #3a3e4b;
@@ -75,6 +79,7 @@
       text-align: center;
       transition: background 0.1s;
       touch-action: manipulation;
+      flex: 0 0 auto;
     }
     .key-btn:active {
       background: #5a5e7b;
@@ -93,15 +98,12 @@
     .key-btn.highlight {
       background: #4a6e8b;
     }
-    .key-hint {
-      color: #aaa;
-      font-size: 0.65rem;
-      display: block;
-    }
   </style>
 </head>
 <body>
-<div id="log-panel"><div class="log-item log-info">[系统] 初始化中...</div></div>
+<div id="log-panel">
+  <div class="log-item log-info">[系统] 初始化中...</div>
+</div>
 <div id="screen-container">
   <div id="screen"></div>
 </div>
@@ -128,6 +130,7 @@
   if (typeof V86 === 'undefined') { log('V86 库加载失败', 'error'); return; }
   log('V86 库加载成功', 'success');
 
+  // 注意：disable_keyboard: false 允许 v86 捕获键盘事件，但物理键盘不在，我们用虚拟键盘发送事件
   const config = {
     screen_container: screenDiv,
     bios: { url: "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/seabios.bin" },
@@ -135,7 +138,7 @@
     cdrom: { url: "https://cdn.jsdelivr.net/gh/copy/images@master/linux.iso" },
     wasm_path: "https://cdn.jsdelivr.net/npm/v86@latest/build/v86.wasm",
     autostart: true,
-    disable_keyboard: true,   // 禁止 v86 自己监听物理键盘，避免冲突
+    disable_keyboard: false,   // 必须为 false，否则 v86 不会监听 keyboard 事件
     disable_speaker: true,
     acpi: true,
   };
@@ -158,7 +161,6 @@
 
   // 虚拟键盘按键定义
   const keys = [
-    // 第一行：数字和符号
     [
       {label:'`', code:'Backquote', key:'`', shiftKey:'~', keyCode:192},
       {label:'1', code:'Digit1', key:'1', shiftKey:'!', keyCode:49},
@@ -175,7 +177,6 @@
       {label:'=', code:'Equal', key:'=', shiftKey:'+', keyCode:61},
       {label:'Back', code:'Backspace', key:'Backspace', keyCode:8, wide:true}
     ],
-    // 第二行：QWERTY
     [
       {label:'Tab', code:'Tab', key:'Tab', keyCode:9, wide:true},
       {label:'q', code:'KeyQ', key:'q', shiftKey:'Q', keyCode:81},
@@ -192,7 +193,6 @@
       {label:']', code:'BracketRight', key:']', shiftKey:'}', keyCode:221},
       {label:'\\', code:'Backslash', key:'\\', shiftKey:'|', keyCode:220}
     ],
-    // 第三行：ASDF
     [
       {label:'Caps', code:'CapsLock', key:'CapsLock', keyCode:20, wide:true, caps:true},
       {label:'a', code:'KeyA', key:'a', shiftKey:'A', keyCode:65},
@@ -208,7 +208,6 @@
       {label:"'", code:'Quote', key:"'", shiftKey:'"', keyCode:222},
       {label:'Enter', code:'Enter', key:'Enter', keyCode:13, wide:true}
     ],
-    // 第四行：ZXCV + 修饰键
     [
       {label:'Shift', code:'ShiftLeft', key:'Shift', keyCode:16, wide:true, shift:true},
       {label:'z', code:'KeyZ', key:'z', shiftKey:'Z', keyCode:90},
@@ -223,7 +222,6 @@
       {label:'/', code:'Slash', key:'/', shiftKey:'?', keyCode:191},
       {label:'Ctrl', code:'ControlLeft', key:'Control', keyCode:17, wide:true},
     ],
-    // 第五行：空格、方向键等
     [
       {label:'Alt', code:'AltLeft', key:'Alt', keyCode:18, wide:true},
       {label:'Space', code:'Space', key:' ', keyCode:32, space:true},
@@ -238,7 +236,6 @@
   let shiftActive = false;
   let capsActive = false;
 
-  // 构建键盘UI
   function buildKeyboard() {
     keyboardDiv.innerHTML = '';
     keys.forEach(row => {
@@ -251,31 +248,24 @@
         if (k.space) btn.classList.add('space');
         btn.textContent = k.label;
         btn.setAttribute('data-code', k.code);
-        // 存储按键数据
         btn._keyData = k;
-        btn.addEventListener('click', () => handleKeyPress(k, btn));
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault(); // 防止触屏时的默认行为
+          handleKeyPress(k, btn);
+        });
+        // 防止快速点击时重复
+        btn.addEventListener('click', (e) => e.preventDefault());
         rowDiv.appendChild(btn);
       });
       keyboardDiv.appendChild(rowDiv);
     });
+    log('虚拟键盘已构建', 'debug');
   }
 
-  // 发送按键事件到v86
-  function sendKeyEvent(type, keyData) {
+  function sendKeyEvent(type, keyData, key) {
     if (!emulator) return;
-    let key = keyData.key;
-    let code = keyData.code;
-    let keyCode = keyData.keyCode;
-
-    // 处理Shift/Caps
-    const isLetter = code.startsWith('Key') && code.length === 4;
-    if ((shiftActive || capsActive) && isLetter && keyData.shiftKey) {
-      key = keyData.shiftKey;
-    }
-    if (shiftActive && !isLetter && keyData.shiftKey) {
-      key = keyData.shiftKey;
-    }
-
+    const code = keyData.code;
+    const keyCode = keyData.keyCode;
     const init = {
       key: key,
       code: code,
@@ -288,40 +278,59 @@
       repeat: false,
       isComposing: false,
     };
-
     const event = new KeyboardEvent(type, init);
-    // 确保charCode属性
+    // 为某些浏览器设置 charCode
     Object.defineProperty(event, 'charCode', { value: keyCode });
     screenDiv.dispatchEvent(event);
+    log(`发送事件: ${type} key=${key} code=${code} keyCode=${keyCode}`, 'debug');
   }
 
   function handleKeyPress(keyData, btn) {
-    // 特殊处理修饰键
-    if (keyData.shift) { // Shift
+    // 处理修饰键
+    if (keyData.shift) {
       shiftActive = !shiftActive;
       btn.classList.toggle('active', shiftActive);
+      sendKeyEvent('keydown', keyData, 'Shift');
+      sendKeyEvent('keyup', keyData, 'Shift');
       return;
     }
-    if (keyData.caps) { // Caps
+    if (keyData.caps) {
       capsActive = !capsActive;
       btn.classList.toggle('active', capsActive);
+      sendKeyEvent('keydown', keyData, 'CapsLock');
+      sendKeyEvent('keyup', keyData, 'CapsLock');
       return;
     }
 
-    // 发送keydown和keyup
-    sendKeyEvent('keydown', keyData);
-    sendKeyEvent('keyup', keyData);
+    let key = keyData.key;
+    // 处理字母大小写
+    if (keyData.shiftKey && (shiftActive || capsActive)) {
+      key = keyData.shiftKey;
+    } else if (keyData.shiftKey && shiftActive) {
+      key = keyData.shiftKey;
+    }
 
-    // 如果按了Shift，自动取消（模拟物理键盘的按下后自动弹起）
+    // 发送键事件
+    sendKeyEvent('keydown', keyData, key);
+    sendKeyEvent('keyup', keyData, key);
+
+    // 自动取消 Shift
     if (shiftActive) {
       shiftActive = false;
       document.querySelectorAll('[data-code="ShiftLeft"]').forEach(b => b.classList.remove('active'));
     }
   }
 
-  // 鼠标点击屏幕释放键盘焦点（无作用）
   buildKeyboard();
-  log('虚拟键盘已就绪', 'success');
+  log('虚拟键盘初始化完成', 'success');
+
+  // 监控屏幕点击（如果需要物理键盘时可以使用）
+  screenContainer.addEventListener('click', () => {
+    if (emulator && !emulator.keyboard_locked) {
+      emulator.lock_mouse();
+    }
+  });
+
 })();
 </script>
 </body>
