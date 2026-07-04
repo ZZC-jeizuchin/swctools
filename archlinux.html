@@ -5,25 +5,98 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
   <title>SwC Linux 终端</title>
   <style>
-    body { margin: 0; background: #1a1e2b; display: flex; flex-direction: column; height: 100vh; font-family: 'JetBrains Mono', monospace; }
-    #log-panel { background: #0d1117; color: #c9d1d9; flex: 0 0 130px; overflow-y: auto; padding: 10px; border-bottom: 2px solid #2a3a4a; font-size: 0.75rem; line-height: 1.4; white-space: pre-wrap; word-break: break-all; }
-    .log-item { margin-bottom: 4px; }
+    body {
+      margin: 0;
+      background: #1a1e2b;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      font-family: 'JetBrains Mono', monospace;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #log-panel {
+      background: #0d1117;
+      color: #c9d1d9;
+      flex: 0 0 80px;
+      overflow-y: auto;
+      padding: 6px 10px;
+      border-bottom: 2px solid #2a3a4a;
+      font-size: 0.7rem;
+      line-height: 1.3;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log-item { margin-bottom: 2px; }
     .log-error { color: #f85149; }
     .log-success { color: #3fb950; }
     .log-info { color: #58a6ff; }
-    #screen-container { flex: 1; position: relative; background: #000; min-height: 400px; }
-    #screen { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; }
-    .touch-input {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      opacity: 0; background: transparent; border: none; resize: none;
-      font-size: 16px; color: transparent; caret-color: transparent;
-      z-index: 20; user-select: none; -webkit-user-select: none;
+
+    #screen-container {
+      flex: 1;
+      position: relative;
+      background: #000;
+      min-height: 200px;
     }
-    .touch-input:focus { outline: none; }
-    .overlay-hint {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      color: #c9d1d9; font-size: 1.1rem; pointer-events: none;
-      background: rgba(0,0,0,0.6); padding: 8px 20px; border-radius: 6px; z-index: 30;
+    #screen {
+      width: 100%;
+      height: 100%;
+      border: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    /* 虚拟键盘 */
+    #keyboard {
+      background: #2a2e3b;
+      padding: 6px 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border-top: 2px solid #4a4e5b;
+      flex-shrink: 0;
+    }
+    .key-row {
+      display: flex;
+      justify-content: center;
+      gap: 3px;
+    }
+    .key-btn {
+      background: #3a3e4b;
+      border: 1px solid #5a5e6b;
+      color: #e0e0e0;
+      padding: 8px 0;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      min-width: 28px;
+      text-align: center;
+      transition: background 0.1s;
+      touch-action: manipulation;
+    }
+    .key-btn:active {
+      background: #5a5e7b;
+    }
+    .key-btn.wide {
+      min-width: 50px;
+    }
+    .key-btn.space {
+      flex: 1;
+      min-width: 80px;
+    }
+    .key-btn.active {
+      background: #6a8e4b;
+      border-color: #8ab86a;
+    }
+    .key-btn.highlight {
+      background: #4a6e8b;
+    }
+    .key-hint {
+      color: #aaa;
+      font-size: 0.65rem;
+      display: block;
     }
   </style>
 </head>
@@ -31,8 +104,9 @@
 <div id="log-panel"><div class="log-item log-info">[系统] 初始化中...</div></div>
 <div id="screen-container">
   <div id="screen"></div>
-  <textarea class="touch-input" id="touchInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
-  <div class="overlay-hint" id="overlay">点我以弹出键盘</div>
+</div>
+<div id="keyboard">
+  <!-- 键盘由JS动态生成 -->
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/v86@latest/build/libv86.js"></script>
@@ -41,8 +115,7 @@
   const logPanel = document.getElementById('log-panel');
   const screenDiv = document.getElementById('screen');
   const screenContainer = document.getElementById('screen-container');
-  const touchInput = document.getElementById('touchInput');
-  const overlay = document.getElementById('overlay');
+  const keyboardDiv = document.getElementById('keyboard');
 
   function log(msg, type = 'info') {
     const item = document.createElement('div');
@@ -62,7 +135,7 @@
     cdrom: { url: "https://cdn.jsdelivr.net/gh/copy/images@master/linux.iso" },
     wasm_path: "https://cdn.jsdelivr.net/npm/v86@latest/build/v86.wasm",
     autostart: true,
-    disable_keyboard: false,
+    disable_keyboard: true,   // 禁止 v86 自己监听物理键盘，避免冲突
     disable_speaker: true,
     acpi: true,
   };
@@ -78,78 +151,177 @@
 
   emulator.add_listener("emulator-loaded", () => {
     log('模拟器已启动！命令行就绪。', 'success');
-    log('当前系统：Buildroot Linux · 登录：root / 空密码', 'info');
-    overlay.style.display = 'none';
+    log('点击下方虚拟键盘输入', 'info');
   });
 
   emulator.add_listener("error", (e) => log('模拟器错误: ' + (e.message || e), 'error'));
 
-  // 焦点管理：点击屏幕弹出键盘
-  screenContainer.addEventListener('click', () => {
-    touchInput.focus();
-  });
+  // 虚拟键盘按键定义
+  const keys = [
+    // 第一行：数字和符号
+    [
+      {label:'`', code:'Backquote', key:'`', shiftKey:'~', keyCode:192},
+      {label:'1', code:'Digit1', key:'1', shiftKey:'!', keyCode:49},
+      {label:'2', code:'Digit2', key:'2', shiftKey:'@', keyCode:50},
+      {label:'3', code:'Digit3', key:'3', shiftKey:'#', keyCode:51},
+      {label:'4', code:'Digit4', key:'4', shiftKey:'$', keyCode:52},
+      {label:'5', code:'Digit5', key:'5', shiftKey:'%', keyCode:53},
+      {label:'6', code:'Digit6', key:'6', shiftKey:'^', keyCode:54},
+      {label:'7', code:'Digit7', key:'7', shiftKey:'&', keyCode:55},
+      {label:'8', code:'Digit8', key:'8', shiftKey:'*', keyCode:56},
+      {label:'9', code:'Digit9', key:'9', shiftKey:'(', keyCode:57},
+      {label:'0', code:'Digit0', key:'0', shiftKey:')', keyCode:48},
+      {label:'-', code:'Minus', key:'-', shiftKey:'_', keyCode:173},
+      {label:'=', code:'Equal', key:'=', shiftKey:'+', keyCode:61},
+      {label:'Back', code:'Backspace', key:'Backspace', keyCode:8, wide:true}
+    ],
+    // 第二行：QWERTY
+    [
+      {label:'Tab', code:'Tab', key:'Tab', keyCode:9, wide:true},
+      {label:'q', code:'KeyQ', key:'q', shiftKey:'Q', keyCode:81},
+      {label:'w', code:'KeyW', key:'w', shiftKey:'W', keyCode:87},
+      {label:'e', code:'KeyE', key:'e', shiftKey:'E', keyCode:69},
+      {label:'r', code:'KeyR', key:'r', shiftKey:'R', keyCode:82},
+      {label:'t', code:'KeyT', key:'t', shiftKey:'T', keyCode:84},
+      {label:'y', code:'KeyY', key:'y', shiftKey:'Y', keyCode:89},
+      {label:'u', code:'KeyU', key:'u', shiftKey:'U', keyCode:85},
+      {label:'i', code:'KeyI', key:'i', shiftKey:'I', keyCode:73},
+      {label:'o', code:'KeyO', key:'o', shiftKey:'O', keyCode:79},
+      {label:'p', code:'KeyP', key:'p', shiftKey:'P', keyCode:80},
+      {label:'[', code:'BracketLeft', key:'[', shiftKey:'{', keyCode:219},
+      {label:']', code:'BracketRight', key:']', shiftKey:'}', keyCode:221},
+      {label:'\\', code:'Backslash', key:'\\', shiftKey:'|', keyCode:220}
+    ],
+    // 第三行：ASDF
+    [
+      {label:'Caps', code:'CapsLock', key:'CapsLock', keyCode:20, wide:true, caps:true},
+      {label:'a', code:'KeyA', key:'a', shiftKey:'A', keyCode:65},
+      {label:'s', code:'KeyS', key:'s', shiftKey:'S', keyCode:83},
+      {label:'d', code:'KeyD', key:'d', shiftKey:'D', keyCode:68},
+      {label:'f', code:'KeyF', key:'f', shiftKey:'F', keyCode:70},
+      {label:'g', code:'KeyG', key:'g', shiftKey:'G', keyCode:71},
+      {label:'h', code:'KeyH', key:'h', shiftKey:'H', keyCode:72},
+      {label:'j', code:'KeyJ', key:'j', shiftKey:'J', keyCode:74},
+      {label:'k', code:'KeyK', key:'k', shiftKey:'K', keyCode:75},
+      {label:'l', code:'KeyL', key:'l', shiftKey:'L', keyCode:76},
+      {label:';', code:'Semicolon', key:';', shiftKey:':', keyCode:186},
+      {label:"'", code:'Quote', key:"'", shiftKey:'"', keyCode:222},
+      {label:'Enter', code:'Enter', key:'Enter', keyCode:13, wide:true}
+    ],
+    // 第四行：ZXCV + 修饰键
+    [
+      {label:'Shift', code:'ShiftLeft', key:'Shift', keyCode:16, wide:true, shift:true},
+      {label:'z', code:'KeyZ', key:'z', shiftKey:'Z', keyCode:90},
+      {label:'x', code:'KeyX', key:'x', shiftKey:'X', keyCode:88},
+      {label:'c', code:'KeyC', key:'c', shiftKey:'C', keyCode:67},
+      {label:'v', code:'KeyV', key:'v', shiftKey:'V', keyCode:86},
+      {label:'b', code:'KeyB', key:'b', shiftKey:'B', keyCode:66},
+      {label:'n', code:'KeyN', key:'n', shiftKey:'N', keyCode:78},
+      {label:'m', code:'KeyM', key:'m', shiftKey:'M', keyCode:77},
+      {label:',', code:'Comma', key:',', shiftKey:'<', keyCode:188},
+      {label:'.', code:'Period', key:'.', shiftKey:'>', keyCode:190},
+      {label:'/', code:'Slash', key:'/', shiftKey:'?', keyCode:191},
+      {label:'Ctrl', code:'ControlLeft', key:'Control', keyCode:17, wide:true},
+    ],
+    // 第五行：空格、方向键等
+    [
+      {label:'Alt', code:'AltLeft', key:'Alt', keyCode:18, wide:true},
+      {label:'Space', code:'Space', key:' ', keyCode:32, space:true},
+      {label:'Esc', code:'Escape', key:'Escape', keyCode:27},
+      {label:'←', code:'ArrowLeft', key:'ArrowLeft', keyCode:37},
+      {label:'↑', code:'ArrowUp', key:'ArrowUp', keyCode:38},
+      {label:'↓', code:'ArrowDown', key:'ArrowDown', keyCode:40},
+      {label:'→', code:'ArrowRight', key:'ArrowRight', keyCode:39},
+    ]
+  ];
 
-  // 通用的键盘事件克隆转发
-  function cloneAndDispatch(originalEvent) {
-    const type = originalEvent.type;
+  let shiftActive = false;
+  let capsActive = false;
+
+  // 构建键盘UI
+  function buildKeyboard() {
+    keyboardDiv.innerHTML = '';
+    keys.forEach(row => {
+      const rowDiv = document.createElement('div');
+      rowDiv.className = 'key-row';
+      row.forEach(k => {
+        const btn = document.createElement('button');
+        btn.className = 'key-btn';
+        if (k.wide) btn.classList.add('wide');
+        if (k.space) btn.classList.add('space');
+        btn.textContent = k.label;
+        btn.setAttribute('data-code', k.code);
+        // 存储按键数据
+        btn._keyData = k;
+        btn.addEventListener('click', () => handleKeyPress(k, btn));
+        rowDiv.appendChild(btn);
+      });
+      keyboardDiv.appendChild(rowDiv);
+    });
+  }
+
+  // 发送按键事件到v86
+  function sendKeyEvent(type, keyData) {
+    if (!emulator) return;
+    let key = keyData.key;
+    let code = keyData.code;
+    let keyCode = keyData.keyCode;
+
+    // 处理Shift/Caps
+    const isLetter = code.startsWith('Key') && code.length === 4;
+    if ((shiftActive || capsActive) && isLetter && keyData.shiftKey) {
+      key = keyData.shiftKey;
+    }
+    if (shiftActive && !isLetter && keyData.shiftKey) {
+      key = keyData.shiftKey;
+    }
+
     const init = {
-      key: originalEvent.key,
-      code: originalEvent.code,
-      location: originalEvent.location,
-      repeat: originalEvent.repeat,
-      isComposing: originalEvent.isComposing,
-      charCode: originalEvent.charCode,
-      keyCode: originalEvent.keyCode,
-      which: originalEvent.which,
+      key: key,
+      code: code,
+      keyCode: keyCode,
+      which: keyCode,
       bubbles: true,
       cancelable: true,
       view: window,
-      detail: originalEvent.detail,
+      location: code.includes('Left') ? 1 : 0,
+      repeat: false,
+      isComposing: false,
     };
-    // 对于 keypress，某些浏览器还需要 charCode 属性
-    const clonedEvent = new KeyboardEvent(type, init);
-    // 额外设置 charCode 如果构造函数未处理
-    Object.defineProperty(clonedEvent, 'charCode', { value: originalEvent.charCode });
-    Object.defineProperty(clonedEvent, 'keyCode', { value: originalEvent.keyCode });
-    Object.defineProperty(clonedEvent, 'which', { value: originalEvent.which });
-    screenDiv.dispatchEvent(clonedEvent);
+
+    const event = new KeyboardEvent(type, init);
+    // 确保charCode属性
+    Object.defineProperty(event, 'charCode', { value: keyCode });
+    screenDiv.dispatchEvent(event);
   }
 
-  // 监听 textarea 上的键盘事件并转发
-  touchInput.addEventListener('keydown', (e) => {
-    cloneAndDispatch(e);
-    e.preventDefault();   // 阻止 textarea 默认行为（如光标移动、文本输入）
-  });
-
-  touchInput.addEventListener('keypress', (e) => {
-    cloneAndDispatch(e);
-    e.preventDefault();
-  });
-
-  touchInput.addEventListener('keyup', (e) => {
-    cloneAndDispatch(e);
-    e.preventDefault();
-  });
-
-  // 确保 textarea 始终为空，并且不响应输入法
-  touchInput.addEventListener('input', (e) => {
-    touchInput.value = '';
-  });
-  touchInput.addEventListener('compositionstart', () => {});
-  touchInput.addEventListener('compositionend', () => {
-    touchInput.value = '';
-  });
-
-  // Esc 释放键盘
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      touchInput.blur();
-      overlay.style.display = 'block';
-      log('键盘已释放', 'info');
+  function handleKeyPress(keyData, btn) {
+    // 特殊处理修饰键
+    if (keyData.shift) { // Shift
+      shiftActive = !shiftActive;
+      btn.classList.toggle('active', shiftActive);
+      return;
     }
-  });
+    if (keyData.caps) { // Caps
+      capsActive = !capsActive;
+      btn.classList.toggle('active', capsActive);
+      return;
+    }
 
-  log('初始化完成', 'success');
+    // 发送keydown和keyup
+    sendKeyEvent('keydown', keyData);
+    sendKeyEvent('keyup', keyData);
+
+    // 如果按了Shift，自动取消（模拟物理键盘的按下后自动弹起）
+    if (shiftActive) {
+      shiftActive = false;
+      document.querySelectorAll('[data-code="ShiftLeft"]').forEach(b => b.classList.remove('active'));
+    }
+  }
+
+  // 鼠标点击屏幕释放键盘焦点（无作用）
+  buildKeyboard();
+  log('虚拟键盘已就绪', 'success');
 })();
 </script>
 </body>
