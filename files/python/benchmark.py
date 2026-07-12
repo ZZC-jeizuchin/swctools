@@ -1,39 +1,33 @@
 #!/usr/bin/env python3
 """
 CPU Benchmark - 自适应单核/多核性能测试（带进度汇报）
-特点：
-  - 动态校准，自动让测试持续约 5 秒
-  - Windows 上提升进程优先级为 HIGH
-  - Linux 上尝试设置 nice -20（需 sudo 或权限）
-  - 每 2 秒汇报进度
+兼容 Windows / Linux，自动校准约 5 秒运行时间
 """
 
 import os, sys, time, math, threading, platform
 import multiprocessing as mp
 from multiprocessing import Process, Queue, Event, Value
 
-# ---------- 高性能优先级设置 ----------
+# ---------- 高性能优先级 ----------
 def set_high_priority():
-    """尽可能提高当前进程的调度优先级"""
     try:
         if platform.system() == 'Windows':
             import ctypes
-            # HIGH_PRIORITY_CLASS = 0x80
-            ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x80)
+            ctypes.windll.kernel32.SetPriorityClass(
+                ctypes.windll.kernel32.GetCurrentProcess(), 0x80  # HIGH
+            )
             print("[INFO] Windows 进程优先级已设为 HIGH")
         else:
-            # Linux / macOS：尝试 renice 到 -20
             try:
                 os.nice(-20)
                 print("[INFO] nice 值已设为 -20")
             except PermissionError:
-                print("[WARN] 无权限设置高优先级，请用 sudo 运行以获得更准确的结果")
+                print("[WARN] 无权限设置高优先级，请用 sudo 运行")
     except Exception as e:
         print(f"[WARN] 无法设置高优先级: {e}")
 
 # ---------- 操作单元 ----------
 def operation_unit(seed: int) -> int:
-    """混合运算单元，返回一个整数"""
     s = seed
     s += 1
     s *= 3
@@ -52,18 +46,22 @@ def operation_unit(seed: int) -> int:
     s += fib(10)
     return s
 
-# ---------- 自适应校准 ----------
+# ---------- 校准用 worker（必须全局定义） ----------
+def calibrate_worker(stop_event, queue):
+    """快速校准 worker：持续运行直到 stop_event 被设置"""
+    cnt = 0
+    seed = 0
+    while not stop_event.is_set():
+        seed = operation_unit(seed)
+        cnt += 1
+    queue.put(cnt)
+
 def calibrate_single(target_seconds=5.0) -> int:
-    """
-    单线程跑 1 秒，估算在 target_seconds 秒内能完成多少操作单元。
-    返回推荐的总操作数。
-    """
     print("[CALIBRATE] 正在校准单核速度...")
-    duration = 1.0
     count = 0
     seed = 0
     start = time.perf_counter()
-    while time.perf_counter() - start < duration:
+    while time.perf_counter() - start < 1.0:
         seed = operation_unit(seed)
         count += 1
     elapsed = time.perf_counter() - start
@@ -73,29 +71,15 @@ def calibrate_single(target_seconds=5.0) -> int:
     return total
 
 def calibrate_multi(target_seconds=5.0, num_workers=None) -> int:
-    """
-    多进程校准：先启动所有 worker 跑 1 秒，统计总吞吐量，
-    然后推算达到 target_seconds 需要的总操作数。
-    注意：多进程模式下总操作数是所有进程完成的总和，我们需要设置一个
-    全局目标，当所有进程完成的累计数达到该目标时停止。
-    """
     if num_workers is None:
         num_workers = os.cpu_count() or 4
     print(f"[CALIBRATE] 正在用 {num_workers} 个进程校准多核速度...")
 
     queue = Queue()
     stop_event = Event()
-    # 启动 worker 1 秒后停止
-    def worker(stop, q):
-        cnt = 0
-        seed = 0
-        while not stop.is_set():
-            seed = operation_unit(seed)
-            cnt += 1
-        q.put(cnt)
     processes = []
     for _ in range(num_workers):
-        p = Process(target=worker, args=(stop_event, queue))
+        p = Process(target=calibrate_worker, args=(stop_event, queue))
         p.start()
         processes.append(p)
 
@@ -107,7 +91,7 @@ def calibrate_multi(target_seconds=5.0, num_workers=None) -> int:
         p.join()
         total_ops += queue.get()
 
-    ops_per_sec = total_ops / 1.0   # 因为跑了 1 秒
+    ops_per_sec = total_ops / 1.0
     target_total = int(ops_per_sec * target_seconds)
     print(f"[CALIBRATE] 多核总速度: {ops_per_sec:,.0f} 单元/秒，目标 {target_seconds} 秒 → 总操作数 {target_total:,}")
     return target_total
@@ -147,7 +131,7 @@ def single_core_benchmark(total_units: int):
     print("-" * 50)
 
 # ---------- 多核测试 ----------
-def worker_process(queue: Queue, stop_event: Event, batch_size: int = 100):
+def multi_worker(queue, stop_event, batch_size=100):
     cnt = 0
     seed = 0
     while not stop_event.is_set():
@@ -159,7 +143,7 @@ def worker_process(queue: Queue, stop_event: Event, batch_size: int = 100):
     if cnt > 0:
         queue.put(cnt)
 
-def monitor(queue: Queue, stop_event: Event, global_progress: Value, target: int):
+def monitor(queue, stop_event, global_progress, target):
     total = 0
     while total < target:
         try:
@@ -171,10 +155,11 @@ def monitor(queue: Queue, stop_event: Event, global_progress: Value, target: int
     stop_event.set()
     global_progress.value = total
 
-def progress_reporter(global_progress: Value, stop_event: Event, target: int):
+def progress_reporter(global_progress, stop_event, target):
     while not stop_event.is_set():
         done = global_progress.value
-        print(f"[进度] 已完成 {done:,} / {target:,} ({done/target*100:.1f}%)")
+        if done > 0:
+            print(f"[进度] 已完成 {done:,} / {target:,} ({done/target*100:.1f}%)")
         time.sleep(2.0)
     done = global_progress.value
     print(f"[进度] 最终完成 {done:,} 个操作单元")
@@ -196,7 +181,7 @@ def multi_core_benchmark(target_units: int):
     processes = []
     start = time.perf_counter()
     for _ in range(num_cpus):
-        p = Process(target=worker_process, args=(queue, stop_event, 100))
+        p = Process(target=multi_worker, args=(queue, stop_event, 100))
         p.start()
         processes.append(p)
 
