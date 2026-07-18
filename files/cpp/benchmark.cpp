@@ -37,6 +37,12 @@ void set_high_priority() {
 #endif
 }
 
+// ========== 递归斐波那契（避免 lambda 递归错误） ==========
+int fib(int n) {
+    if (n <= 1) return n;
+    return fib(n - 1) + fib(n - 2);
+}
+
 // ========== 操作单元（混合运算，防止优化） ==========
 int operation_unit(int seed) {
     int s = seed;
@@ -51,12 +57,6 @@ int operation_unit(int seed) {
     f = std::cos(f) * 1000.0;
     f = std::log(std::abs(f) + 1.1) * 50.0;
     s = static_cast<int>(f) + s;
-
-    // 递归斐波那契（深度10）
-    auto fib = [](int n) -> int {
-        if (n <= 1) return n;
-        return fib(n - 1) + fib(n - 2);
-    };
     s += fib(10);
     return s;
 }
@@ -179,7 +179,9 @@ void multi_test(unsigned num_threads, double test_seconds) {
 
     std::this_thread::sleep_for(std::chrono::seconds(static_cast<int>(test_seconds)));
     stop.store(true, std::memory_order_relaxed);
-    double elapsed = test_seconds; // 近似，实际可能略有偏差
+
+    // 实际耗时可能稍微超过 test_seconds，这里采用固定值计算分数
+    double elapsed = test_seconds; 
 
     for (auto& t : threads) t.join();
     reporter.join();
@@ -207,7 +209,7 @@ int main() {
     const double TEST_SECONDS = 5.0;
 
     if (mode == "single") {
-        calibrate_single();          // 仅显示参考
+        calibrate_single();
         single_test(TEST_SECONDS);
     } else if (mode == "multi") {
         unsigned num_threads = std::thread::hardware_concurrency();
