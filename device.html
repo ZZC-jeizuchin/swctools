@@ -1,304 +1,357 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Device Info - SwCTools</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta name="baiduspider" content="noindex, nofollow">
+  <meta name="yandex" content="noindex, nofollow">
+  <meta name="bingbot" content="noindex, nofollow">
+  <title>设备信息 - SwCTools</title>
   <style>
-    /* ---------- 深色主题 (与主站保持一致，若主站已有定义可整体替换) ---------- */
     :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --border: #30363d;
-      --text: #e6edf3;
-      --text-secondary: #8b949e;
-      --accent: #58a6ff;
-      --accent-emphasis: #1f6feb;
-      --danger: #f85149;
-      --radius: 8px;
+      --bg-body: #e8edf2;
+      --panel-bg: rgba(255, 255, 255, 0.85);
+      --panel-border: #bdd1e6;
+      --title-color: #1e4b6e;
+      --badge-bg: #d0e2f0;
+      --badge-color: #2c6182;
+      --cat-btn-bg: #d9e8f4;
+      --cat-btn-border: #adc7e0;
+      --cat-btn-color: #1a4059;
+      --cat-btn-hover-bg: #c2d8ed;
+      --jump-row-bg: #e7f0f9;
+      --jump-row-border: #c1d6ea;
+      --input-border: #b3cce2;
+      --input-focus-border: #4f7fa3;
+      --go-btn-bg: #4f7f9e;
+      --go-btn-hover-bg: #3a6b8c;
+      --tool-btn-bg: #cddef0;
+      --tool-btn-border: #a3bed8;
+      --tool-btn-color: #1a4765;
+      --modal-overlay-bg: rgba(22, 50, 70, 0.25);
+      --modal-card-bg: #f3f9ff;
+      --link-item-bg: #d9e8f4;
+      --link-item-border: #adc7e0;
+      --drawer-panel-bg: #f3f9ff;
+      --device-item-bg: #eaf2fc;
+      --device-label-color: #1e4b6e;
+      --device-value-color: #0d3450;
+      --text-color: #173e58;
+      --corner-text-color: #3a6a8e;
+      --fps-bg: rgba(255, 255, 255, 0.6);
     }
 
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    [data-theme="dark"] {
+      --bg-body: #0a0f14;
+      --panel-bg: rgba(13, 27, 42, 0.9);
+      --panel-border: #1e3a5a;
+      --title-color: #a0c4e8;
+      --badge-bg: #1a3a5c;
+      --badge-color: #b0d0f0;
+      --cat-btn-bg: #1e3a5a;
+      --cat-btn-border: #2a5a8a;
+      --cat-btn-color: #c0d8f0;
+      --cat-btn-hover-bg: #2a5a8a;
+      --jump-row-bg: #122a3e;
+      --jump-row-border: #1e4a6e;
+      --input-border: #2a5a8a;
+      --input-focus-border: #5a9ac0;
+      --go-btn-bg: #2a6a9e;
+      --go-btn-hover-bg: #1a4a7a;
+      --tool-btn-bg: #1e3a5a;
+      --tool-btn-border: #2a5a8a;
+      --tool-btn-color: #c0d8f0;
+      --modal-overlay-bg: rgba(0, 20, 40, 0.5);
+      --modal-card-bg: #0d1b2a;
+      --link-item-bg: #1e3a5a;
+      --link-item-border: #2a5a8a;
+      --drawer-panel-bg: #0d1b2a;
+      --device-item-bg: #122a3e;
+      --device-label-color: #a0c4e8;
+      --device-value-color: #d0e0f0;
+      --text-color: #c0d8f0;
+      --corner-text-color: #7a9ab0;
+      --fps-bg: rgba(0, 0, 0, 0.5);
     }
 
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; }
     body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      background: var(--bg-body);
       min-height: 100vh;
-      padding: 1.5rem;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    /* 角落水印 */
-    .corner-watermark {
-      position: fixed;
-      bottom: 12px;
-      right: 16px;
-      font-size: 0.7rem;
-      color: var(--text-secondary);
-      opacity: 0.5;
-      letter-spacing: 0.5px;
-      z-index: 1000;
-      pointer-events: none;
-    }
-
-    /* FPS 计数器 */
-    .fps-counter {
-      position: fixed;
-      top: 12px;
-      right: 16px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 4px 8px;
-      font-size: 0.75rem;
-      color: var(--accent);
-      font-family: monospace;
-      z-index: 1001;
-    }
-
-    /* 返回主站按钮 */
-    .back-btn {
-      position: absolute;
-      top: 1.5rem;
-      left: 1.5rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 8px 16px;
-      border-radius: var(--radius);
-      font-size: 0.9rem;
-      cursor: pointer;
-      text-decoration: none;
-      display: inline-flex;
+      display: flex;
       align-items: center;
-      gap: 6px;
-      transition: background 0.2s;
-    }
-    .back-btn:hover {
-      background: var(--border);
+      justify-content: center;
+      padding: 12px;
+      position: relative;
     }
 
-    /* 主容器 */
-    .container {
-      width: 100%;
-      max-width: 960px;
-      margin-top: 4rem;
+    button, a, input, select, .drawer-overlay, .modal-overlay, .drawer-panel, .modal-card,
+    .cat-btn, .go-btn, .tool-btn, .nav-btn, .link-item, .run-ide-btn,
+    .theme-toggle, .perf-toggle {
+      -webkit-tap-highlight-color: transparent;
+      outline: none;
     }
 
-    h1 {
-      font-size: 1.8rem;
-      font-weight: 600;
-      margin-bottom: 0.25rem;
-      color: var(--text);
+    .corner-tl { position: fixed; top: calc(var(--main-h) * 0.015); left: calc(var(--main-w) * 0.015); font-size: calc(var(--main-h) * 0.026); color: var(--corner-text-color); opacity: 0.8; z-index: 3000; pointer-events: none; }
+    .corner-tr { position: fixed; top: calc(var(--main-h) * 0.015); right: calc(var(--main-w) * 0.02); font-size: calc(var(--main-h) * 0.026); color: var(--corner-text-color); opacity: 0.8; z-index: 3000; pointer-events: none; background: var(--fps-bg); padding: calc(var(--main-h) * 0.005) calc(var(--main-w) * 0.012); border-radius: calc(var(--main-w) * 0.02); border: 1px solid var(--panel-border); }
+    .corner-br { position: fixed; bottom: calc(var(--main-h) * 0.015); right: calc(var(--main-w) * 0.02); font-size: calc(var(--main-h) * 0.026); color: var(--corner-text-color); opacity: 0.8; z-index: 3000; pointer-events: none; }
+
+    .theme-toggle, .perf-toggle {
+      position: fixed; bottom: 12px; font-size: 0.9rem; background: var(--cat-btn-bg); border: 1px solid var(--panel-border); color: var(--corner-text-color); padding: 5px 14px; border-radius: 32px; cursor: pointer; opacity: 0.85; transition: 0.2s; z-index: 3000; font-weight: 500;
     }
-    .subtitle {
-      color: var(--text-secondary);
-      font-size: 0.9rem;
-      margin-bottom: 2rem;
+    .theme-toggle { left: 16px; } .perf-toggle { left: 100px; }
+    .theme-toggle:hover, .perf-toggle:hover { opacity: 1; background: var(--cat-btn-hover-bg); }
+
+    .main-panel {
+      width:  min(96vw, calc(96vh * 2.5));
+      height: min(96vh, calc(96vw / 1.33));
+      margin: auto;
+      background: var(--panel-bg);
+      border-radius: calc(var(--main-w) * 0.025);
+      box-shadow: 0 calc(var(--main-h) * 0.015) calc(var(--main-h) * 0.03) calc(var(--main-h) * -0.008) rgba(30, 65, 90, 0.18);
+      border: 1px solid var(--panel-border);
+      display: flex; flex-direction: column; overflow: hidden; position: relative;
     }
 
-    /* 基本信息网格 */
+    /* 设备页面专有：允许内部滚动 */
+    .main-panel.device-page {
+      overflow-y: auto;
+    }
+
+    .title-section {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: calc(var(--main-h) * 0.003) solid var(--panel-border);
+      padding: calc(var(--main-h) * 0.015) calc(var(--main-w) * 0.02);
+    }
+    .title-section h1 { font-size: calc(var(--main-h) * 0.065); font-weight: 550; color: var(--title-color); white-space: nowrap; }
+    .badge { font-size: calc(var(--main-h) * 0.039); color: var(--badge-color); background: var(--badge-bg); padding: calc(var(--main-h) * 0.01) calc(var(--main-w) * 0.025); border-radius: calc(var(--main-w) * 0.04); border: 1px solid var(--cat-btn-border); white-space: nowrap; }
+
+    .back-btn {
+      background: var(--cat-btn-bg); border: 1px solid var(--cat-btn-border); color: var(--cat-btn-color);
+      padding: calc(var(--main-h) * 0.015) calc(var(--main-w) * 0.025);
+      border-radius: calc(var(--main-w) * 0.05);
+      font-size: calc(var(--main-h) * 0.0325); font-weight: 520;
+      cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+      transition: all 0.15s; white-space: nowrap;
+    }
+    .back-btn:hover { background: var(--cat-btn-hover-bg); }
+
     .basic-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 1rem;
-      margin-bottom: 2rem;
+      gap: calc(var(--main-w) * 0.02);
+      padding: calc(var(--main-h) * 0.02) calc(var(--main-w) * 0.02);
     }
     .info-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
+      background: var(--device-item-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: calc(var(--main-w) * 0.03);
+      padding: calc(var(--main-h) * 0.018) calc(var(--main-w) * 0.02);
     }
     .info-card .label {
-      font-size: 0.75rem;
-      color: var(--text-secondary);
+      font-size: calc(var(--main-h) * 0.028);
+      color: var(--device-label-color);
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.4em;
     }
     .info-card .value {
-      font-size: 1.1rem;
+      font-size: calc(var(--main-h) * 0.036);
       font-weight: 500;
+      color: var(--device-value-color);
       word-break: break-word;
     }
-    .live-indicator {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      margin-right: 4px;
-      background: var(--accent);
-    }
 
-    /* 按钮组 */
     .modal-triggers {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-bottom: 1.5rem;
+      gap: calc(var(--main-w) * 0.015);
+      padding: 0 calc(var(--main-w) * 0.02);
+      margin: calc(var(--main-h) * 0.01) 0;
     }
     .modal-triggers button {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 8px 18px;
-      border-radius: 20px;
-      font-size: 0.85rem;
+      background: var(--cat-btn-bg);
+      border: 1px solid var(--cat-btn-border);
+      color: var(--cat-btn-color);
+      padding: calc(var(--main-h) * 0.018) calc(var(--main-w) * 0.03);
+      border-radius: calc(var(--main-w) * 0.05);
+      font-size: calc(var(--main-h) * 0.0325);
+      font-weight: 520;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.15s;
       white-space: nowrap;
     }
     .modal-triggers button:hover {
-      background: var(--accent-emphasis);
-      border-color: var(--accent);
+      background: var(--cat-btn-hover-bg);
+      border-color: #7fa5c5;
     }
 
     .refresh-btn {
-      background: var(--accent-emphasis);
+      background: var(--go-btn-bg);
       border: none;
       color: white;
-      padding: 10px 28px;
-      border-radius: 20px;
-      font-size: 0.9rem;
-      font-weight: 500;
+      padding: calc(var(--main-h) * 0.025) calc(var(--main-w) * 0.04);
+      border-radius: calc(var(--main-w) * 0.07);
+      font-size: calc(var(--main-h) * 0.039);
+      font-weight: 600;
       cursor: pointer;
-      margin-bottom: 1.5rem;
-      transition: opacity 0.2s;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
+      margin: calc(var(--main-h) * 0.02) auto;
+      display: block;
+      transition: all 0.15s;
     }
-    .refresh-btn:hover {
-      opacity: 0.9;
-    }
+    .refresh-btn:hover { background: var(--go-btn-hover-bg); }
 
-    /* 模态框 */
     .modal-overlay {
-      display: none;
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.7);
-      align-items: center;
-      justify-content: center;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--modal-overlay-bg);
+      backdrop-filter: blur(3px);
+      visibility: hidden; opacity: 0;
+      transition: opacity 0.2s, visibility 0s 0.2s;
       z-index: 2000;
-      backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
     }
-    .modal-overlay.active {
-      display: flex;
+    .modal-overlay.show {
+      visibility: visible; opacity: 1;
+      transition: opacity 0.2s, visibility 0s;
     }
-    .modal-content {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.8rem;
-      width: 90%;
-      max-width: 600px;
-      max-height: 80vh;
+    .modal-card {
+      background: var(--modal-card-bg);
+      width: 90vw; max-width: 600px; max-height: 70vh;
+      border-radius: calc(var(--main-w) * 0.04);
+      border: 1px solid var(--panel-border);
+      box-shadow: 0 calc(var(--main-h) * 0.02) calc(var(--main-h) * 0.04) rgba(28, 60, 84, 0.25);
+      padding: calc(var(--main-h) * 0.03) calc(var(--main-w) * 0.03);
       overflow-y: auto;
       position: relative;
-      color: var(--text);
     }
-    .modal-content h3 {
-      margin-bottom: 1rem;
-      font-size: 1.3rem;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 0.5rem;
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: calc(var(--main-h) * 0.02);
+      border-bottom: calc(var(--main-h) * 0.002) solid var(--panel-border);
+      padding-bottom: calc(var(--main-h) * 0.01);
     }
+    .modal-header h3 { font-size: calc(var(--main-h) * 0.0676); color: var(--title-color); }
     .modal-close {
-      position: absolute;
-      top: 12px;
-      right: 16px;
-      background: transparent;
-      border: none;
-      color: var(--text-secondary);
-      font-size: 1.5rem;
-      cursor: pointer;
-      line-height: 1;
+      background: none; border: none; font-size: calc(var(--main-h) * 0.091);
+      cursor: pointer; color: var(--corner-text-color); line-height: 1;
     }
-    .modal-content .detail-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 0.6rem 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.9rem;
+    .detail-item {
+      display: flex; justify-content: space-between; padding: 0.6em 0;
+      border-bottom: 1px solid var(--panel-border); font-size: calc(var(--main-h) * 0.034);
+      color: var(--text-color);
     }
-    .detail-item .d-label {
-      color: var(--text-secondary);
-    }
-    .detail-item .d-value {
-      font-weight: 500;
-      text-align: right;
-      word-break: break-word;
-      max-width: 60%;
-    }
+    .detail-item .d-label { color: var(--device-label-color); }
+    .detail-item .d-value { font-weight: 500; text-align: right; word-break: break-word; max-width: 60%; }
 
-    @media (max-width: 480px) {
-      body { padding: 1rem; }
-      .back-btn { top: 0.8rem; left: 0.8rem; padding: 6px 12px; font-size: 0.8rem; }
-    }
+    /* 性能模式同样适用 */
+    .perf-mode .cat-btn, .perf-mode .go-btn, .perf-mode .tool-btn, .perf-mode .nav-btn,
+    .perf-mode .link-item, .perf-mode .run-ide-btn, .perf-mode .theme-toggle, .perf-mode .perf-toggle,
+    .perf-mode button { transition: none !important; transform: none !important; box-shadow: none !important; }
+    .perf-mode .cat-btn:hover, .perf-mode .go-btn:hover, .perf-mode .tool-btn:hover,
+    .perf-mode .nav-btn:hover, .perf-mode .link-item:hover, .perf-mode .run-ide-btn:hover,
+    .perf-mode .theme-toggle:hover, .perf-mode .perf-toggle:hover { background: var(--cat-btn-hover-bg); border-color: #7fa5c5; }
+    .perf-mode .modal-overlay { transition: none !important; backdrop-filter: none !important; }
+    .perf-mode .modal-card { transform: none !important; filter: none !important; transition: none !important; }
+    .perf-mode .main-panel, .perf-mode .modal-card { box-shadow: none !important; }
   </style>
 </head>
 <body>
-  <!-- FPS 计数器 -->
-  <div class="fps-counter" id="fpsCounter">FPS: --</div>
+  <div class="corner-tl">不自由毋宁死 · 不自由毋寧死 · Give me liberty or give me death · 自由か、死か</div>
+  <div class="corner-tr" id="fpsDisplay">FPS: --</div>
+  <div class="corner-br">made by ZZC-jeizuchin, github</div>
+  <button class="theme-toggle" id="themeToggle">深色</button>
+  <button class="perf-toggle" id="perfToggle">性能</button>
 
-  <!-- 角落水印 -->
-  <div class="corner-watermark">SwCTools Device</div>
-
-  <!-- 返回主站 -->
-  <a href="index.html" class="back-btn">← 返回主站</a>
-
-  <div class="container">
-    <h1>📱 完整设备信息</h1>
-    <p class="subtitle">实时硬件与软件详情 · 每秒自动刷新</p>
-
-    <!-- 基本信息区域（直接可见） -->
-    <div class="basic-grid" id="basicInfoGrid">
-      <!-- 动态填充 JS -->
+  <div class="main-panel device-page" id="mainPanel">
+    <div class="title-section">
+      <a href="index.html" class="back-btn">← 返回主站</a>
+      <h1>设备信息</h1>
+      <span class="badge">Device</span>
     </div>
 
-    <!-- 分类模态框按钮 -->
-    <div class="modal-triggers" id="modalTriggers">
-      <!-- 动态生成 11 个按钮 -->
-    </div>
+    <!-- 基本信息网格（直接可见） -->
+    <div class="basic-grid" id="basicInfoGrid"></div>
+
+    <!-- 分类详情按钮组 -->
+    <div class="modal-triggers" id="modalTriggers"></div>
 
     <button class="refresh-btn" id="refreshAllBtn">🔄 刷新所有信息</button>
+  </div>
 
-    <!-- 模态框容器 (由JS动态管理) -->
-    <div id="modalContainer"></div>
+  <!-- 模态框容器 -->
+  <div class="modal-overlay" id="deviceModal">
+    <div class="modal-card" id="deviceModalCard">
+      <div class="modal-header">
+        <h3 id="modalTitle">详情</h3>
+        <button class="modal-close" id="modalCloseBtn">&times;</button>
+      </div>
+      <div id="modalBody"></div>
+    </div>
   </div>
 
   <script>
     (function() {
-      // ---------- FPS 监测 ----------
-      let fpsFrames = 0, fpsLastTime = performance.now();
-      function updateFPS() {
-        fpsFrames++;
-        const now = performance.now();
-        if (now - fpsLastTime >= 1000) {
-          const fps = Math.round((fpsFrames * 1000) / (now - fpsLastTime));
-          document.getElementById('fpsCounter').textContent = `FPS: ${fps}`;
-          fpsFrames = 0;
-          fpsLastTime = now;
-        }
-        requestAnimationFrame(updateFPS);
-      }
-      updateFPS();
+      // ---------- 主站一致的主题、性能、FPS、尺寸缩放 ----------
+      const mainPanel = document.getElementById('mainPanel');
+      const root = document.documentElement;
 
-      // ---------- 全局数据存储 ----------
+      function updatePanelScale() {
+        const w = mainPanel.clientWidth;
+        const h = mainPanel.clientHeight;
+        root.style.setProperty('--main-w', w + 'px');
+        root.style.setProperty('--main-h', h + 'px');
+      }
+      window.addEventListener('resize', updatePanelScale);
+      window.addEventListener('orientationchange', updatePanelScale);
+      // 初始调用需要在元素渲染后，使用 setTimeout 或监听 load
+      setTimeout(updatePanelScale, 10);
+
+      const themeToggle = document.getElementById('themeToggle');
+      const currentTheme = localStorage.getItem('swc_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', currentTheme);
+      themeToggle.textContent = currentTheme === 'light' ? '深色' : '亮色';
+      themeToggle.addEventListener('click', () => {
+        const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('swc_theme', newTheme);
+        themeToggle.textContent = newTheme === 'light' ? '深色' : '亮色';
+        // 主题改变后需重新计算尺寸变量
+        setTimeout(updatePanelScale, 0);
+      });
+
+      const perfToggle = document.getElementById('perfToggle');
+      if (localStorage.getItem('swc_perf') === 'true') document.body.classList.add('perf-mode');
+      perfToggle.textContent = document.body.classList.contains('perf-mode') ? '性能 ✓' : '性能';
+      perfToggle.addEventListener('click', () => {
+        const enabled = document.body.classList.toggle('perf-mode');
+        localStorage.setItem('swc_perf', enabled);
+        perfToggle.textContent = enabled ? '性能 ✓' : '性能';
+      });
+
+      const fpsDisplay = document.getElementById('fpsDisplay');
+      let frameCount = 0, lastFpsUpdate = performance.now(), rafId = null;
+      function fpsLoop() {
+        frameCount++;
+        const now = performance.now();
+        if (now - lastFpsUpdate >= 1000) {
+          fpsDisplay.textContent = `FPS: ${Math.round(frameCount * 1000 / (now - lastFpsUpdate))}`;
+          frameCount = 0; lastFpsUpdate = now;
+        }
+        rafId = requestAnimationFrame(fpsLoop);
+      }
+      function startFPS() { if (!rafId) rafId = requestAnimationFrame(fpsLoop); }
+      function stopFPS() { if (rafId) { cancelAnimationFrame(rafId); rafId = null; } }
+      document.addEventListener('visibilitychange', () => document.hidden ? stopFPS() : startFPS());
+      startFPS();
+
+      // ---------- 设备数据存储 ----------
       let deviceData = {
         systemArch: '采集中...',
         publicIP: '获取中...',
@@ -315,7 +368,6 @@
         cpuCores: navigator.hardwareConcurrency || '未知',
         memory: navigator.deviceMemory || '未知',
         ua: navigator.userAgent,
-        // 高级信息
         userAgentData: null,
         sensors: {},
         peripherals: {},
@@ -323,12 +375,12 @@
         features: {},
       };
 
-      // ---------- 工具函数 ----------
+      // 工具函数
       function safeGet(fn, fallback = '不支持') {
         try { return fn(); } catch (e) { return fallback; }
       }
 
-      // 获取本地 IP（WebRTC 方式）
+      // 获取本地 IP（WebRTC）
       async function getLocalIP() {
         return new Promise((resolve) => {
           const pc = new RTCPeerConnection({ iceServers: [] });
@@ -358,9 +410,8 @@
         }
       }
 
-      // ---------- 核心采集函数 ----------
+      // ---------- 各类信息采集 ----------
       async function collectAllData() {
-        // 并行采集所有独立数据
         const [
           publicIP,
           localIP,
@@ -391,7 +442,6 @@
           checkFeatures()
         ]);
 
-        // 更新全局数据
         deviceData.publicIP = publicIP;
         deviceData.localIP = localIP;
         deviceData.battery = batteryInfo;
@@ -407,7 +457,7 @@
         deviceData.features = featuresSupport;
         deviceData.online = navigator.onLine;
 
-        // 屏幕信息 (非异步)
+        // 屏幕信息
         deviceData.screen = {
           logical: `${window.screen.width}x${window.screen.height}`,
           physical: `${window.screen.width * window.devicePixelRatio}x${window.screen.height * window.devicePixelRatio}`,
@@ -416,33 +466,34 @@
           colorDepth: window.screen.colorDepth,
         };
 
-        // 系统架构优先使用 userAgentData，否则回退
-        if (highEntropyData?.platform) {
-          deviceData.systemArch = highEntropyData.platform;
+        // 系统架构：优先使用高熵数据
+        if (highEntropyData) {
+          let archStr = highEntropyData.platform || '未知平台';
+          if (highEntropyData.architecture) archStr += ` (${highEntropyData.architecture})`;
+          if (highEntropyData.bitness) archStr += ` ${highEntropyData.bitness}位`;
+          if (highEntropyData.platformVersion) archStr += ` v${highEntropyData.platformVersion}`;
+          if (highEntropyData.fullVersionList?.length) {
+            const brands = highEntropyData.fullVersionList.map(b => `${b.brand} ${b.version}`).join(' / ');
+            archStr += ` [${brands}]`;
+          }
+          deviceData.systemArch = archStr;
         } else {
           deviceData.systemArch = navigator.platform || '未知';
         }
-        // 如果有完整版本列表则附加品牌
-        if (highEntropyData?.fullVersionList) {
-          const brands = highEntropyData.fullVersionList.map(b => `${b.brand} ${b.version}`).join(' / ');
-          deviceData.systemArch += ` (${brands})`;
-        }
 
-        // CPU/内存实时部分稍后更新
         updateBasicUI();
-        updateAllOpenModals();
+        updateOpenModalIfAny();
       }
 
-      // ---------- 各单项采集实现 ----------
       async function getBatteryInfo() {
         if (!navigator.getBattery) return { level: '不支持', charging: '不支持' };
         try {
-          const battery = await navigator.getBattery();
+          const b = await navigator.getBattery();
           return {
-            level: (battery.level * 100).toFixed(0) + '%',
-            charging: battery.charging ? '充电中' : '未充电',
-            chargingTime: battery.chargingTime === Infinity ? 'N/A' : battery.chargingTime + 's',
-            dischargingTime: battery.dischargingTime === Infinity ? 'N/A' : battery.dischargingTime + 's'
+            level: (b.level * 100).toFixed(0) + '%',
+            charging: b.charging ? '充电中' : '未充电',
+            chargingTime: b.chargingTime === Infinity ? 'N/A' : b.chargingTime + 's',
+            dischargingTime: b.dischargingTime === Infinity ? 'N/A' : b.dischargingTime + 's'
           };
         } catch (e) {
           return { level: '错误', charging: '错误' };
@@ -463,10 +514,10 @@
       async function getStorageInfo() {
         if (!navigator.storage?.estimate) return { quota: '不支持', usage: '不支持' };
         try {
-          const estimate = await navigator.storage.estimate();
-          const quota = estimate.quota ? (estimate.quota / 1e9).toFixed(1) + ' GB' : '未知';
-          const usage = estimate.usage ? (estimate.usage / 1e9).toFixed(2) + ' GB' : '未知';
-          const percent = estimate.quota && estimate.usage ? ((estimate.usage / estimate.quota) * 100).toFixed(1) + '%' : 'N/A';
+          const est = await navigator.storage.estimate();
+          const quota = est.quota ? (est.quota / 1e9).toFixed(1) + ' GB' : '未知';
+          const usage = est.usage ? (est.usage / 1e9).toFixed(2) + ' GB' : '未知';
+          const percent = est.quota && est.usage ? ((est.usage / est.quota) * 100).toFixed(1) + '%' : 'N/A';
           return { quota, usage, percent };
         } catch (e) {
           return { quota: '错误', usage: '错误' };
@@ -477,7 +528,7 @@
         if (!navigator.mediaDevices?.enumerateDevices) return [];
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
-          return devices.map(d => ({ kind: d.kind, label: d.label || '未命名', deviceId: d.deviceId.slice(0,8) + '...' }));
+          return devices.map(d => ({ kind: d.kind, label: d.label || '未命名', deviceId: d.deviceId.slice(0,8)+'...' }));
         } catch (e) {
           return [];
         }
@@ -488,10 +539,8 @@
           const canvas = document.createElement('canvas');
           const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
           if (!gl) return '不支持 WebGL';
-          const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-          if (debugInfo) {
-            return gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-          }
+          const ext = gl.getExtension('WEBGL_debug_renderer_info');
+          if (ext) return gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
           return 'WebGL 支持但无法获取渲染器';
         } catch (e) {
           return '检测失败';
@@ -499,14 +548,12 @@
       }
 
       async function getBrightness() {
-        // 实验性 API (仅部分 Chromium 支持)
         if ('getScreenBrightness' in navigator) {
           try {
-            const brightness = await navigator.getScreenBrightness();
-            return (brightness * 100).toFixed(0) + '%';
+            const b = await navigator.getScreenBrightness();
+            return (b * 100).toFixed(0) + '%';
           } catch (e) {}
         }
-        // 尝试通过 Battery API 相关属性？ 无标准方法
         return '不支持';
       }
 
@@ -577,29 +624,28 @@
       function updateBasicUI() {
         const grid = document.getElementById('basicInfoGrid');
         const items = [
-          { label: '系统架构', value: deviceData.systemArch },
-          { label: '公网 IP', value: deviceData.publicIP },
-          { label: '本地 IP', value: deviceData.localIP },
-          { label: '屏幕 (逻辑)', value: deviceData.screen.logical },
-          { label: '屏幕 (物理)', value: deviceData.screen.physical },
-          { label: 'DPR', value: deviceData.screen.dpr },
-          { label: '视口', value: deviceData.screen.viewport },
-          { label: '电池', value: deviceData.battery.level + ' · ' + deviceData.battery.charging },
-          { label: '网络', value: deviceData.network.effectiveType || '未知' },
-          { label: 'GPU', value: deviceData.gpu },
-          { label: '存储 (已用/总额)', value: deviceData.storage.usage + ' / ' + deviceData.storage.quota },
-          { label: '亮度', value: deviceData.brightness },
-          { label: '语言', value: deviceData.language },
-          { label: '在线状态', value: deviceData.online ? '在线' : '离线' },
-          { label: 'CPU 核心', value: deviceData.cpuCores },
-          { label: '内存 (GB)', value: deviceData.memory },
-          { label: 'UA 字符串', value: deviceData.ua.length > 60 ? deviceData.ua.substring(0,60)+'...' : deviceData.ua },
+          ['系统架构', deviceData.systemArch],
+          ['公网 IP', deviceData.publicIP],
+          ['本地 IP', deviceData.localIP],
+          ['屏幕(逻辑)', deviceData.screen.logical],
+          ['屏幕(物理)', deviceData.screen.physical],
+          ['DPR', deviceData.screen.dpr],
+          ['视口', deviceData.screen.viewport],
+          ['电池', deviceData.battery.level + ' · ' + deviceData.battery.charging],
+          ['网络', deviceData.network.effectiveType || '未知'],
+          ['GPU', deviceData.gpu],
+          ['存储', deviceData.storage.usage + ' / ' + deviceData.storage.quota],
+          ['亮度', deviceData.brightness],
+          ['语言', deviceData.language],
+          ['在线', deviceData.online ? '在线' : '离线'],
+          ['CPU核心', deviceData.cpuCores],
+          ['内存(GB)', deviceData.memory],
+          ['UA', deviceData.ua.length > 50 ? deviceData.ua.substring(0,50)+'…' : deviceData.ua],
         ];
-
-        grid.innerHTML = items.map(item => `
+        grid.innerHTML = items.map(([label, value]) => `
           <div class="info-card">
-            <span class="label">${item.label}</span>
-            <span class="value">${item.value}</span>
+            <div class="label">${label}</div>
+            <div class="value">${value}</div>
           </div>
         `).join('');
       }
@@ -621,137 +667,90 @@
         { id: 'features', title: '✨ 系统特性' }
       ];
 
-      // 动态创建按钮
       const triggerContainer = document.getElementById('modalTriggers');
       modalCategories.forEach(cat => {
         const btn = document.createElement('button');
         btn.textContent = cat.title;
-        btn.addEventListener('click', () => openModal(cat.id));
+        btn.addEventListener('click', () => openModal(cat));
         triggerContainer.appendChild(btn);
       });
 
-      // 创建模态框容器
-      const modalContainer = document.getElementById('modalContainer');
-      modalCategories.forEach(cat => {
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.id = `modal-${cat.id}`;
-        overlay.innerHTML = `
-          <div class="modal-content">
-            <button class="modal-close" data-close="${cat.id}">✕</button>
-            <h3>${cat.title}</h3>
-            <div id="modal-body-${cat.id}" class="modal-body"></div>
-          </div>
-        `;
-        modalContainer.appendChild(overlay);
-      });
+      const deviceModal = document.getElementById('deviceModal');
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+      const modalCloseBtn = document.getElementById('modalCloseBtn');
+      let currentModalId = null;
 
-      // 关闭按钮事件委托
-      document.addEventListener('click', (e) => {
-        if (e.target.classList.contains('modal-close')) {
-          const id = e.target.dataset.close;
-          closeModal(id);
-        }
-        if (e.target.classList.contains('modal-overlay')) {
-          e.target.classList.remove('active');
-        }
-      });
-
-      function openModal(id) {
-        const overlay = document.getElementById(`modal-${id}`);
-        if (overlay) {
-          overlay.classList.add('active');
-          updateModalContent(id);
-        }
+      function openModal(cat) {
+        currentModalId = cat.id;
+        modalTitle.textContent = cat.title;
+        updateModalContent(cat.id);
+        deviceModal.classList.add('show');
+        document.body.style.overflow = 'hidden';
       }
 
-      function closeModal(id) {
-        const overlay = document.getElementById(`modal-${id}`);
-        if (overlay) overlay.classList.remove('active');
+      function closeModal() {
+        deviceModal.classList.remove('show');
+        document.body.style.overflow = '';
+        currentModalId = null;
       }
 
-      // 更新指定模态框内容
+      modalCloseBtn.addEventListener('click', closeModal);
+      deviceModal.addEventListener('click', (e) => {
+        if (e.target === deviceModal) closeModal();
+      });
+
       function updateModalContent(id) {
-        const body = document.getElementById(`modal-body-${id}`);
-        if (!body) return;
         const d = deviceData;
         let html = '';
         switch(id) {
           case 'battery':
-            html = renderDetailItems([
-              ['电量', d.battery.level],
-              ['充电状态', d.battery.charging],
-              ['充电时间', d.battery.chargingTime],
-              ['放电时间', d.battery.dischargingTime]
-            ]);
+            html = detailRows([['电量', d.battery.level], ['充电状态', d.battery.charging], ['充电时间', d.battery.chargingTime], ['放电时间', d.battery.dischargingTime]]);
             break;
           case 'network':
-            html = renderDetailItems([
-              ['网络类型', d.network.effectiveType],
-              ['下行带宽', d.network.downlink],
-              ['RTT', d.network.rtt],
-              ['省流量模式', d.network.saveData]
-            ]);
+            html = detailRows([['网络类型', d.network.effectiveType], ['下行带宽', d.network.downlink], ['RTT', d.network.rtt], ['省流量模式', d.network.saveData]]);
             break;
           case 'storage':
-            html = renderDetailItems([
-              ['已用空间', d.storage.usage],
-              ['总额配额', d.storage.quota],
-              ['使用率', d.storage.percent]
-            ]);
+            html = detailRows([['已用空间', d.storage.usage], ['总额配额', d.storage.quota], ['使用率', d.storage.percent]]);
             break;
           case 'brightness':
-            html = renderDetailItems([['屏幕亮度', d.brightness]]);
+            html = detailRows([['屏幕亮度', d.brightness]]);
             break;
           case 'media':
-            if (d.mediaDevices.length === 0) {
-              html = '<p>无媒体设备信息或权限未授予</p>';
-            } else {
-              html = d.mediaDevices.map(m => `<div class="detail-item"><span class="d-label">${m.kind}</span><span class="d-value">${m.label}</span></div>`).join('');
-            }
+            if (!d.mediaDevices.length) html = '<p style="color:var(--text-color)">无媒体设备信息或权限未授予</p>';
+            else html = d.mediaDevices.map(m => `<div class="detail-item"><span class="d-label">${m.kind}</span><span class="d-value">${m.label}</span></div>`).join('');
             break;
           case 'language':
-            html = renderDetailItems([
-              ['界面语言', d.language],
-              ['时区', Intl.DateTimeFormat().resolvedOptions().timeZone],
-              ['日期格式', new Intl.DateTimeFormat().format(new Date())]
-            ]);
+            html = detailRows([['界面语言', d.language], ['时区', Intl.DateTimeFormat().resolvedOptions().timeZone], ['日期格式', new Intl.DateTimeFormat().format(new Date())]]);
             break;
           case 'online':
-            html = renderDetailItems([['状态', d.online ? '在线' : '离线']]);
+            html = detailRows([['状态', d.online ? '在线' : '离线']]);
             break;
           case 'cpu':
-            html = renderDetailItems([
-              ['逻辑核心数', d.cpuCores],
-              ['设备内存 (GB)', d.memory],
-              ['User-Agent', d.ua.substring(0, 80) + (d.ua.length>80?'...':'')]
-            ]);
+            html = detailRows([['逻辑核心数', d.cpuCores], ['设备内存(GB)', d.memory], ['User-Agent', d.ua]]);
             break;
           case 'gpu':
-            html = renderDetailItems([['GPU 渲染器', d.gpu]]);
-            if (d.features.webGPU) {
-              html += '<p style="color: var(--accent); margin-top: 0.5rem;">✅ WebGPU 已支持</p>';
-            } else {
-              html += '<p style="color: var(--text-secondary); margin-top: 0.5rem;">⚠️ WebGPU 未支持或需开启 flag</p>';
-            }
+            html = detailRows([['GPU 渲染器', d.gpu]]);
+            if (d.features.webGPU) html += '<p style="color:var(--title-color); margin-top:0.5em;">✅ WebGPU 已支持</p>';
+            else html += '<p style="color:var(--text-color); margin-top:0.5em;">⚠️ WebGPU 未支持或需开启 flag</p>';
             break;
           case 'sensors':
-            html = renderDetailItems(Object.entries(d.sensors).map(([k,v]) => [k, v ? '✅' : '❌']));
+            html = detailRows(Object.entries(d.sensors).map(([k,v]) => [k, v ? '✅' : '❌']));
             break;
           case 'peripherals':
-            html = renderDetailItems(Object.entries(d.peripherals).map(([k,v]) => [k, v ? '✅' : '❌']));
+            html = detailRows(Object.entries(d.peripherals).map(([k,v]) => [k, v ? '✅' : '❌']));
             break;
           case 'webxr':
-            html = renderDetailItems([['WebXR 支持', d.webxr ? '✅ 支持' : '❌ 不支持']]);
+            html = detailRows([['WebXR 支持', d.webxr ? '✅ 支持' : '❌ 不支持']]);
             break;
           case 'features':
-            html = renderDetailItems(Object.entries(d.features).map(([k,v]) => [k, v ? '✅' : '❌']));
+            html = detailRows(Object.entries(d.features).map(([k,v]) => [k, v ? '✅' : '❌']));
             break;
         }
-        body.innerHTML = html;
+        modalBody.innerHTML = html;
       }
 
-      function renderDetailItems(items) {
+      function detailRows(items) {
         return items.map(([label, value]) => `
           <div class="detail-item">
             <span class="d-label">${label}</span>
@@ -760,24 +759,21 @@
         `).join('');
       }
 
-      function updateAllOpenModals() {
-        modalCategories.forEach(cat => {
-          const overlay = document.getElementById(`modal-${cat.id}`);
-          if (overlay && overlay.classList.contains('active')) {
-            updateModalContent(cat.id);
-          }
-        });
+      function updateOpenModalIfAny() {
+        if (currentModalId) updateModalContent(currentModalId);
       }
 
       // ---------- 实时监测 (每秒) ----------
       async function liveUpdate() {
         // 电池
         if (navigator.getBattery) {
-          const battery = await navigator.getBattery();
-          deviceData.battery.level = (battery.level * 100).toFixed(0) + '%';
-          deviceData.battery.charging = battery.charging ? '充电中' : '未充电';
-          deviceData.battery.chargingTime = battery.chargingTime === Infinity ? 'N/A' : battery.chargingTime + 's';
-          deviceData.battery.dischargingTime = battery.dischargingTime === Infinity ? 'N/A' : battery.dischargingTime + 's';
+          try {
+            const b = await navigator.getBattery();
+            deviceData.battery.level = (b.level * 100).toFixed(0) + '%';
+            deviceData.battery.charging = b.charging ? '充电中' : '未充电';
+            deviceData.battery.chargingTime = b.chargingTime === Infinity ? 'N/A' : b.chargingTime + 's';
+            deviceData.battery.dischargingTime = b.dischargingTime === Infinity ? 'N/A' : b.dischargingTime + 's';
+          } catch(e) {}
         }
         // 网络
         const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -785,10 +781,11 @@
           deviceData.network.effectiveType = conn.effectiveType;
           deviceData.network.downlink = conn.downlink ? conn.downlink + ' Mbps' : '未知';
           deviceData.network.rtt = conn.rtt ? conn.rtt + ' ms' : '未知';
+          deviceData.network.saveData = conn.saveData ? '已开启' : '关闭';
         }
         // 在线状态
         deviceData.online = navigator.onLine;
-        // 存储快读刷新（异步，可能不变）
+        // 存储（异步但不阻塞）
         if (navigator.storage?.estimate) {
           try {
             const est = await navigator.storage.estimate();
@@ -798,32 +795,39 @@
             deviceData.storage.percent = pct;
           } catch(e) {}
         }
-        // 亮度（实验性）
+        // 亮度
         if ('getScreenBrightness' in navigator) {
           try {
             const b = await navigator.getScreenBrightness();
             deviceData.brightness = (b * 100).toFixed(0) + '%';
-          } catch(e){}
+          } catch(e) {}
         }
 
         updateBasicUI();
-        updateAllOpenModals();
+        updateOpenModalIfAny();
       }
 
-      // 启动实时循环
       setInterval(liveUpdate, 1000);
 
       // 刷新所有按钮
-      document.getElementById('refreshAllBtn').addEventListener('click', () => {
-        collectAllData();
+      document.getElementById('refreshAllBtn').addEventListener('click', collectAllData);
+
+      // 监听在线/离线事件
+      window.addEventListener('online', () => {
+        deviceData.online = true;
+        updateBasicUI();
+        updateOpenModalIfAny();
+      });
+      window.addEventListener('offline', () => {
+        deviceData.online = false;
+        updateBasicUI();
+        updateOpenModalIfAny();
       });
 
-      // 初次加载
-      collectAllData();
-
-      // 监听在线/离线事件更新UI
-      window.addEventListener('online', () => { deviceData.online = true; updateBasicUI(); updateAllOpenModals(); });
-      window.addEventListener('offline', () => { deviceData.online = false; updateBasicUI(); updateAllOpenModals(); });
+      // 初始加载
+      setTimeout(collectAllData, 100);
+      // 重新计算尺寸
+      window.addEventListener('load', updatePanelScale);
     })();
   </script>
 </body>
