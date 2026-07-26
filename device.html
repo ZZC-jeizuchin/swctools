@@ -117,7 +117,6 @@
       display: flex; flex-direction: column; overflow: hidden; position: relative;
     }
 
-    /* 设备页面专有：允许内部滚动 */
     .main-panel.device-page {
       overflow-y: auto;
     }
@@ -250,7 +249,15 @@
     .detail-item .d-label { color: var(--device-label-color); }
     .detail-item .d-value { font-weight: 500; text-align: right; word-break: break-word; max-width: 60%; }
 
-    /* 性能模式同样适用 */
+    .ua-full {
+      font-family: monospace; font-size: calc(var(--main-h) * 0.028); word-break: break-all;
+      background: var(--device-item-bg); border: 1px solid var(--panel-border);
+      padding: calc(var(--main-h) * 0.01) calc(var(--main-w) * 0.02);
+      border-radius: calc(var(--main-w) * 0.03);
+      margin: calc(var(--main-h) * 0.01) calc(var(--main-w) * 0.02);
+      color: var(--text-color);
+    }
+
     .perf-mode .cat-btn, .perf-mode .go-btn, .perf-mode .tool-btn, .perf-mode .nav-btn,
     .perf-mode .link-item, .perf-mode .run-ide-btn, .perf-mode .theme-toggle, .perf-mode .perf-toggle,
     .perf-mode button { transition: none !important; transform: none !important; box-shadow: none !important; }
@@ -279,10 +286,13 @@
     <!-- 基本信息网格（直接可见） -->
     <div class="basic-grid" id="basicInfoGrid"></div>
 
+    <!-- UA完整字符串单独展示 -->
+    <div class="ua-full" id="uaFull"></div>
+
     <!-- 分类详情按钮组 -->
     <div class="modal-triggers" id="modalTriggers"></div>
 
-    <button class="refresh-btn" id="refreshAllBtn">🔄 刷新所有信息</button>
+    <button class="refresh-btn" id="refreshAllBtn">刷新所有信息</button>
   </div>
 
   <!-- 模态框容器 -->
@@ -298,7 +308,6 @@
 
   <script>
     (function() {
-      // ---------- 主站一致的主题、性能、FPS、尺寸缩放 ----------
       const mainPanel = document.getElementById('mainPanel');
       const root = document.documentElement;
 
@@ -310,7 +319,6 @@
       }
       window.addEventListener('resize', updatePanelScale);
       window.addEventListener('orientationchange', updatePanelScale);
-      // 初始调用需要在元素渲染后，使用 setTimeout 或监听 load
       setTimeout(updatePanelScale, 10);
 
       const themeToggle = document.getElementById('themeToggle');
@@ -322,7 +330,6 @@
         document.documentElement.setAttribute('data-theme', newTheme);
         localStorage.setItem('swc_theme', newTheme);
         themeToggle.textContent = newTheme === 'light' ? '深色' : '亮色';
-        // 主题改变后需重新计算尺寸变量
         setTimeout(updatePanelScale, 0);
       });
 
@@ -351,7 +358,6 @@
       document.addEventListener('visibilitychange', () => document.hidden ? stopFPS() : startFPS());
       startFPS();
 
-      // ---------- 设备数据存储 ----------
       let deviceData = {
         systemArch: '采集中...',
         publicIP: '获取中...',
@@ -363,7 +369,8 @@
         storage: {},
         brightness: '未知',
         mediaDevices: [],
-        language: navigator.language || '未知',
+        languages: [],
+        timezone: '',
         online: navigator.onLine,
         cpuCores: navigator.hardwareConcurrency || '未知',
         memory: navigator.deviceMemory || '未知',
@@ -373,14 +380,53 @@
         peripherals: {},
         webxr: false,
         features: {},
+        performanceMemory: null,
+        maxTouchPoints: navigator.maxTouchPoints || 0,
+        gamepads: [],
+        vibration: 'vibrate' in navigator,
+        payment: 'PaymentRequest' in window,
+        credentials: 'credentials' in navigator,
+        wakeLock: 'wakeLock' in navigator,
+        webglVendor: '',
+        webglRenderer: '',
+        webgl2Vendor: '',
+        webgl2Renderer: '',
+        canvasFingerprint: '',
+        plugins: [],
+        mimeTypes: [],
+        cookieEnabled: navigator.cookieEnabled,
+        doNotTrack: navigator.doNotTrack || window.doNotTrack || 'unspecified',
+        javaEnabled: navigator.javaEnabled ? navigator.javaEnabled() : false,
+        pdfViewer: 'application/pdf' in navigator.mimeTypes ? '支持' : '不支持',
+        webdriver: navigator.webdriver ? '是' : '否',
+        deviceOrientation: 'DeviceOrientationEvent' in window,
+        deviceMotion: 'DeviceMotionEvent' in window,
+        geolocation: 'geolocation' in navigator,
+        clipboard: 'clipboard' in navigator,
+        notifications: 'Notification' in window,
+        pushManager: 'PushManager' in window,
+        backgroundSync: 'SyncManager' in window,
+        bluetoothAvailability: false,
+        usbDevices: false,
+        xrSupported: false,
+        connectionType: '',
+        connectionDownlink: '',
+        connectionRtt: '',
+        saveData: false,
+        batteryLevel: '',
+        batteryCharging: '',
+        storageQuota: '',
+        storageUsage: '',
+        storagePercent: '',
+        screenBrightness: '不支持',
+        memoryInfo: null,
+        fonts: [],
+        audioContext: null,
+        sampleRate: 0,
       };
 
-      // 工具函数
-      function safeGet(fn, fallback = '不支持') {
-        try { return fn(); } catch (e) { return fallback; }
-      }
+      function safeGet(fn, fallback = '不支持') { try { return fn(); } catch (e) { return fallback; } }
 
-      // 获取本地 IP（WebRTC）
       async function getLocalIP() {
         return new Promise((resolve) => {
           const pc = new RTCPeerConnection({ iceServers: [] });
@@ -390,99 +436,15 @@
             if (!e.candidate) return;
             const ipRegex = /([0-9]{1,3}\.){3}[0-9]{1,3}/;
             const match = e.candidate.candidate.match(ipRegex);
-            if (match) {
-              resolve(match[0]);
-              pc.close();
-            }
+            if (match) { resolve(match[0]); pc.close(); }
           };
           setTimeout(() => resolve('未获取到'), 2000);
         });
       }
 
-      // 获取公网 IP
       async function getPublicIP() {
-        try {
-          const res = await fetch('https://api.ipify.org?format=json');
-          const data = await res.json();
-          return data.ip;
-        } catch (e) {
-          return '获取失败';
-        }
-      }
-
-      // ---------- 各类信息采集 ----------
-      async function collectAllData() {
-        const [
-          publicIP,
-          localIP,
-          batteryInfo,
-          networkInfo,
-          storageInfo,
-          mediaDevices,
-          gpuInfo,
-          brightnessVal,
-          highEntropyData,
-          sensorsSupport,
-          peripheralsSupport,
-          webxrSupport,
-          featuresSupport
-        ] = await Promise.all([
-          getPublicIP(),
-          getLocalIP(),
-          getBatteryInfo(),
-          getNetworkInfo(),
-          getStorageInfo(),
-          getMediaDevices(),
-          getGPUInfo(),
-          getBrightness(),
-          getHighEntropyData(),
-          checkSensors(),
-          checkPeripherals(),
-          checkWebXR(),
-          checkFeatures()
-        ]);
-
-        deviceData.publicIP = publicIP;
-        deviceData.localIP = localIP;
-        deviceData.battery = batteryInfo;
-        deviceData.network = networkInfo;
-        deviceData.storage = storageInfo;
-        deviceData.mediaDevices = mediaDevices;
-        deviceData.gpu = gpuInfo;
-        deviceData.brightness = brightnessVal;
-        deviceData.userAgentData = highEntropyData;
-        deviceData.sensors = sensorsSupport;
-        deviceData.peripherals = peripheralsSupport;
-        deviceData.webxr = webxrSupport;
-        deviceData.features = featuresSupport;
-        deviceData.online = navigator.onLine;
-
-        // 屏幕信息
-        deviceData.screen = {
-          logical: `${window.screen.width}x${window.screen.height}`,
-          physical: `${window.screen.width * window.devicePixelRatio}x${window.screen.height * window.devicePixelRatio}`,
-          dpr: window.devicePixelRatio,
-          viewport: `${window.innerWidth}x${window.innerHeight}`,
-          colorDepth: window.screen.colorDepth,
-        };
-
-        // 系统架构：优先使用高熵数据
-        if (highEntropyData) {
-          let archStr = highEntropyData.platform || '未知平台';
-          if (highEntropyData.architecture) archStr += ` (${highEntropyData.architecture})`;
-          if (highEntropyData.bitness) archStr += ` ${highEntropyData.bitness}位`;
-          if (highEntropyData.platformVersion) archStr += ` v${highEntropyData.platformVersion}`;
-          if (highEntropyData.fullVersionList?.length) {
-            const brands = highEntropyData.fullVersionList.map(b => `${b.brand} ${b.version}`).join(' / ');
-            archStr += ` [${brands}]`;
-          }
-          deviceData.systemArch = archStr;
-        } else {
-          deviceData.systemArch = navigator.platform || '未知';
-        }
-
-        updateBasicUI();
-        updateOpenModalIfAny();
+        try { const res = await fetch('https://api.ipify.org?format=json'); return (await res.json()).ip; }
+        catch { return '获取失败'; }
       }
 
       async function getBatteryInfo() {
@@ -495,9 +457,7 @@
             chargingTime: b.chargingTime === Infinity ? 'N/A' : b.chargingTime + 's',
             dischargingTime: b.dischargingTime === Infinity ? 'N/A' : b.dischargingTime + 's'
           };
-        } catch (e) {
-          return { level: '错误', charging: '错误' };
-        }
+        } catch { return { level: '错误', charging: '错误' }; }
       }
 
       async function getNetworkInfo() {
@@ -519,19 +479,15 @@
           const usage = est.usage ? (est.usage / 1e9).toFixed(2) + ' GB' : '未知';
           const percent = est.quota && est.usage ? ((est.usage / est.quota) * 100).toFixed(1) + '%' : 'N/A';
           return { quota, usage, percent };
-        } catch (e) {
-          return { quota: '错误', usage: '错误' };
-        }
+        } catch { return { quota: '错误', usage: '错误' }; }
       }
 
       async function getMediaDevices() {
         if (!navigator.mediaDevices?.enumerateDevices) return [];
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
-          return devices.map(d => ({ kind: d.kind, label: d.label || '未命名', deviceId: d.deviceId.slice(0,8)+'...' }));
-        } catch (e) {
-          return [];
-        }
+          return devices.map(d => ({ kind: d.kind, label: d.label || '未命名', groupId: d.groupId?.slice(0,8) || '' }));
+        } catch { return []; }
       }
 
       async function getGPUInfo() {
@@ -540,19 +496,18 @@
           const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
           if (!gl) return '不支持 WebGL';
           const ext = gl.getExtension('WEBGL_debug_renderer_info');
-          if (ext) return gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+          if (ext) {
+            deviceData.webglVendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL);
+            deviceData.webglRenderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+            return deviceData.webglRenderer;
+          }
           return 'WebGL 支持但无法获取渲染器';
-        } catch (e) {
-          return '检测失败';
-        }
+        } catch { return '检测失败'; }
       }
 
       async function getBrightness() {
         if ('getScreenBrightness' in navigator) {
-          try {
-            const b = await navigator.getScreenBrightness();
-            return (b * 100).toFixed(0) + '%';
-          } catch (e) {}
+          try { const b = await navigator.getScreenBrightness(); return (b * 100).toFixed(0) + '%'; } catch {}
         }
         return '不支持';
       }
@@ -560,22 +515,10 @@
       async function getHighEntropyData() {
         if (!navigator.userAgentData?.getHighEntropyValues) return null;
         try {
-          const data = await navigator.userAgentData.getHighEntropyValues([
+          return await navigator.userAgentData.getHighEntropyValues([
             "architecture", "bitness", "model", "platform", "platformVersion", "fullVersionList"
           ]);
-          return {
-            architecture: data.architecture,
-            bitness: data.bitness,
-            model: data.model,
-            platform: data.platform,
-            platformVersion: data.platformVersion,
-            fullVersionList: data.fullVersionList,
-            brands: navigator.userAgentData.brands,
-            mobile: navigator.userAgentData.mobile
-          };
-        } catch (e) {
-          return null;
-        }
+        } catch { return null; }
       }
 
       function checkSensors() {
@@ -585,6 +528,8 @@
           magnetometer: 'Magnetometer' in window,
           ambientLight: 'AmbientLightSensor' in window,
           proximity: 'ProximitySensor' in window,
+          absoluteOrientation: 'AbsoluteOrientationSensor' in window,
+          relativeOrientation: 'RelativeOrientationSensor' in window,
         };
       }
 
@@ -599,12 +544,10 @@
         };
       }
 
-      function checkWebXR() {
-        return 'xr' in navigator && 'XRSystem' in window;
-      }
+      function checkWebXR() { return 'xr' in navigator && 'XRSystem' in window; }
 
       function checkFeatures() {
-        return {
+        const f = {
           webGPU: 'gpu' in navigator,
           serviceWorker: 'serviceWorker' in navigator,
           webShare: 'share' in navigator,
@@ -617,31 +560,204 @@
           screenWakeLock: 'wakeLock' in navigator,
           clipboardRead: 'clipboard' in navigator && 'read' in navigator.clipboard,
           idleDetection: 'IdleDetector' in window,
+          contentIndex: 'ContentIndex' in ServiceWorkerRegistration.prototype,
+          periodicSync: 'PeriodicSyncManager' in window,
+          shapeDetection: 'BarcodeDetector' in window || 'FaceDetector' in window || 'TextDetector' in window,
+          virtualKeyboard: 'virtualKeyboard' in navigator,
+          screenOrientation: 'orientation' in screen,
+          fullscreen: document.fullscreenEnabled || document.webkitFullscreenEnabled || document.mozFullScreenEnabled,
+          pictureInPicture: document.pictureInPictureEnabled,
+          webAuthn: 'PublicKeyCredential' in window,
+          autoplay: 'autoplay' in document.createElement('video'),
         };
+        return f;
       }
 
-      // ---------- UI 更新 ----------
+      function getPerformanceMemory() {
+        if (performance && performance.memory) {
+          return {
+            jsHeapSizeLimit: (performance.memory.jsHeapSizeLimit / 1048576).toFixed(1) + ' MB',
+            totalJSHeapSize: (performance.memory.totalJSHeapSize / 1048576).toFixed(1) + ' MB',
+            usedJSHeapSize: (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + ' MB',
+          };
+        }
+        return null;
+      }
+
+      function getGamepads() {
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        if (!pads) return [];
+        return Array.from(pads).filter(p => p).map(p => ({ id: p.id, connected: p.connected }));
+      }
+
+      function getPluginsAndMime() {
+        const plugins = [];
+        if (navigator.plugins) {
+          for (let i = 0; i < navigator.plugins.length; i++) {
+            plugins.push(navigator.plugins[i].name);
+          }
+        }
+        const mimeTypes = [];
+        if (navigator.mimeTypes) {
+          for (let i = 0; i < navigator.mimeTypes.length; i++) {
+            mimeTypes.push(navigator.mimeTypes[i].type);
+          }
+        }
+        return { plugins, mimeTypes };
+      }
+
+      async function getAudioContextInfo() {
+        try {
+          const ac = new (window.AudioContext || window.webkitAudioContext)();
+          const sr = ac.sampleRate;
+          await ac.close();
+          return { sampleRate: sr };
+        } catch { return null; }
+      }
+
+      // 主采集
+      async function collectAllData() {
+        const [
+          publicIP, localIP, batteryInfo, networkInfo, storageInfo,
+          mediaDevices, gpuInfo, brightnessVal, highEntropyData,
+          audioCtxInfo
+        ] = await Promise.all([
+          getPublicIP(), getLocalIP(), getBatteryInfo(), getNetworkInfo(),
+          getStorageInfo(), getMediaDevices(), getGPUInfo(), getBrightness(),
+          getHighEntropyData(), getAudioContextInfo()
+        ]);
+
+        deviceData.publicIP = publicIP;
+        deviceData.localIP = localIP;
+        deviceData.battery = batteryInfo;
+        deviceData.network = networkInfo;
+        deviceData.storage = storageInfo;
+        deviceData.mediaDevices = mediaDevices;
+        deviceData.gpu = gpuInfo;
+        deviceData.brightness = brightnessVal;
+        deviceData.userAgentData = highEntropyData;
+        deviceData.sensors = checkSensors();
+        deviceData.peripherals = checkPeripherals();
+        deviceData.webxr = checkWebXR();
+        deviceData.features = checkFeatures();
+        deviceData.performanceMemory = getPerformanceMemory();
+        deviceData.maxTouchPoints = navigator.maxTouchPoints || 0;
+        deviceData.gamepads = getGamepads();
+        deviceData.vibration = 'vibrate' in navigator;
+        deviceData.payment = 'PaymentRequest' in window;
+        deviceData.credentials = 'credentials' in navigator;
+        deviceData.wakeLock = 'wakeLock' in navigator;
+        const pluginInfo = getPluginsAndMime();
+        deviceData.plugins = pluginInfo.plugins;
+        deviceData.mimeTypes = pluginInfo.mimeTypes;
+        deviceData.cookieEnabled = navigator.cookieEnabled;
+        deviceData.doNotTrack = navigator.doNotTrack || window.doNotTrack || 'unspecified';
+        deviceData.javaEnabled = navigator.javaEnabled ? navigator.javaEnabled() : false;
+        deviceData.webdriver = navigator.webdriver ? '是' : '否';
+        deviceData.deviceOrientation = 'DeviceOrientationEvent' in window;
+        deviceData.deviceMotion = 'DeviceMotionEvent' in window;
+        deviceData.geolocation = 'geolocation' in navigator;
+        deviceData.clipboard = 'clipboard' in navigator;
+        deviceData.notifications = 'Notification' in window;
+        deviceData.pushManager = 'PushManager' in window;
+        deviceData.backgroundSync = 'SyncManager' in window;
+        if (audioCtxInfo) deviceData.sampleRate = audioCtxInfo.sampleRate;
+        deviceData.languages = navigator.languages || [navigator.language];
+        deviceData.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        // 屏幕
+        deviceData.screen = {
+          logical: `${window.screen.width}x${window.screen.height}`,
+          physical: `${window.screen.width * window.devicePixelRatio}x${window.screen.height * window.devicePixelRatio}`,
+          dpr: window.devicePixelRatio,
+          viewport: `${window.innerWidth}x${window.innerHeight}`,
+          colorDepth: window.screen.colorDepth,
+          pixelDepth: window.screen.pixelDepth,
+          availWidth: window.screen.availWidth,
+          availHeight: window.screen.availHeight,
+          orientation: screen.orientation ? screen.orientation.type : '不支持'
+        };
+
+        // 系统架构
+        if (highEntropyData) {
+          let archStr = highEntropyData.platform || '未知平台';
+          if (highEntropyData.architecture) archStr += ` (${highEntropyData.architecture})`;
+          if (highEntropyData.bitness) archStr += ` ${highEntropyData.bitness}位`;
+          if (highEntropyData.platformVersion) archStr += ` v${highEntropyData.platformVersion}`;
+          if (highEntropyData.fullVersionList?.length) {
+            const brands = highEntropyData.fullVersionList.map(b => `${b.brand} ${b.version}`).join(' / ');
+            archStr += ` [${brands}]`;
+          }
+          deviceData.systemArch = archStr;
+        } else {
+          deviceData.systemArch = navigator.platform || '未知';
+        }
+
+        updateAllUI();
+      }
+
+      function updateAllUI() {
+        updateBasicUI();
+        document.getElementById('uaFull').textContent = 'UA: ' + deviceData.ua;
+        updateOpenModalIfAny();
+      }
+
       function updateBasicUI() {
         const grid = document.getElementById('basicInfoGrid');
+        const d = deviceData;
         const items = [
-          ['系统架构', deviceData.systemArch],
-          ['公网 IP', deviceData.publicIP],
-          ['本地 IP', deviceData.localIP],
-          ['屏幕(逻辑)', deviceData.screen.logical],
-          ['屏幕(物理)', deviceData.screen.physical],
-          ['DPR', deviceData.screen.dpr],
-          ['视口', deviceData.screen.viewport],
-          ['电池', deviceData.battery.level + ' · ' + deviceData.battery.charging],
-          ['网络', deviceData.network.effectiveType || '未知'],
-          ['GPU', deviceData.gpu],
-          ['存储', deviceData.storage.usage + ' / ' + deviceData.storage.quota],
-          ['亮度', deviceData.brightness],
-          ['语言', deviceData.language],
-          ['在线', deviceData.online ? '在线' : '离线'],
-          ['CPU核心', deviceData.cpuCores],
-          ['内存(GB)', deviceData.memory],
-          ['UA', deviceData.ua.length > 50 ? deviceData.ua.substring(0,50)+'…' : deviceData.ua],
+          ['系统架构', d.systemArch],
+          ['公网 IP', d.publicIP],
+          ['本地 IP', d.localIP],
+          ['屏幕(逻辑)', d.screen.logical],
+          ['屏幕(物理)', d.screen.physical],
+          ['DPR', d.screen.dpr],
+          ['视口', d.screen.viewport],
+          ['颜色深度', d.screen.colorDepth],
+          ['像素深度', d.screen.pixelDepth],
+          ['可用屏幕宽', d.screen.availWidth],
+          ['可用屏幕高', d.screen.availHeight],
+          ['屏幕方向', d.screen.orientation],
+          ['电池', (d.battery.level || '') + ' · ' + (d.battery.charging || '')],
+          ['网络类型', d.network.effectiveType || '未知'],
+          ['下行带宽', d.network.downlink],
+          ['RTT', d.network.rtt],
+          ['省流量', d.network.saveData],
+          ['GPU', d.gpu],
+          ['WebGL 供应商', d.webglVendor || '未获取'],
+          ['WebGL 渲染器', d.webglRenderer || '未获取'],
+          ['存储(已用/总额)', (d.storage.usage || '') + ' / ' + (d.storage.quota || '')],
+          ['存储使用率', d.storage.percent],
+          ['亮度', d.brightness],
+          ['语言(列表)', d.languages.join(', ')],
+          ['时区', d.timezone],
+          ['在线状态', d.online ? '在线' : '离线'],
+          ['CPU核心', d.cpuCores],
+          ['设备内存(GB)', d.memory],
+          ['最大触摸点', d.maxTouchPoints],
+          ['振动支持', d.vibration ? '是' : '否'],
+          ['支付请求', d.payment ? '是' : '否'],
+          ['凭据管理', d.credentials ? '是' : '否'],
+          ['屏幕唤醒锁', d.wakeLock ? '是' : '否'],
+          ['WebDriver', d.webdriver],
+          ['Cookie启用', d.cookieEnabled ? '是' : '否'],
+          ['Do Not Track', d.doNotTrack],
+          ['Java启用', d.javaEnabled ? '是' : '否'],
+          ['设备方向', d.deviceOrientation ? '是' : '否'],
+          ['设备运动', d.deviceMotion ? '是' : '否'],
+          ['地理定位', d.geolocation ? '是' : '否'],
+          ['剪贴板', d.clipboard ? '是' : '否'],
+          ['通知', d.notifications ? '是' : '否'],
+          ['推送管理', d.pushManager ? '是' : '否'],
+          ['后台同步', d.backgroundSync ? '是' : '否'],
+          ['音频采样率', d.sampleRate ? d.sampleRate + ' Hz' : '未获取'],
+          ['游戏手柄', d.gamepads.length > 0 ? d.gamepads.map(g => g.id).join(', ') : '无'],
         ];
+        if (d.performanceMemory) {
+          items.push(['JS堆大小限制', d.performanceMemory.jsHeapSizeLimit]);
+          items.push(['JS堆总大小', d.performanceMemory.totalJSHeapSize]);
+          items.push(['JS堆已用', d.performanceMemory.usedJSHeapSize]);
+        }
         grid.innerHTML = items.map(([label, value]) => `
           <div class="info-card">
             <div class="label">${label}</div>
@@ -650,21 +766,26 @@
         `).join('');
       }
 
-      // 模态框管理
+      // 模态框分类（更多分类）
       const modalCategories = [
-        { id: 'battery', title: '🔋 电池详情' },
-        { id: 'network', title: '📶 网络详情' },
-        { id: 'storage', title: '💾 存储详情' },
-        { id: 'brightness', title: '☀️ 屏幕亮度' },
-        { id: 'media', title: '🎥 媒体设备' },
-        { id: 'language', title: '🌐 语言与地区' },
-        { id: 'online', title: '🔌 在线状态' },
-        { id: 'cpu', title: '🧠 CPU & 内存' },
-        { id: 'gpu', title: '🎮 GPU 信息' },
-        { id: 'sensors', title: '📡 传感器支持' },
-        { id: 'peripherals', title: '🖥️ 外设支持' },
-        { id: 'webxr', title: '🥽 WebXR' },
-        { id: 'features', title: '✨ 系统特性' }
+        { id: 'battery', title: '电池详情' },
+        { id: 'network', title: '网络详情' },
+        { id: 'storage', title: '存储详情' },
+        { id: 'brightness', title: '屏幕亮度' },
+        { id: 'media', title: '媒体设备' },
+        { id: 'language', title: '语言与时区' },
+        { id: 'online', title: '在线状态' },
+        { id: 'cpu', title: 'CPU 与内存' },
+        { id: 'gpu', title: 'GPU 信息' },
+        { id: 'sensors', title: '传感器支持' },
+        { id: 'peripherals', title: '外设支持' },
+        { id: 'webxr', title: 'WebXR' },
+        { id: 'features', title: '系统特性' },
+        { id: 'plugins', title: '插件与MIME' },
+        { id: 'screen', title: '屏幕详细' },
+        { id: 'performance', title: '性能内存' },
+        { id: 'gamepad', title: '游戏手柄' },
+        { id: 'misc', title: '杂项' }
       ];
 
       const triggerContainer = document.getElementById('modalTriggers');
@@ -696,76 +817,88 @@
       }
 
       modalCloseBtn.addEventListener('click', closeModal);
-      deviceModal.addEventListener('click', (e) => {
-        if (e.target === deviceModal) closeModal();
-      });
+      deviceModal.addEventListener('click', (e) => { if (e.target === deviceModal) closeModal(); });
 
       function updateModalContent(id) {
         const d = deviceData;
         let html = '';
+        const row = (l, v) => `<div class="detail-item"><span class="d-label">${l}</span><span class="d-value">${v}</span></div>`;
         switch(id) {
           case 'battery':
-            html = detailRows([['电量', d.battery.level], ['充电状态', d.battery.charging], ['充电时间', d.battery.chargingTime], ['放电时间', d.battery.dischargingTime]]);
+            html = row('电量', d.battery.level) + row('充电状态', d.battery.charging) + row('充电时间', d.battery.chargingTime) + row('放电时间', d.battery.dischargingTime);
             break;
           case 'network':
-            html = detailRows([['网络类型', d.network.effectiveType], ['下行带宽', d.network.downlink], ['RTT', d.network.rtt], ['省流量模式', d.network.saveData]]);
+            html = row('网络类型', d.network.effectiveType) + row('下行带宽', d.network.downlink) + row('RTT', d.network.rtt) + row('省流量模式', d.network.saveData);
             break;
           case 'storage':
-            html = detailRows([['已用空间', d.storage.usage], ['总额配额', d.storage.quota], ['使用率', d.storage.percent]]);
+            html = row('已用空间', d.storage.usage) + row('总额配额', d.storage.quota) + row('使用率', d.storage.percent);
             break;
           case 'brightness':
-            html = detailRows([['屏幕亮度', d.brightness]]);
+            html = row('屏幕亮度', d.brightness);
             break;
           case 'media':
-            if (!d.mediaDevices.length) html = '<p style="color:var(--text-color)">无媒体设备信息或权限未授予</p>';
-            else html = d.mediaDevices.map(m => `<div class="detail-item"><span class="d-label">${m.kind}</span><span class="d-value">${m.label}</span></div>`).join('');
+            if (!d.mediaDevices.length) html = '<p>无媒体设备信息或权限未授予</p>';
+            else html = d.mediaDevices.map(m => row(m.kind, m.label)).join('');
             break;
           case 'language':
-            html = detailRows([['界面语言', d.language], ['时区', Intl.DateTimeFormat().resolvedOptions().timeZone], ['日期格式', new Intl.DateTimeFormat().format(new Date())]]);
+            html = row('语言列表', d.languages.join(', ')) + row('时区', d.timezone) + row('日期格式', new Intl.DateTimeFormat().format(new Date()));
             break;
           case 'online':
-            html = detailRows([['状态', d.online ? '在线' : '离线']]);
+            html = row('状态', d.online ? '在线' : '离线');
             break;
           case 'cpu':
-            html = detailRows([['逻辑核心数', d.cpuCores], ['设备内存(GB)', d.memory], ['User-Agent', d.ua]]);
+            html = row('逻辑核心数', d.cpuCores) + row('设备内存(GB)', d.memory) + row('UA', d.ua);
             break;
           case 'gpu':
-            html = detailRows([['GPU 渲染器', d.gpu]]);
-            if (d.features.webGPU) html += '<p style="color:var(--title-color); margin-top:0.5em;">✅ WebGPU 已支持</p>';
-            else html += '<p style="color:var(--text-color); margin-top:0.5em;">⚠️ WebGPU 未支持或需开启 flag</p>';
+            html = row('GPU 渲染器', d.gpu) + row('WebGL 供应商', d.webglVendor || '未知') + row('WebGL 渲染器', d.webglRenderer || '未知');
+            if (d.features.webGPU) html += '<p>WebGPU 已支持</p>'; else html += '<p>WebGPU 未支持或需开启 flag</p>';
             break;
           case 'sensors':
-            html = detailRows(Object.entries(d.sensors).map(([k,v]) => [k, v ? '✅' : '❌']));
+            html = Object.entries(d.sensors).map(([k,v]) => row(k, v ? '支持' : '不支持')).join('');
             break;
           case 'peripherals':
-            html = detailRows(Object.entries(d.peripherals).map(([k,v]) => [k, v ? '✅' : '❌']));
+            html = Object.entries(d.peripherals).map(([k,v]) => row(k, v ? '支持' : '不支持')).join('');
             break;
           case 'webxr':
-            html = detailRows([['WebXR 支持', d.webxr ? '✅ 支持' : '❌ 不支持']]);
+            html = row('WebXR 支持', d.webxr ? '支持' : '不支持');
             break;
           case 'features':
-            html = detailRows(Object.entries(d.features).map(([k,v]) => [k, v ? '✅' : '❌']));
+            html = Object.entries(d.features).map(([k,v]) => row(k, v ? '支持' : '不支持')).join('');
+            break;
+          case 'plugins':
+            html = row('插件数量', d.plugins.length);
+            html += d.plugins.map(p => row('插件', p)).join('');
+            html += row('MIME类型数量', d.mimeTypes.length);
+            html += d.mimeTypes.slice(0,10).map(m => row('MIME', m)).join('');
+            if (d.mimeTypes.length > 10) html += row('...', `共 ${d.mimeTypes.length} 项`);
+            break;
+          case 'screen':
+            html = row('逻辑尺寸', d.screen.logical) + row('物理尺寸', d.screen.physical) + row('DPR', d.screen.dpr) + row('视口', d.screen.viewport) + row('颜色深度', d.screen.colorDepth) + row('像素深度', d.screen.pixelDepth) + row('可用宽', d.screen.availWidth) + row('可用高', d.screen.availHeight) + row('方向', d.screen.orientation);
+            break;
+          case 'performance':
+            if (d.performanceMemory) {
+              html = row('JS堆大小限制', d.performanceMemory.jsHeapSizeLimit) + row('JS堆总大小', d.performanceMemory.totalJSHeapSize) + row('JS堆已用', d.performanceMemory.usedJSHeapSize);
+            } else {
+              html = '<p>性能内存信息不可用</p>';
+            }
+            break;
+          case 'gamepad':
+            if (d.gamepads.length === 0) html = '<p>未检测到游戏手柄</p>';
+            else html = d.gamepads.map(g => row(g.id, g.connected ? '已连接' : '未连接')).join('');
+            break;
+          case 'misc':
+            html = row('WebDriver', d.webdriver) + row('Cookie', d.cookieEnabled ? '是' : '否') + row('DNT', d.doNotTrack) + row('Java', d.javaEnabled ? '是' : '否') + row('PDF查看器', d.pdfViewer) + row('振动', d.vibration ? '是' : '否') + row('支付', d.payment ? '是' : '否') + row('凭据', d.credentials ? '是' : '否') + row('唤醒锁', d.wakeLock ? '是' : '否') + row('设备方向事件', d.deviceOrientation ? '是' : '否') + row('设备运动事件', d.deviceMotion ? '是' : '否') + row('地理定位', d.geolocation ? '是' : '否') + row('剪贴板', d.clipboard ? '是' : '否') + row('通知', d.notifications ? '是' : '否') + row('推送管理', d.pushManager ? '是' : '否') + row('后台同步', d.backgroundSync ? '是' : '否');
             break;
         }
         modalBody.innerHTML = html;
-      }
-
-      function detailRows(items) {
-        return items.map(([label, value]) => `
-          <div class="detail-item">
-            <span class="d-label">${label}</span>
-            <span class="d-value">${value}</span>
-          </div>
-        `).join('');
       }
 
       function updateOpenModalIfAny() {
         if (currentModalId) updateModalContent(currentModalId);
       }
 
-      // ---------- 实时监测 (每秒) ----------
+      // 实时刷新（每秒）
       async function liveUpdate() {
-        // 电池
         if (navigator.getBattery) {
           try {
             const b = await navigator.getBattery();
@@ -773,9 +906,8 @@
             deviceData.battery.charging = b.charging ? '充电中' : '未充电';
             deviceData.battery.chargingTime = b.chargingTime === Infinity ? 'N/A' : b.chargingTime + 's';
             deviceData.battery.dischargingTime = b.dischargingTime === Infinity ? 'N/A' : b.dischargingTime + 's';
-          } catch(e) {}
+          } catch {}
         }
-        // 网络
         const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
         if (conn) {
           deviceData.network.effectiveType = conn.effectiveType;
@@ -783,9 +915,7 @@
           deviceData.network.rtt = conn.rtt ? conn.rtt + ' ms' : '未知';
           deviceData.network.saveData = conn.saveData ? '已开启' : '关闭';
         }
-        // 在线状态
         deviceData.online = navigator.onLine;
-        // 存储（异步但不阻塞）
         if (navigator.storage?.estimate) {
           try {
             const est = await navigator.storage.estimate();
@@ -793,40 +923,29 @@
             deviceData.storage.quota = est.quota ? (est.quota / 1e9).toFixed(1) + ' GB' : '未知';
             const pct = est.quota && est.usage ? ((est.usage / est.quota)*100).toFixed(1)+'%' : 'N/A';
             deviceData.storage.percent = pct;
-          } catch(e) {}
+          } catch {}
         }
-        // 亮度
         if ('getScreenBrightness' in navigator) {
-          try {
-            const b = await navigator.getScreenBrightness();
-            deviceData.brightness = (b * 100).toFixed(0) + '%';
-          } catch(e) {}
+          try { const b = await navigator.getScreenBrightness(); deviceData.brightness = (b*100).toFixed(0)+'%'; } catch {}
         }
-
-        updateBasicUI();
-        updateOpenModalIfAny();
+        if (performance && performance.memory) {
+          deviceData.performanceMemory = {
+            jsHeapSizeLimit: (performance.memory.jsHeapSizeLimit / 1048576).toFixed(1) + ' MB',
+            totalJSHeapSize: (performance.memory.totalJSHeapSize / 1048576).toFixed(1) + ' MB',
+            usedJSHeapSize: (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + ' MB',
+          };
+        }
+        updateAllUI();
       }
 
       setInterval(liveUpdate, 1000);
 
-      // 刷新所有按钮
       document.getElementById('refreshAllBtn').addEventListener('click', collectAllData);
 
-      // 监听在线/离线事件
-      window.addEventListener('online', () => {
-        deviceData.online = true;
-        updateBasicUI();
-        updateOpenModalIfAny();
-      });
-      window.addEventListener('offline', () => {
-        deviceData.online = false;
-        updateBasicUI();
-        updateOpenModalIfAny();
-      });
+      window.addEventListener('online', () => { deviceData.online = true; updateAllUI(); });
+      window.addEventListener('offline', () => { deviceData.online = false; updateAllUI(); });
 
-      // 初始加载
       setTimeout(collectAllData, 100);
-      // 重新计算尺寸
       window.addEventListener('load', updatePanelScale);
     })();
   </script>
