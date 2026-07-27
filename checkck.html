@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cookie 查看器 - SwCTools</title>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #e8edf2;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 1000px;
+      background: white;
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #1e4b6e;
+      margin-bottom: 20px;
+    }
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: #4f7f9e;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.15s;
+    }
+    button:hover { background: #3a6b8c; }
+    button.danger { background: #c0392b; }
+    button.danger:hover { background: #e74c3c; }
+    button.delete-item {
+      background: #e74c3c;
+      padding: 4px 12px;
+      font-size: 0.8rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+      word-break: break-all;
+      font-size: 0.9rem;
+    }
+    th {
+      background: #e7f0f9;
+      color: #1e4b6e;
+      font-weight: 600;
+    }
+    .value-cell {
+      max-height: 80px;
+      overflow-y: auto;
+      display: block;
+      white-space: pre-wrap;
+      font-family: monospace;
+    }
+    .empty {
+      color: #666;
+      font-style: italic;
+      text-align: center;
+      padding: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Cookie 查看器</h1>
+    <div class="btn-group">
+      <button onclick="loadCookies()">刷新</button>
+      <button class="danger" onclick="deleteAllCookies()">删除全部 Cookie</button>
+    </div>
+    <table id="cookieTable">
+      <thead>
+        <tr>
+          <th style="width: 25%;">名称 (Name)</th>
+          <th style="width: 60%;">值 (Value)</th>
+          <th style="width: 15%;">操作</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="3" class="empty">正在加载...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    function parseCookies() {
+      const cookies = document.cookie.split(';').filter(c => c.trim() !== '');
+      const result = [];
+      for (const cookie of cookies) {
+        const [name, ...valueParts] = cookie.split('=');
+        const value = valueParts.join('=').trim();
+        result.push({ name: name.trim(), value: decodeURIComponent(value) });
+      }
+      return result.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    function deleteCookie(name) {
+      // 删除 cookie 的方式是设置过期时间为过去
+      document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
+    }
+
+    function loadCookies() {
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = '';
+      const cookies = parseCookies();
+      if (cookies.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="empty">当前站点没有 Cookie。</td></tr>';
+        return;
+      }
+      cookies.forEach(cookie => {
+        const row = tbody.insertRow();
+        const nameCell = row.insertCell();
+        nameCell.textContent = cookie.name;
+
+        const valueCell = row.insertCell();
+        valueCell.innerHTML = `<span class="value-cell">${escapeHTML(cookie.value)}</span>`;
+
+        const actionCell = row.insertCell();
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '删除';
+        delBtn.className = 'delete-item';
+        delBtn.onclick = () => {
+          if (confirm(`确定要删除 Cookie "${cookie.name}" 吗？`)) {
+            deleteCookie(cookie.name);
+            loadCookies();
+          }
+        };
+        actionCell.appendChild(delBtn);
+      });
+    }
+
+    function deleteAllCookies() {
+      const cookies = parseCookies();
+      if (cookies.length === 0) {
+        alert('当前没有 Cookie 可删除。');
+        return;
+      }
+      if (confirm(`确定要删除全部 ${cookies.length} 个 Cookie 吗？此操作不可恢复！`)) {
+        for (const cookie of cookies) {
+          deleteCookie(cookie.name);
+        }
+        loadCookies();
+      }
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    // 页面加载时自动显示
+    loadCookies();
+  </script>
+</body>
+</html>
