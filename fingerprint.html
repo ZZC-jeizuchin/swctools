@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>BrowserLab 指纹检测</title>
+    <style>
+        body { font-family: monospace; background: #111; color: #eee; padding: 20px; }
+        h1 { color: #0f0; }
+        .section { margin: 20px 0; }
+        .section h3 { color: #0f0; border-bottom: 1px solid #444; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+        th, td { border: 1px solid #444; padding: 4px 10px; text-align: left; font-size: 12px; }
+        th { background: #222; }
+        .val { word-break: break-all; }
+        button { padding: 8px 16px; margin-right: 10px; background: #0f0; border: none; color: #000; font-weight: bold; cursor: pointer; }
+        button:hover { background: #0c0; }
+        textarea { width: 100%; height: 200px; background: #000; color: #0f0; border: 1px solid #444; margin-top: 10px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>🔍 BrowserLab 指纹检测</h1>
+    <p>以下数据可直接保存为 .ini 模板，导入 BrowserLab 的 Fingerprint 管理器。</p>
+    <div id="content">
+        <div class="section" id="table-area"></div>
+        <button onclick="downloadIni()">下载 INI 文件</button>
+        <button onclick="copyIni()">复制到剪贴板</button>
+        <h3>生成的 INI 内容预览</h3>
+        <textarea id="ini-output" readonly></textarea>
+    </div>
+
+    <script>
+        // 属性定义，与 fingerprint.py CATEGORIES 完全一致
+        const categories = {
+            "1. 用户代理与平台": [
+                ["navigator.platform", "操作系统平台"],
+                ["navigator.vendor", "浏览器厂商"],
+                ["navigator.vendorSub", "浏览器厂商补充"],
+                ["navigator.productSub", "产品子版本"],
+                ["navigator.appName", "应用名称"],
+                ["navigator.appCodeName", "应用代码名"],
+                ["navigator.appVersion", "应用版本"],
+                ["navigator.oscpu", "OS/CPU (Firefox)"],
+                ["navigator.buildID", "构建ID (Firefox)"],
+                ["navigator.webdriver", "自动化标志"],
+                ["navigator.userAgent", "UA 字符串"]
+            ],
+            "2. 屏幕与显示": [
+                ["screen.width", "屏幕宽度"],
+                ["screen.height", "屏幕高度"],
+                ["screen.availWidth", "可用屏幕宽度"],
+                ["screen.availHeight", "可用屏幕高度"],
+                ["screen.colorDepth", "颜色深度"],
+                ["screen.pixelDepth", "像素深度"],
+                ["devicePixelRatio", "设备像素比"],
+                ["innerWidth", "视口宽度"],
+                ["innerHeight", "视口高度"],
+                ["screen.orientation.type", "屏幕方向"],
+                ["screen.orientation.angle", "屏幕旋转角度"]
+            ],
+            "3. 电池与网络": [
+                ["battery.charging", "是否充电"],
+                ["battery.level", "电量 (0-1)"],
+                ["battery.chargingTime", "充电时间"],
+                ["battery.dischargingTime", "放电时间"],
+                ["navigator.connection.effectiveType", "网络类型 (4g/3g)"],
+                ["navigator.connection.rtt", "RTT (ms)"],
+                ["navigator.connection.downlink", "下行带宽 (Mbps)"],
+                ["navigator.connection.saveData", "省流量模式"]
+            ],
+            "4. 硬件与内存": [
+                ["navigator.hardwareConcurrency", "CPU 核心数"],
+                ["navigator.deviceMemory", "设备内存 (GB)"],
+                ["navigator.maxTouchPoints", "最大触控点数"]
+            ],
+            "5. 图形与 GPU": [
+                ["webgl.vendor", "WebGL 厂商"],
+                ["webgl.renderer", "WebGL 渲染器"],
+                ["webgl.MAX_TEXTURE_SIZE", "最大纹理尺寸"],
+                ["webgl.MAX_RENDERBUFFER_SIZE", "最大渲染缓冲大小"],
+                ["webgl.MAX_VIEWPORT_DIMS", "最大视口尺寸"],
+                ["webgl.MAX_VERTEX_ATTRIBS", "最大顶点属性"],
+                ["webgl.MAX_TEXTURE_IMAGE_UNITS", "纹理单元数"],
+                ["webgl2.supported", "WebGL2 支持"]
+            ],
+            "6. 音频指纹": [
+                ["audio.sampleRate", "采样率"],
+                ["audio.state", "状态 (running/suspended)"]
+            ],
+            "7. 字体检测": [
+                ["fonts.installed", "已安装字体列表"]
+            ],
+            "8. 插件与 MIME": [
+                ["navigator.plugins", "插件列表"],
+                ["navigator.mimeTypes", "MIME 类型列表"]
+            ],
+            "9. 国际化 (Intl)": [
+                ["navigator.language", "浏览器语言"],
+                ["navigator.languages", "用户语言偏好列表"],
+                ["timezone", "时区"]
+            ],
+            "10. 传感器与设备": [
+                ["sensors.accelerometer", "加速度计"],
+                ["sensors.gyroscope", "陀螺仪"],
+                ["sensors.magnetometer", "磁力计"],
+                ["sensors.ambientLight", "环境光传感器"],
+                ["sensors.proximity", "距离传感器"],
+                ["mediaDevices", "媒体设备列表"]
+            ],
+            "11. 外设与连接": [
+                ["navigator.bluetooth", "蓝牙"],
+                ["navigator.usb", "USB"],
+                ["navigator.serial", "串口"],
+                ["navigator.hid", "HID"],
+                ["nfc.supported", "NFC (NDEFReader)"],
+                ["midi.supported", "MIDI"]
+            ],
+            "12. 存储与缓存": [
+                ["storage.localStorage", "LocalStorage 是否存在"],
+                ["storage.sessionStorage", "SessionStorage 是否存在"],
+                ["storage.indexedDB", "IndexedDB 是否存在"],
+                ["storage.cacheStorage", "CacheStorage 是否存在"],
+                ["storage.opfs", "OPFS (Origin Private File System)"],
+                ["navigator.cookieEnabled", "Cookie 启用"]
+            ],
+            "13. 性能与内存": [
+                ["performance.memory.jsHeapSizeLimit", "JS 堆大小限制"],
+                ["performance.memory.totalJSHeapSize", "总堆大小"],
+                ["performance.memory.usedJSHeapSize", "已用堆大小"]
+            ],
+            "14. 自动化检测": [
+                ["navigator.webdriver", "WebDriver 标志"],
+                ["window.chrome", "chrome 对象"]
+            ],
+            "15. 其他 Navigator 属性": [
+                ["navigator.onLine", "在线状态"],
+                ["navigator.doNotTrack", "DNT"],
+                ["navigator.javaEnabled", "Java 启用"],
+                ["navigator.pdfViewerEnabled", "PDF 查看器启用"],
+                ["navigator.virtualKeyboard", "虚拟键盘 API"]
+            ],
+            "16. 窗口与文档环境": [
+                ["outerWidth", "窗口外部宽度"],
+                ["outerHeight", "窗口外部高度"],
+                ["screenX", "窗口 X"],
+                ["screenY", "窗口 Y"],
+                ["scrollX", "滚动 X"],
+                ["scrollY", "滚动 Y"],
+                ["visualViewport.width", "可视视口宽度"],
+                ["crossOriginIsolated", "跨域隔离"],
+                ["isSecureContext", "安全上下文"],
+                ["document.hidden", "文档隐藏"],
+                ["document.visibilityState", "可见性状态"]
+            ],
+            "17. WebRTC (IP 泄漏)": [
+                ["webrtc.privateIP", "本地 IP"]
+            ],
+            "18. Canvas 指纹 (2D)": [
+                ["canvas.noise", "是否添加噪点"]
+            ],
+            "19. Audio 指纹 (完整)": [
+                ["audio.noise", "是否添加噪声"]
+            ],
+            "20. WebAssembly": [
+                ["wasm.supported", "WebAssembly 支持"],
+                ["wasm.simd", "SIMD"],
+                ["wasm.threads", "Threads"]
+            ],
+            "21. 共享内存": [
+                ["crossOriginIsolated", "跨域隔离"]
+            ],
+            "22. 媒体能力": [
+                ["mediaCapabilities.h264", "H.264 支持"],
+                ["mediaCapabilities.h265", "H.265/HEVC"],
+                ["mediaCapabilities.vp8", "VP8"],
+                ["mediaCapabilities.vp9", "VP9"],
+                ["mediaCapabilities.av1", "AV1"]
+            ]
+        };
+
+        // 采集真实值
+        function collectValues() {
+            const vals = {};
+            // 基础
+            vals["navigator.platform"] = navigator.platform;
+            vals["navigator.vendor"] = navigator.vendor;
+            vals["navigator.vendorSub"] = navigator.vendorSub;
+            vals["navigator.productSub"] = navigator.productSub;
+            vals["navigator.appName"] = navigator.appName;
+            vals["navigator.appCodeName"] = navigator.appCodeName;
+            vals["navigator.appVersion"] = navigator.appVersion;
+            try { vals["navigator.oscpu"] = navigator.oscpu || ''; } catch(e){ vals["navigator.oscpu"] = ''; }
+            try { vals["navigator.buildID"] = navigator.buildID || ''; } catch(e){ vals["navigator.buildID"] = ''; }
+            vals["navigator.webdriver"] = navigator.webdriver;
+            vals["navigator.userAgent"] = navigator.userAgent;
+
+            // 屏幕
+            vals["screen.width"] = screen.width;
+            vals["screen.height"] = screen.height;
+            vals["screen.availWidth"] = screen.availWidth;
+            vals["screen.availHeight"] = screen.availHeight;
+            vals["screen.colorDepth"] = screen.colorDepth;
+            vals["screen.pixelDepth"] = screen.pixelDepth;
+            vals["devicePixelRatio"] = window.devicePixelRatio;
+            vals["innerWidth"] = window.innerWidth;
+            vals["innerHeight"] = window.innerHeight;
+            try { vals["screen.orientation.type"] = screen.orientation.type; } catch(e){ vals["screen.orientation.type"] = ''; }
+            try { vals["screen.orientation.angle"] = screen.orientation.angle; } catch(e){ vals["screen.orientation.angle"] = 0; }
+
+            // 电池（异步，先用 null）
+            vals["battery.charging"] = null;
+            vals["battery.level"] = null;
+            vals["battery.chargingTime"] = null;
+            vals["battery.dischargingTime"] = null;
+            if (navigator.getBattery) {
+                navigator.getBattery().then(b => {
+                    vals["battery.charging"] = b.charging;
+                    vals["battery.level"] = b.level;
+                    vals["battery.chargingTime"] = b.chargingTime;
+                    vals["battery.dischargingTime"] = b.dischargingTime;
+                    refreshUI();
+                });
+            }
+
+            // 网络
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            vals["navigator.connection.effectiveType"] = conn ? conn.effectiveType : '';
+            vals["navigator.connection.rtt"] = conn ? conn.rtt : 0;
+            vals["navigator.connection.downlink"] = conn ? conn.downlink : 0;
+            vals["navigator.connection.saveData"] = conn ? conn.saveData : false;
+
+            // 硬件
+            vals["navigator.hardwareConcurrency"] = navigator.hardwareConcurrency;
+            vals["navigator.deviceMemory"] = navigator.deviceMemory || 0;
+            vals["navigator.maxTouchPoints"] = navigator.maxTouchPoints;
+
+            // WebGL
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (gl) {
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                vals["webgl.vendor"] = debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : '';
+                vals["webgl.renderer"] = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : '';
+                vals["webgl.MAX_TEXTURE_SIZE"] = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+                vals["webgl.MAX_RENDERBUFFER_SIZE"] = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+                vals["webgl.MAX_VIEWPORT_DIMS"] = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+                vals["webgl.MAX_VERTEX_ATTRIBS"] = gl.getParameter(gl.MAX_VERTEX_ATTRIBS);
+                vals["webgl.MAX_TEXTURE_IMAGE_UNITS"] = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+            } else {
+                vals["webgl.vendor"] = '';
+                vals["webgl.renderer"] = '';
+                vals["webgl.MAX_TEXTURE_SIZE"] = 0;
+                vals["webgl.MAX_RENDERBUFFER_SIZE"] = 0;
+                vals["webgl.MAX_VIEWPORT_DIMS"] = [0,0];
+                vals["webgl.MAX_VERTEX_ATTRIBS"] = 0;
+                vals["webgl.MAX_TEXTURE_IMAGE_UNITS"] = 0;
+            }
+            vals["webgl2.supported"] = !!window.WebGL2RenderingContext;
+
+            // 音频
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) {
+                const ctx = new AudioCtx();
+                vals["audio.sampleRate"] = ctx.sampleRate;
+                vals["audio.state"] = ctx.state;
+            } else {
+                vals["audio.sampleRate"] = 0;
+                vals["audio.state"] = '';
+            }
+
+            // 字体
+            vals["fonts.installed"] = [];
+
+            // 插件/MIME
+            vals["navigator.plugins"] = Array.from(navigator.plugins).map(p => p.name);
+            vals["navigator.mimeTypes"] = Array.from(navigator.mimeTypes).map(m => m.type);
+
+            // 语言
+            vals["navigator.language"] = navigator.language;
+            vals["navigator.languages"] = navigator.languages;
+            vals["timezone"] = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+            // 传感器
+            vals["sensors.accelerometer"] = !!window.Accelerometer;
+            vals["sensors.gyroscope"] = !!window.Gyroscope;
+            vals["sensors.magnetometer"] = !!window.Magnetometer;
+            vals["sensors.ambientLight"] = !!window.AmbientLightSensor;
+            vals["sensors.proximity"] = !!window.ProximitySensor;
+            vals["mediaDevices"] = [];
+
+            // 外设
+            vals["navigator.bluetooth"] = !!navigator.bluetooth;
+            vals["navigator.usb"] = !!navigator.usb;
+            vals["navigator.serial"] = !!navigator.serial;
+            vals["navigator.hid"] = !!navigator.hid;
+            vals["nfc.supported"] = !!window.NDEFReader;
+            vals["midi.supported"] = !!navigator.requestMIDIAccess;
+
+            // 存储
+            vals["storage.localStorage"] = !!window.localStorage;
+            vals["storage.sessionStorage"] = !!window.sessionStorage;
+            vals["storage.indexedDB"] = !!window.indexedDB;
+            vals["storage.cacheStorage"] = !!window.caches;
+            vals["storage.opfs"] = !!(navigator.storage && navigator.storage.getDirectory);
+            vals["navigator.cookieEnabled"] = navigator.cookieEnabled;
+
+            // 性能内存
+            if (performance.memory) {
+                vals["performance.memory.jsHeapSizeLimit"] = performance.memory.jsHeapSizeLimit;
+                vals["performance.memory.totalJSHeapSize"] = performance.memory.totalJSHeapSize;
+                vals["performance.memory.usedJSHeapSize"] = performance.memory.usedJSHeapSize;
+            } else {
+                vals["performance.memory.jsHeapSizeLimit"] = 0;
+                vals["performance.memory.totalJSHeapSize"] = 0;
+                vals["performance.memory.usedJSHeapSize"] = 0;
+            }
+
+            // 自动化检测
+            vals["navigator.webdriver"] = navigator.webdriver;
+            vals["window.chrome"] = !!window.chrome;
+
+            // 其他 navigator
+            vals["navigator.onLine"] = navigator.onLine;
+            vals["navigator.doNotTrack"] = navigator.doNotTrack || '';
+            try { vals["navigator.javaEnabled"] = navigator.javaEnabled(); } catch(e) { vals["navigator.javaEnabled"] = false; }
+            vals["navigator.pdfViewerEnabled"] = navigator.pdfViewerEnabled;
+            vals["navigator.virtualKeyboard"] = !!navigator.virtualKeyboard;
+
+            // 窗口环境
+            vals["outerWidth"] = window.outerWidth;
+            vals["outerHeight"] = window.outerHeight;
+            vals["screenX"] = window.screenX;
+            vals["screenY"] = window.screenY;
+            vals["scrollX"] = window.scrollX;
+            vals["scrollY"] = window.scrollY;
+            vals["visualViewport.width"] = window.visualViewport ? visualViewport.width : 0;
+            vals["crossOriginIsolated"] = window.crossOriginIsolated;
+            vals["isSecureContext"] = window.isSecureContext;
+            vals["document.hidden"] = document.hidden;
+            vals["document.visibilityState"] = document.visibilityState;
+
+            // WebRTC
+            vals["webrtc.privateIP"] = '';
+
+            // 噪点（只是设置，不是真实值）
+            vals["canvas.noise"] = false;
+            vals["audio.noise"] = false;
+
+            // WASM
+            vals["wasm.supported"] = !!window.WebAssembly;
+            vals["wasm.simd"] = false;
+            vals["wasm.threads"] = false;
+
+            // 媒体能力
+            vals["mediaCapabilities.h264"] = false;
+            vals["mediaCapabilities.h265"] = false;
+            vals["mediaCapabilities.vp8"] = false;
+            vals["mediaCapabilities.vp9"] = false;
+            vals["mediaCapabilities.av1"] = false;
+
+            return vals;
+        }
+
+        let currentValues = {};
+
+        function refreshUI() {
+            const tableArea = document.getElementById('table-area');
+            tableArea.innerHTML = '';
+
+            for (const [cat, props] of Object.entries(categories)) {
+                const section = document.createElement('div');
+                section.className = 'section';
+                const title = document.createElement('h3');
+                title.textContent = cat;
+                section.appendChild(title);
+
+                const tbl = document.createElement('table');
+                const thead = document.createElement('thead');
+                thead.innerHTML = '<tr><th>Property</th><th>Value</th><th>Description</th></tr>';
+                tbl.appendChild(thead);
+                const tbody = document.createElement('tbody');
+
+                for (const [key, desc] of props) {
+                    const val = currentValues.hasOwnProperty(key) ? currentValues[key] : '???';
+                    let displayVal = (val === null || val === '') ? '(无)' : String(val);
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${key}</td><td class="val">${displayVal}</td><td>${desc}</td>`;
+                    tbody.appendChild(tr);
+                }
+                tbl.appendChild(tbody);
+                section.appendChild(tbl);
+                tableArea.appendChild(section);
+            }
+
+            generateIni();
+        }
+
+        function generateIni() {
+            let ini = '';
+            for (const [cat, props] of Object.entries(categories)) {
+                ini += `[${cat}]\n`;
+                for (const [key, desc] of props) {
+                    const val = currentValues.hasOwnProperty(key) ? currentValues[key] : '';
+                    const valStr = (val === null) ? '' : String(val);
+                    ini += `${key} = ${valStr}\n`;
+                }
+                ini += '\n';
+            }
+            document.getElementById('ini-output').value = ini;
+        }
+
+        function downloadIni() {
+            const content = document.getElementById('ini-output').value;
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'fingerprint_template.ini';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function copyIni() {
+            const content = document.getElementById('ini-output').value;
+            navigator.clipboard.writeText(content).then(() => alert('已复制到剪贴板')).catch(() => prompt('手动复制', content));
+        }
+
+        // 初始化
+        currentValues = collectValues();
+        refreshUI();
+    </script>
+</body>
+</html>
