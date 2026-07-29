@@ -358,6 +358,7 @@
       document.addEventListener('visibilitychange', () => document.hidden ? stopFPS() : startFPS());
       startFPS();
 
+      // 全局设备数据（新增 requestHeaders 字段）
       let deviceData = {
         systemArch: '采集中...',
         publicIP: '获取中...',
@@ -406,9 +407,6 @@
         notifications: 'Notification' in window,
         pushManager: 'PushManager' in window,
         backgroundSync: 'SyncManager' in window,
-        bluetoothAvailability: false,
-        usbDevices: false,
-        xrSupported: false,
         connectionType: '',
         connectionDownlink: '',
         connectionRtt: '',
@@ -423,10 +421,28 @@
         fonts: [],
         audioContext: null,
         sampleRate: 0,
+        requestHeaders: {},        // 新增：存储请求头
+        requestHeadersError: false // 是否获取失败
       };
 
       function safeGet(fn, fallback = '不支持') { try { return fn(); } catch (e) { return fallback; } }
 
+      // ---------- 新增：获取请求头（通过 httpbin 回显） ----------
+      async function getRequestHeaders() {
+        try {
+          const res = await fetch('https://httpbin.org/headers');
+          if (!res.ok) throw new Error('status ' + res.status);
+          const data = await res.json();
+          deviceData.requestHeaders = data.headers || {};
+          deviceData.requestHeadersError = false;
+        } catch (e) {
+          console.warn('获取请求头失败', e);
+          deviceData.requestHeaders = {};
+          deviceData.requestHeadersError = true;
+        }
+      }
+
+      // ---------- 原有采集函数（保持不变） ----------
       async function getLocalIP() {
         return new Promise((resolve) => {
           const pc = new RTCPeerConnection({ iceServers: [] });
@@ -615,7 +631,7 @@
         } catch { return null; }
       }
 
-      // 主采集
+      // 主采集函数（增加 getRequestHeaders 调用）
       async function collectAllData() {
         const [
           publicIP, localIP, batteryInfo, networkInfo, storageInfo,
@@ -665,7 +681,7 @@
         deviceData.languages = navigator.languages || [navigator.language];
         deviceData.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-        // 屏幕
+        // 屏幕信息
         deviceData.screen = {
           logical: `${window.screen.width}x${window.screen.height}`,
           physical: `${window.screen.width * window.devicePixelRatio}x${window.screen.height * window.devicePixelRatio}`,
@@ -692,6 +708,9 @@
         } else {
           deviceData.systemArch = navigator.platform || '未知';
         }
+
+        // 请求头（独立异步，但不阻塞UI更新）
+        getRequestHeaders().then(() => updateAllUI());
 
         updateAllUI();
       }
@@ -752,6 +771,8 @@
           ['后台同步', d.backgroundSync ? '是' : '否'],
           ['音频采样率', d.sampleRate ? d.sampleRate + ' Hz' : '未获取'],
           ['游戏手柄', d.gamepads.length > 0 ? d.gamepads.map(g => g.id).join(', ') : '无'],
+          // 新增：请求头摘要
+          ['请求头', d.requestHeadersError ? '获取失败' : (Object.keys(d.requestHeaders).length > 0 ? Object.keys(d.requestHeaders).length + ' 项' : '加载中...')]
         ];
         if (d.performanceMemory) {
           items.push(['JS堆大小限制', d.performanceMemory.jsHeapSizeLimit]);
@@ -766,7 +787,7 @@
         `).join('');
       }
 
-      // 模态框分类（更多分类）
+      // 模态框分类（新增 'headers' 分类）
       const modalCategories = [
         { id: 'battery', title: '电池详情' },
         { id: 'network', title: '网络详情' },
@@ -785,7 +806,8 @@
         { id: 'screen', title: '屏幕详细' },
         { id: 'performance', title: '性能内存' },
         { id: 'gamepad', title: '游戏手柄' },
-        { id: 'misc', title: '杂项' }
+        { id: 'misc', title: '杂项' },
+        { id: 'headers', title: '请求头' }  // 新增
       ];
 
       const triggerContainer = document.getElementById('modalTriggers');
@@ -889,6 +911,15 @@
           case 'misc':
             html = row('WebDriver', d.webdriver) + row('Cookie', d.cookieEnabled ? '是' : '否') + row('DNT', d.doNotTrack) + row('Java', d.javaEnabled ? '是' : '否') + row('PDF查看器', d.pdfViewer) + row('振动', d.vibration ? '是' : '否') + row('支付', d.payment ? '是' : '否') + row('凭据', d.credentials ? '是' : '否') + row('唤醒锁', d.wakeLock ? '是' : '否') + row('设备方向事件', d.deviceOrientation ? '是' : '否') + row('设备运动事件', d.deviceMotion ? '是' : '否') + row('地理定位', d.geolocation ? '是' : '否') + row('剪贴板', d.clipboard ? '是' : '否') + row('通知', d.notifications ? '是' : '否') + row('推送管理', d.pushManager ? '是' : '否') + row('后台同步', d.backgroundSync ? '是' : '否');
             break;
+          case 'headers':
+            if (d.requestHeadersError) {
+              html = '<p>无法获取请求头（网络问题或服务不可用）</p>';
+            } else if (Object.keys(d.requestHeaders).length === 0) {
+              html = '<p>正在获取请求头信息...</p>';
+            } else {
+              html = Object.entries(d.requestHeaders).map(([key, value]) => row(key, value)).join('');
+            }
+            break;
         }
         modalBody.innerHTML = html;
       }
@@ -897,7 +928,7 @@
         if (currentModalId) updateModalContent(currentModalId);
       }
 
-      // 实时刷新（每秒）
+      // 实时刷新（每秒），注意请求头不会每秒重新获取
       async function liveUpdate() {
         if (navigator.getBattery) {
           try {
