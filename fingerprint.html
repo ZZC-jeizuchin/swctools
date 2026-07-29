@@ -43,7 +43,8 @@
                 ["navigator.oscpu", "OS/CPU (Firefox)"],
                 ["navigator.buildID", "构建ID (Firefox)"],
                 ["navigator.webdriver", "自动化标志"],
-                ["navigator.userAgent", "UA 字符串"]
+                ["navigator.userAgent", "UA 字符串"],
+                ["navigator.userAgentData.getHighEntropyValues", "高熵客户端提示 (JSON)"]
             ],
             "2. 屏幕与显示": [
                 ["screen.width", "屏幕宽度"],
@@ -193,6 +194,8 @@
             try { vals["navigator.buildID"] = navigator.buildID || ''; } catch(e){ vals["navigator.buildID"] = ''; }
             vals["navigator.webdriver"] = navigator.webdriver;
             vals["navigator.userAgent"] = navigator.userAgent;
+            // 异步获取高熵值，先置空
+            vals["navigator.userAgentData.getHighEntropyValues"] = "";
 
             // 2. 屏幕与显示
             vals["screen.width"] = screen.width;
@@ -207,7 +210,7 @@
             try { vals["screen.orientation.type"] = screen.orientation.type; } catch(e){ vals["screen.orientation.type"] = ''; }
             try { vals["screen.orientation.angle"] = screen.orientation.angle; } catch(e){ vals["screen.orientation.angle"] = 0; }
 
-            // 3. 电池与网络 (异步先置 null，后续更新)
+            // 3. 电池与网络
             vals["battery.charging"] = null;
             vals["battery.level"] = null;
             vals["battery.chargingTime"] = null;
@@ -266,7 +269,7 @@
                 vals["audio.state"] = '';
             }
 
-            // 7. 字体检测 (留空)
+            // 7. 字体检测
             vals["fonts.installed"] = [];
 
             // 8. 插件与 MIME
@@ -340,7 +343,7 @@
             // 17. WebRTC
             vals["webrtc.privateIP"] = '';
 
-            // 18-19. 噪点设置（非真实值）
+            // 18-19. 噪点设置
             vals["canvas.noise"] = false;
             vals["audio.noise"] = false;
 
@@ -349,15 +352,26 @@
             vals["wasm.simd"] = false;
             vals["wasm.threads"] = false;
 
-            // 21. 共享内存 (重复项，保持一致)
+            // 21. 共享内存
             vals["crossOriginIsolated"] = window.crossOriginIsolated;
 
-            // 22. 媒体能力 (简单检测)
+            // 22. 媒体能力
             vals["mediaCapabilities.h264"] = false;
             vals["mediaCapabilities.h265"] = false;
             vals["mediaCapabilities.vp8"] = false;
             vals["mediaCapabilities.vp9"] = false;
             vals["mediaCapabilities.av1"] = false;
+
+            // 异步获取 High Entropy Values
+            if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+                navigator.userAgentData.getHighEntropyValues(["platformVersion","architecture","model","uaFullVersion","fullVersionList"]).then(hints => {
+                    vals["navigator.userAgentData.getHighEntropyValues"] = JSON.stringify(hints);
+                    refreshUI();
+                }).catch(() => {
+                    vals["navigator.userAgentData.getHighEntropyValues"] = "";
+                    refreshUI();
+                });
+            }
 
             return vals;
         }
@@ -411,7 +425,6 @@
                     const val = currentValues.hasOwnProperty(key) ? currentValues[key] : '';
                     let valStr;
                     if (Array.isArray(val)) {
-                        // 数组必须用 JSON 格式，确保导入时能被正确解析
                         valStr = JSON.stringify(val);
                     } else if (val === null || val === undefined) {
                         valStr = '';
@@ -450,7 +463,6 @@
         // 初始化
         currentValues = collectValues();
         refreshUI();
-        // 如果电池 API 存在，后续会再次刷新
     </script>
 </body>
 </html>
