@@ -179,8 +179,30 @@
             ]
         };
 
-        // 采集真实值
-        function collectValues() {
+        // 异步获取高熵客户端提示
+        async function getHighEntropyData() {
+            if (!navigator.userAgentData?.getHighEntropyValues) return null;
+            try {
+                const data = await navigator.userAgentData.getHighEntropyValues([
+                    "architecture", "bitness", "model", "platform", "platformVersion", "fullVersionList"
+                ]);
+                return {
+                    architecture: data.architecture,
+                    bitness: data.bitness,
+                    model: data.model,
+                    platform: data.platform,
+                    platformVersion: data.platformVersion,
+                    fullVersionList: data.fullVersionList,
+                    brands: navigator.userAgentData.brands,
+                    mobile: navigator.userAgentData.mobile
+                };
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // 采集同步值
+        function collectSyncValues() {
             const vals = {};
             // 1. 用户代理与平台
             vals["navigator.platform"] = navigator.platform;
@@ -194,10 +216,10 @@
             try { vals["navigator.buildID"] = navigator.buildID || ''; } catch(e){ vals["navigator.buildID"] = ''; }
             vals["navigator.webdriver"] = navigator.webdriver;
             vals["navigator.userAgent"] = navigator.userAgent;
-            // 异步获取高熵值，先置空
+            // 高熵值先留空，异步填充
             vals["navigator.userAgentData.getHighEntropyValues"] = "";
 
-            // 2. 屏幕与显示
+            // 2. 屏幕
             vals["screen.width"] = screen.width;
             vals["screen.height"] = screen.height;
             vals["screen.availWidth"] = screen.availWidth;
@@ -230,12 +252,12 @@
             vals["navigator.connection.downlink"] = conn ? conn.downlink : 0;
             vals["navigator.connection.saveData"] = conn ? conn.saveData : false;
 
-            // 4. 硬件与内存
+            // 4. 硬件
             vals["navigator.hardwareConcurrency"] = navigator.hardwareConcurrency;
             vals["navigator.deviceMemory"] = navigator.deviceMemory || 0;
             vals["navigator.maxTouchPoints"] = navigator.maxTouchPoints;
 
-            // 5. 图形与 GPU
+            // 5. WebGL
             const canvas = document.createElement('canvas');
             const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
             if (gl) {
@@ -258,7 +280,7 @@
             }
             vals["webgl2.supported"] = !!window.WebGL2RenderingContext;
 
-            // 6. 音频指纹
+            // 6. 音频
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             if (AudioCtx) {
                 const ctx = new AudioCtx();
@@ -269,7 +291,7 @@
                 vals["audio.state"] = '';
             }
 
-            // 7. 字体检测
+            // 7. 字体
             vals["fonts.installed"] = [];
 
             // 8. 插件与 MIME
@@ -281,7 +303,7 @@
             vals["navigator.languages"] = navigator.languages;
             vals["timezone"] = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-            // 10. 传感器与设备
+            // 10. 传感器
             vals["sensors.accelerometer"] = !!window.Accelerometer;
             vals["sensors.gyroscope"] = !!window.Gyroscope;
             vals["sensors.magnetometer"] = !!window.Magnetometer;
@@ -289,7 +311,7 @@
             vals["sensors.proximity"] = !!window.ProximitySensor;
             vals["mediaDevices"] = [];
 
-            // 11. 外设与连接
+            // 11. 外设
             vals["navigator.bluetooth"] = !!navigator.bluetooth;
             vals["navigator.usb"] = !!navigator.usb;
             vals["navigator.serial"] = !!navigator.serial;
@@ -297,7 +319,7 @@
             vals["nfc.supported"] = !!window.NDEFReader;
             vals["midi.supported"] = !!navigator.requestMIDIAccess;
 
-            // 12. 存储与缓存
+            // 12. 存储
             vals["storage.localStorage"] = !!window.localStorage;
             vals["storage.sessionStorage"] = !!window.sessionStorage;
             vals["storage.indexedDB"] = !!window.indexedDB;
@@ -305,7 +327,7 @@
             vals["storage.opfs"] = !!(navigator.storage && navigator.storage.getDirectory);
             vals["navigator.cookieEnabled"] = navigator.cookieEnabled;
 
-            // 13. 性能与内存
+            // 13. 性能内存
             if (performance.memory) {
                 vals["performance.memory.jsHeapSizeLimit"] = performance.memory.jsHeapSizeLimit;
                 vals["performance.memory.totalJSHeapSize"] = performance.memory.totalJSHeapSize;
@@ -316,18 +338,18 @@
                 vals["performance.memory.usedJSHeapSize"] = 0;
             }
 
-            // 14. 自动化检测
+            // 14. 自动化
             vals["navigator.webdriver"] = navigator.webdriver;
             vals["window.chrome"] = !!window.chrome;
 
-            // 15. 其他 Navigator 属性
+            // 15. 其他 navigator
             vals["navigator.onLine"] = navigator.onLine;
             vals["navigator.doNotTrack"] = navigator.doNotTrack || '';
             try { vals["navigator.javaEnabled"] = navigator.javaEnabled(); } catch(e) { vals["navigator.javaEnabled"] = false; }
             vals["navigator.pdfViewerEnabled"] = navigator.pdfViewerEnabled;
             vals["navigator.virtualKeyboard"] = !!navigator.virtualKeyboard;
 
-            // 16. 窗口与文档环境
+            // 16. 窗口环境
             vals["outerWidth"] = window.outerWidth;
             vals["outerHeight"] = window.outerHeight;
             vals["screenX"] = window.screenX;
@@ -343,7 +365,7 @@
             // 17. WebRTC
             vals["webrtc.privateIP"] = '';
 
-            // 18-19. 噪点设置
+            // 18-19. 噪点
             vals["canvas.noise"] = false;
             vals["audio.noise"] = false;
 
@@ -361,17 +383,6 @@
             vals["mediaCapabilities.vp8"] = false;
             vals["mediaCapabilities.vp9"] = false;
             vals["mediaCapabilities.av1"] = false;
-
-            // 异步获取 High Entropy Values
-            if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
-                navigator.userAgentData.getHighEntropyValues(["platformVersion","architecture","model","uaFullVersion","fullVersionList"]).then(hints => {
-                    vals["navigator.userAgentData.getHighEntropyValues"] = JSON.stringify(hints);
-                    refreshUI();
-                }).catch(() => {
-                    vals["navigator.userAgentData.getHighEntropyValues"] = "";
-                    refreshUI();
-                });
-            }
 
             return vals;
         }
@@ -460,9 +471,22 @@
             });
         }
 
-        // 初始化
-        currentValues = collectValues();
-        refreshUI();
+        // 初始化：先收集同步值，然后异步获取高熵数据，最后刷新 UI
+        async function initialize() {
+            currentValues = collectSyncValues();
+            refreshUI(); // 先显示一次，此时高熵值为空
+
+            // 异步获取高熵客户端提示
+            const highEntropy = await getHighEntropyData();
+            if (highEntropy) {
+                currentValues["navigator.userAgentData.getHighEntropyValues"] = JSON.stringify(highEntropy);
+            } else {
+                currentValues["navigator.userAgentData.getHighEntropyValues"] = "";
+            }
+            refreshUI(); // 更新表格和 INI
+        }
+
+        initialize();
     </script>
 </body>
 </html>
