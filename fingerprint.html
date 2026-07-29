@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BrowserLab 指纹检测</title>
     <style>
         body { font-family: monospace; background: #111; color: #eee; padding: 20px; }
@@ -29,7 +30,7 @@
     </div>
 
     <script>
-        // 属性定义，与 fingerprint.py CATEGORIES 完全一致
+        // 属性定义，与 fingerprint.py 的 CATEGORIES 完全一致
         const categories = {
             "1. 用户代理与平台": [
                 ["navigator.platform", "操作系统平台"],
@@ -180,7 +181,7 @@
         // 采集真实值
         function collectValues() {
             const vals = {};
-            // 基础
+            // 1. 用户代理与平台
             vals["navigator.platform"] = navigator.platform;
             vals["navigator.vendor"] = navigator.vendor;
             vals["navigator.vendorSub"] = navigator.vendorSub;
@@ -193,7 +194,7 @@
             vals["navigator.webdriver"] = navigator.webdriver;
             vals["navigator.userAgent"] = navigator.userAgent;
 
-            // 屏幕
+            // 2. 屏幕与显示
             vals["screen.width"] = screen.width;
             vals["screen.height"] = screen.height;
             vals["screen.availWidth"] = screen.availWidth;
@@ -206,7 +207,7 @@
             try { vals["screen.orientation.type"] = screen.orientation.type; } catch(e){ vals["screen.orientation.type"] = ''; }
             try { vals["screen.orientation.angle"] = screen.orientation.angle; } catch(e){ vals["screen.orientation.angle"] = 0; }
 
-            // 电池（异步，先用 null）
+            // 3. 电池与网络 (异步先置 null，后续更新)
             vals["battery.charging"] = null;
             vals["battery.level"] = null;
             vals["battery.chargingTime"] = null;
@@ -218,22 +219,20 @@
                     vals["battery.chargingTime"] = b.chargingTime;
                     vals["battery.dischargingTime"] = b.dischargingTime;
                     refreshUI();
-                });
+                }).catch(() => {});
             }
-
-            // 网络
             const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
             vals["navigator.connection.effectiveType"] = conn ? conn.effectiveType : '';
             vals["navigator.connection.rtt"] = conn ? conn.rtt : 0;
             vals["navigator.connection.downlink"] = conn ? conn.downlink : 0;
             vals["navigator.connection.saveData"] = conn ? conn.saveData : false;
 
-            // 硬件
+            // 4. 硬件与内存
             vals["navigator.hardwareConcurrency"] = navigator.hardwareConcurrency;
             vals["navigator.deviceMemory"] = navigator.deviceMemory || 0;
             vals["navigator.maxTouchPoints"] = navigator.maxTouchPoints;
 
-            // WebGL
+            // 5. 图形与 GPU
             const canvas = document.createElement('canvas');
             const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
             if (gl) {
@@ -256,7 +255,7 @@
             }
             vals["webgl2.supported"] = !!window.WebGL2RenderingContext;
 
-            // 音频
+            // 6. 音频指纹
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             if (AudioCtx) {
                 const ctx = new AudioCtx();
@@ -267,19 +266,19 @@
                 vals["audio.state"] = '';
             }
 
-            // 字体
+            // 7. 字体检测 (留空)
             vals["fonts.installed"] = [];
 
-            // 插件/MIME
+            // 8. 插件与 MIME
             vals["navigator.plugins"] = Array.from(navigator.plugins).map(p => p.name);
             vals["navigator.mimeTypes"] = Array.from(navigator.mimeTypes).map(m => m.type);
 
-            // 语言
+            // 9. 国际化
             vals["navigator.language"] = navigator.language;
             vals["navigator.languages"] = navigator.languages;
             vals["timezone"] = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-            // 传感器
+            // 10. 传感器与设备
             vals["sensors.accelerometer"] = !!window.Accelerometer;
             vals["sensors.gyroscope"] = !!window.Gyroscope;
             vals["sensors.magnetometer"] = !!window.Magnetometer;
@@ -287,7 +286,7 @@
             vals["sensors.proximity"] = !!window.ProximitySensor;
             vals["mediaDevices"] = [];
 
-            // 外设
+            // 11. 外设与连接
             vals["navigator.bluetooth"] = !!navigator.bluetooth;
             vals["navigator.usb"] = !!navigator.usb;
             vals["navigator.serial"] = !!navigator.serial;
@@ -295,7 +294,7 @@
             vals["nfc.supported"] = !!window.NDEFReader;
             vals["midi.supported"] = !!navigator.requestMIDIAccess;
 
-            // 存储
+            // 12. 存储与缓存
             vals["storage.localStorage"] = !!window.localStorage;
             vals["storage.sessionStorage"] = !!window.sessionStorage;
             vals["storage.indexedDB"] = !!window.indexedDB;
@@ -303,7 +302,7 @@
             vals["storage.opfs"] = !!(navigator.storage && navigator.storage.getDirectory);
             vals["navigator.cookieEnabled"] = navigator.cookieEnabled;
 
-            // 性能内存
+            // 13. 性能与内存
             if (performance.memory) {
                 vals["performance.memory.jsHeapSizeLimit"] = performance.memory.jsHeapSizeLimit;
                 vals["performance.memory.totalJSHeapSize"] = performance.memory.totalJSHeapSize;
@@ -314,18 +313,18 @@
                 vals["performance.memory.usedJSHeapSize"] = 0;
             }
 
-            // 自动化检测
+            // 14. 自动化检测
             vals["navigator.webdriver"] = navigator.webdriver;
             vals["window.chrome"] = !!window.chrome;
 
-            // 其他 navigator
+            // 15. 其他 Navigator 属性
             vals["navigator.onLine"] = navigator.onLine;
             vals["navigator.doNotTrack"] = navigator.doNotTrack || '';
             try { vals["navigator.javaEnabled"] = navigator.javaEnabled(); } catch(e) { vals["navigator.javaEnabled"] = false; }
             vals["navigator.pdfViewerEnabled"] = navigator.pdfViewerEnabled;
             vals["navigator.virtualKeyboard"] = !!navigator.virtualKeyboard;
 
-            // 窗口环境
+            // 16. 窗口与文档环境
             vals["outerWidth"] = window.outerWidth;
             vals["outerHeight"] = window.outerHeight;
             vals["screenX"] = window.screenX;
@@ -338,19 +337,22 @@
             vals["document.hidden"] = document.hidden;
             vals["document.visibilityState"] = document.visibilityState;
 
-            // WebRTC
+            // 17. WebRTC
             vals["webrtc.privateIP"] = '';
 
-            // 噪点（只是设置，不是真实值）
+            // 18-19. 噪点设置（非真实值）
             vals["canvas.noise"] = false;
             vals["audio.noise"] = false;
 
-            // WASM
+            // 20. WebAssembly
             vals["wasm.supported"] = !!window.WebAssembly;
             vals["wasm.simd"] = false;
             vals["wasm.threads"] = false;
 
-            // 媒体能力
+            // 21. 共享内存 (重复项，保持一致)
+            vals["crossOriginIsolated"] = window.crossOriginIsolated;
+
+            // 22. 媒体能力 (简单检测)
             vals["mediaCapabilities.h264"] = false;
             vals["mediaCapabilities.h265"] = false;
             vals["mediaCapabilities.vp8"] = false;
@@ -381,7 +383,14 @@
 
                 for (const [key, desc] of props) {
                     const val = currentValues.hasOwnProperty(key) ? currentValues[key] : '???';
-                    let displayVal = (val === null || val === '') ? '(无)' : String(val);
+                    let displayVal;
+                    if (Array.isArray(val)) {
+                        displayVal = JSON.stringify(val);
+                    } else if (val === null || val === undefined) {
+                        displayVal = '(无)';
+                    } else {
+                        displayVal = String(val);
+                    }
                     const tr = document.createElement('tr');
                     tr.innerHTML = `<td>${key}</td><td class="val">${displayVal}</td><td>${desc}</td>`;
                     tbody.appendChild(tr);
@@ -400,7 +409,15 @@
                 ini += `[${cat}]\n`;
                 for (const [key, desc] of props) {
                     const val = currentValues.hasOwnProperty(key) ? currentValues[key] : '';
-                    const valStr = (val === null) ? '' : String(val);
+                    let valStr;
+                    if (Array.isArray(val)) {
+                        // 数组必须用 JSON 格式，确保导入时能被正确解析
+                        valStr = JSON.stringify(val);
+                    } else if (val === null || val === undefined) {
+                        valStr = '';
+                    } else {
+                        valStr = String(val);
+                    }
                     ini += `${key} = ${valStr}\n`;
                 }
                 ini += '\n';
@@ -423,12 +440,17 @@
 
         function copyIni() {
             const content = document.getElementById('ini-output').value;
-            navigator.clipboard.writeText(content).then(() => alert('已复制到剪贴板')).catch(() => prompt('手动复制', content));
+            navigator.clipboard.writeText(content).then(() => {
+                alert('已复制到剪贴板，可以直接保存为 .ini 文件');
+            }).catch(() => {
+                prompt('无法自动复制，请手动复制：', content);
+            });
         }
 
         // 初始化
         currentValues = collectValues();
         refreshUI();
+        // 如果电池 API 存在，后续会再次刷新
     </script>
 </body>
 </html>
