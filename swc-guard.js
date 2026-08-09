@@ -1,9 +1,9 @@
 // swc-guard.js — SwCTools 域名跳转 + 反爬守卫
-alert("test");
+
 (function () {
   const PAGES_HOST = 'swctools.pages.dev';
   const MAIN_HOST = 'swctools.dpdns.org';
-
+  alert("test");
   // ========== 1. 域名跳转（pages.dev → dpdns.org）==========
   if (window.location.hostname === PAGES_HOST) {
     alert(
