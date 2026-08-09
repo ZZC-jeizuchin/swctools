@@ -500,34 +500,7 @@
   }
   updateLoginButton();
 
-  // 智能登录框弹出逻辑（未登录且反爬虫已验证）
-  (function() {
-    const token = localStorage.getItem('swc_token');
-    let needLogin = true;
-    if (token) {
-      try {
-        const parts = token.split('.');
-        if (parts.length === 3) {
-          const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))));
-          if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-            needLogin = true;
-          } else {
-            needLogin = false;
-          }
-        }
-      } catch (e) {
-        needLogin = true;
-      }
-    }
-    if (needLogin) {
-      const notRobot = localStorage.getItem('not_robot');
-      if (notRobot === '1') {
-        localStorage.setItem('not_robot', '0');
-        const loginBtn = document.getElementById('loginBtn');
-        if (loginBtn) loginBtn.click();
-      }
-    }
-  })();
+  
 
   const modalOverlay = document.getElementById('modalOverlay'), modalSlides = document.getElementById('modalSlides');
   let currentCatIndex = 0, modalStartX = 0, modalCurrentX = 0, isModalDragging = false;
