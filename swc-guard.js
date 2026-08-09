@@ -50,7 +50,7 @@
   }
 
   // 未登录 → 检查 not_robot 标记
-  const notRobot = localStorage.getItem('not_robot');
+  const notRobot = document.cookie.includes('not_robot=1');
   if (notRobot === '1') {
     // 有验证标记，只放行，不再清除标记
     return;
