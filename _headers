@@ -1,3 +1,5 @@
 /*
   Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
+
+/swc-guard.js
+  Cache-Control: no-cache, no-store, must-revalidate
