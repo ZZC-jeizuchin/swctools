@@ -441,11 +441,50 @@
 
     // Turnstile 回调
     window.onSuccess = function(token) {
-      document.cookie = 'not_robot=1; path=/; max-age=3600; samesite=lax';
-      showResult('你打败了cloudflare的土豆服务器人机验证，看来你的大脑比cpu好使', true);
+
+      console.log(
+        "%c[ANTIROBOT] success",
+        "color:green;font-weight:bold"
+      );
+
+
+      // 写入 session，供 swc-guard.js 判断
+      sessionStorage.setItem(
+        "swc_verified",
+        "1"
+      );
+
+
+      console.log(
+        "[ANTIROBOT] session:",
+        sessionStorage.getItem("swc_verified")
+      );
+
+
+      // 保留 cookie
+      document.cookie =
+        "not_robot=1; path=/; max-age=3600; SameSite=Lax";
+
+
+      showResult(
+        '你打败了cloudflare的土豆服务器人机验证，看来你的大脑比cpu好使',
+        true
+      );
+
+
       setTimeout(() => {
-        window.location.href = getRedirectUrl();
+
+        const url = getRedirectUrl();
+
+        console.log(
+          "[ANTIROBOT] redirect:",
+          url
+        );
+
+        window.location.href = url;
+
       }, 1989);
+
     };
 
     window.onFailure = function() {
