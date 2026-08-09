@@ -1,9 +1,8 @@
 // swc-guard.js — SwCTools 域名跳转 + 反爬守卫
-
 (function () {
   const PAGES_HOST = 'swctools.pages.dev';
   const MAIN_HOST = 'swctools.dpdns.org';
-  alert("test");
+
   // ========== 1. 域名跳转（pages.dev → dpdns.org）==========
   if (window.location.hostname === PAGES_HOST) {
     alert(
@@ -31,7 +30,7 @@
   // 避免 antirobot.html 自身触发无限跳转
   if (window.location.pathname.endsWith('/antirobot.html')) return;
 
-  // 优先检查登录状态
+  // 优先检查登录状态（有效的 swc_token）
   const token = localStorage.getItem('swc_token');
   if (token) {
     try {
@@ -49,15 +48,15 @@
     } catch (_) {}
   }
 
-  // 未登录 → 检查一次性人机验证标记
+  // 未登录 → 检查 not_robot 标记
   const notRobot = localStorage.getItem('not_robot');
   if (notRobot === '1') {
-    // 刚通过验证，放行本次，立即消耗掉标记
+    // 有验证标记，消耗掉，放行
     localStorage.setItem('not_robot', '0');
     return;
   }
 
-  // 未登录且标记为 0 → 踢去验证
+  // 未登录且无标记 → 踢去验证
   const redirectParam = encodeURIComponent(window.location.href);
   window.location.replace('/antirobot.html?redirect=' + redirectParam);
 })();
