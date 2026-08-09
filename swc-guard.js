@@ -1,144 +1,256 @@
 // swc-guard.js
-// SwCTools domain redirect + anti bot guard
+// SwCTools debug guard
 
 (function () {
 
-  console.log("[SWC GUARD] loaded");
-
-  const PAGES_HOST = 'swctools.pages.dev';
-  const MAIN_HOST = 'swctools.dpdns.org';
-
-
-  // pages.dev -> dpdns.org
-
-  if (window.location.hostname === PAGES_HOST) {
-
-    const targetUrl =
-      window.location.protocol +
-      '//' +
-      MAIN_HOST +
-      window.location.pathname +
-      window.location.search +
-      window.location.hash;
-
-    window.location.replace(targetUrl);
-    return;
-  }
+    console.log(
+        "%c[SWC GUARD] loaded",
+        "color:green;font-weight:bold"
+    );
 
 
-  // 非正式域名不处理
-
-  if (window.location.hostname !== MAIN_HOST) {
-    return;
-  }
+    const PAGES_HOST = "swctools.pages.dev";
+    const MAIN_HOST = "swctools.dpdns.org";
 
 
-  // antirobot 页面自己放行
+    console.log(
+        "[SWC GUARD] origin:",
+        location.origin
+    );
 
-  if (
-    window.location.pathname === '/antirobot' ||
-    window.location.pathname.endsWith('/antirobot.html')
-  ) {
-    console.log("[SWC GUARD] antirobot page");
-    return;
-  }
+    console.log(
+        "[SWC GUARD] path:",
+        location.pathname
+    );
+
+    console.log(
+        "[SWC GUARD] cookie:",
+        document.cookie
+    );
+
+    console.log(
+        "[SWC GUARD] session:",
+        sessionStorage.getItem("swc_verified")
+    );
 
 
 
-  // =========================
-  // 1. 检查登录状态
-  // =========================
+    // ==========================
+    // pages.dev 跳转
+    // ==========================
 
-  const token = localStorage.getItem('swc_token');
+    if (location.hostname === PAGES_HOST) {
+
+        const target =
+            location.protocol +
+            "//" +
+            MAIN_HOST +
+            location.pathname +
+            location.search +
+            location.hash;
 
 
-  if (token) {
-
-    try {
-
-      const parts = token.split('.');
-
-
-      if (parts.length === 3) {
-
-        const payload = JSON.parse(
-          decodeURIComponent(
-            escape(
-              atob(
-                parts[1]
-                  .replace(/-/g, '+')
-                  .replace(/_/g, '/')
-              )
-            )
-          )
+        console.log(
+            "[SWC GUARD] pages redirect:",
+            target
         );
 
 
-        if (
-          !payload.exp ||
-          payload.exp > Math.floor(Date.now()/1000)
-        ) {
+        location.replace(target);
 
-          console.log(
-            "[SWC GUARD] logged in, allow"
-          );
+        return;
+    }
 
-          return;
+
+
+    // ==========================
+    // 非主域名
+    // ==========================
+
+    if (location.hostname !== MAIN_HOST) {
+
+        console.log(
+            "[SWC GUARD] not main host"
+        );
+
+        return;
+    }
+
+
+
+
+    // ==========================
+    // antirobot 页面跳过
+    // ==========================
+
+    if (
+        location.pathname === "/antirobot" ||
+        location.pathname.endsWith("/antirobot.html")
+    ) {
+
+        console.log(
+            "[SWC GUARD] antirobot page skip"
+        );
+
+        return;
+    }
+
+
+
+
+
+    // ==========================
+    // 登录检测
+    // ==========================
+
+    const token =
+        localStorage.getItem("swc_token");
+
+
+    console.log(
+        "[SWC GUARD] token:",
+        token ? "exists" : "none"
+    );
+
+
+
+    if (token) {
+
+        try {
+
+
+            const parts =
+                token.split(".");
+
+
+            if (parts.length === 3) {
+
+
+                const payload =
+                    JSON.parse(
+                        decodeURIComponent(
+                            escape(
+                                atob(
+                                    parts[1]
+                                    .replace(/-/g, "+")
+                                    .replace(/_/g, "/")
+                                )
+                            )
+                        )
+                    );
+
+
+                console.log(
+                    "[SWC GUARD] payload:",
+                    payload
+                );
+
+
+
+                if (
+                    !payload.exp ||
+                    payload.exp >
+                    Math.floor(Date.now()/1000)
+                ) {
+
+
+                    console.log(
+                        "[SWC GUARD] login allow"
+                    );
+
+
+                    return;
+
+                }
+
+            }
+
+
+        } catch(e) {
+
+
+            console.log(
+                "[SWC GUARD] token error",
+                e
+            );
+
 
         }
 
-      }
+    }
 
-    } catch(e){
 
-      console.log(
-        "[SWC GUARD] token invalid"
-      );
+
+
+
+
+    // ==========================
+    // session 验证检测
+    // ==========================
+
+
+    const verified =
+        sessionStorage.getItem(
+            "swc_verified"
+        );
+
+
+    console.log(
+        "[SWC GUARD] verified:",
+        verified
+    );
+
+
+
+    if (verified === "1") {
+
+
+        console.log(
+            "%c[SWC GUARD] human verified allow",
+            "color:green;font-weight:bold"
+        );
+
+
+        return;
 
     }
 
-  }
 
 
 
-  // =========================
-  // 2. 未登录检查本次会话验证
-  // =========================
-
-  const verified =
-    sessionStorage.getItem('swc_verified');
 
 
-  if (verified === '1') {
+    // ==========================
+    // 未验证
+    // ==========================
+
+
+    const redirect =
+        encodeURIComponent(
+            location.href
+        );
+
+
+    const target =
+        "/antirobot?redirect=" + redirect;
+
+
 
     console.log(
-      "[SWC GUARD] session verified"
-    );
-
-    return;
-
-  }
-
-
-
-  // =========================
-  // 3. 未验证 -> Turnstile
-  // =========================
-
-  console.log(
-    "[SWC GUARD] require human verification"
-  );
-
-
-  const redirectParam =
-    encodeURIComponent(
-      window.location.href
+        "%c[SWC GUARD] redirect antirobot",
+        "color:red;font-weight:bold"
     );
 
 
-  window.location.replace(
-    '/antirobot?redirect=' + redirectParam
-  );
+    console.log(
+        "[SWC GUARD] target:",
+        target
+    );
+
+
+
+    location.replace(target);
+
 
 
 })();
