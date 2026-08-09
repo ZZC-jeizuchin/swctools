@@ -1,4 +1,4 @@
-// swc-guard.js — SwCTools 域名跳转 + 反爬守卫（合并版）
+// swc-guard.js — SwCTools 域名跳转 + 反爬守卫
 (function () {
   const PAGES_HOST = 'swctools.pages.dev';
   const MAIN_HOST = 'swctools.dpdns.org';
@@ -21,16 +21,17 @@
       window.location.hash;
 
     window.location.replace(targetUrl);
-    return; // 跳转中，不执行后续逻辑
+    return;
   }
 
   // ========== 2. 反爬守卫（仅在正式域名下） ==========
   if (window.location.hostname !== MAIN_HOST) return;
 
-  // 检查是否已登录（有效 JWT）
-  const token = localStorage.getItem('swc_token');
-  let isLoggedIn = false;
+  // 避免 antirobot.html 自身触发无限跳转
+  if (window.location.pathname.endsWith('/antirobot.html')) return;
 
+  // 优先检查登录状态
+  const token = localStorage.getItem('swc_token');
   if (token) {
     try {
       const parts = token.split('.');
@@ -41,18 +42,21 @@
           )
         );
         if (!payload.exp || payload.exp > Math.floor(Date.now() / 1000)) {
-          isLoggedIn = true;
+          return; // 已登录，直接放行
         }
       }
     } catch (_) {}
   }
 
-  // 未登录 → 踢去人机验证
-  if (!isLoggedIn) {
-    // 避免 antirobot.html 自身触发无限跳转
-    if (window.location.pathname.endsWith('/antirobot.html')) return;
-
-    const redirectParam = encodeURIComponent(window.location.href);
-    window.location.replace('/antirobot.html?redirect=' + redirectParam);
+  // 未登录 → 检查一次性人机验证标记
+  const notRobot = localStorage.getItem('not_robot');
+  if (notRobot === '1') {
+    // 刚通过验证，放行本次，立即消耗掉标记
+    localStorage.setItem('not_robot', '0');
+    return;
   }
+
+  // 未登录且标记为 0 → 踢去验证
+  const redirectParam = encodeURIComponent(window.location.href);
+  window.location.replace('/antirobot.html?redirect=' + redirectParam);
 })();
