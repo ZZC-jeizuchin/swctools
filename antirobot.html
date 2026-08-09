@@ -441,7 +441,7 @@
 
     // Turnstile 回调
     window.onSuccess = function(token) {
-      localStorage.setItem('not_robot', '1');
+      document.cookie = 'not_robot=1; path=/; max-age=3600; samesite=lax';
       showResult('你打败了cloudflare的土豆服务器人机验证，看来你的大脑比cpu好使', true);
       setTimeout(() => {
         window.location.href = getRedirectUrl();
