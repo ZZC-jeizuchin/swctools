@@ -232,16 +232,17 @@
       let tracks = [];      // { url, name }
       let currentIndex = -1;
 
-      // 从直链提取文件名，去掉 .wav 后缀
+      // 从直链提取文件名，去掉 .wav 后缀，并自动解码 URI 编码（中文显示）
       function extractName(url) {
         try {
           const path = new URL(url).pathname;
           const parts = path.split('/').filter(Boolean);
           if (parts.length === 0) return url;
           const filename = parts[parts.length - 1];
-          return filename.replace(/\.wav$/i, '');
+          return decodeURIComponent(filename.replace(/\.wav$/i, ''));
         } catch (e) {
-          return url.split('/').pop().replace(/\.wav$/i, '') || url;
+          const fallback = url.split('/').pop().replace(/\.wav$/i, '') || url;
+          return decodeURIComponent(fallback);
         }
       }
 
@@ -322,7 +323,7 @@
         playTrack(next);
       });
 
-      // 音频加载错误处理（静默，更新状态）
+      // 音频加载错误处理
       audio.addEventListener('error', () => {
         nowPlayingEl.textContent = '⚠️ 音频加载失败';
       });
