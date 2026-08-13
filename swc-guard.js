@@ -40,7 +40,7 @@
     // ==========================
 
     if (location.hostname === PAGES_HOST) {
-
+        alert("这是旧的域名，现已迁移至新域名swctools.dpdns.org(即将跳转)")
         const target =
             location.protocol +
             "//" +
