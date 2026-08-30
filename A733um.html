@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+  <title>SwCTools · A733um 阅读器</title>
+  <style>
+    /* ========== 主站风格变量（与 index.html 完全一致） ========== */
+    :root {
+      --bg-body: #e8edf2;
+      --panel-bg: rgba(255, 255, 255, 0.85);
+      --panel-border: #bdd1e6;
+      --title-color: #1e4b6e;
+      --badge-bg: #d0e2f0;
+      --badge-color: #2c6182;
+      --cat-btn-bg: #d9e8f4;
+      --cat-btn-border: #adc7e0;
+      --cat-btn-color: #1a4059;
+      --cat-btn-hover-bg: #c2d8ed;
+      --jump-row-bg: #e7f0f9;
+      --jump-row-border: #c1d6ea;
+      --input-border: #b3cce2;
+      --input-focus-border: #4f7fa3;
+      --go-btn-bg: #4f7f9e;
+      --go-btn-hover-bg: #3a6b8c;
+      --tool-btn-bg: #cddef0;
+      --tool-btn-border: #a3bed8;
+      --tool-btn-color: #1a4765;
+      --modal-overlay-bg: rgba(22, 50, 70, 0.25);
+      --modal-card-bg: #f3f9ff;
+      --link-item-bg: #d9e8f4;
+      --link-item-border: #adc7e0;
+      --drawer-panel-bg: #f3f9ff;
+      --device-item-bg: #eaf2fc;
+      --device-label-color: #1e4b6e;
+      --device-value-color: #0d3450;
+      --text-color: #173e58;
+      --corner-text-color: #3a6a8e;
+      --fps-bg: rgba(255, 255, 255, 0.6);
+      --mark-bg: #ffeb3b;
+      --mark-text: #000000;
+    }
+    [data-theme="dark"] {
+      --bg-body: #0a0f14;
+      --panel-bg: rgba(13, 27, 42, 0.9);
+      --panel-border: #1e3a5a;
+      --title-color: #a0c4e8;
+      --badge-bg: #1a3a5c;
+      --badge-color: #b0d0f0;
+      --cat-btn-bg: #1e3a5a;
+      --cat-btn-border: #2a5a8a;
+      --cat-btn-color: #c0d8f0;
+      --cat-btn-hover-bg: #2a5a8a;
+      --jump-row-bg: #122a3e;
+      --jump-row-border: #1e4a6e;
+      --input-border: #2a5a8a;
+      --input-focus-border: #5a9ac0;
+      --go-btn-bg: #2a6a9e;
+      --go-btn-hover-bg: #1a4a7a;
+      --tool-btn-bg: #1e3a5a;
+      --tool-btn-border: #2a5a8a;
+      --tool-btn-color: #c0d8f0;
+      --modal-overlay-bg: rgba(0, 20, 40, 0.5);
+      --modal-card-bg: #0d1b2a;
+      --link-item-bg: #1e3a5a;
+      --link-item-border: #2a5a8a;
+      --drawer-panel-bg: #0d1b2a;
+      --device-item-bg: #122a3e;
+      --device-label-color: #a0c4e8;
+      --device-value-color: #d0e0f0;
+      --text-color: #c0d8f0;
+      --corner-text-color: #7a9ab0;
+      --fps-bg: rgba(0, 0, 0, 0.5);
+      --mark-bg: #8b6d00;
+      --mark-text: #ffffff;
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; font-family:'Inter',system-ui,sans-serif; }
+    body {
+      background:var(--bg-body);
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:12px;
+      position:relative;
+      flex-direction: column;
+    }
+    .corner-tl, .corner-tr, .corner-br {
+      position:fixed; font-size:0.75rem; color:var(--corner-text-color);
+      opacity:0.8; z-index:3000; pointer-events:none;
+    }
+    .corner-tl { top:12px; left:16px; }
+    .corner-tr {
+      top:12px; right:20px;
+      background:var(--fps-bg); padding:4px 12px; border-radius:24px;
+      border:1px solid var(--panel-border);
+    }
+    .corner-br { bottom:12px; right:20px; }
+    .theme-toggle {
+      position:fixed; bottom:12px; left:16px; font-size:0.9rem;
+      background:var(--tool-btn-bg); border:1px solid var(--panel-border);
+      color:var(--corner-text-color); padding:5px 14px; border-radius:32px;
+      cursor:pointer; opacity:0.85; transition:0.2s; z-index:3000; font-weight:500;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .theme-toggle:hover { opacity:1; background:var(--cat-btn-hover-bg); }
+    .back-btn {
+      position:fixed; top:12px; left:16px;
+      background:var(--tool-btn-bg); border:1px solid var(--panel-border);
+      color:var(--corner-text-color); padding:5px 14px; border-radius:32px;
+      text-decoration:none; font-size:0.9rem; z-index:3000; opacity:0.85;
+      font-weight:500; transition:0.2s;
+    }
+    .back-btn:hover { opacity:1; background:var(--cat-btn-hover-bg); }
+
+    .main-panel {
+      width: min(96vw, 900px);
+      max-height: 90vh;
+      background:var(--panel-bg);
+      border-radius:28px;
+      box-shadow:0 16px 30px -8px rgba(30,65,90,0.18);
+      border:1px solid var(--panel-border);
+      padding:24px 28px;
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+      margin-top:40px;
+      position:relative;
+    }
+    .title-section {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      border-bottom:1px solid var(--panel-border);
+      padding-bottom:12px;
+    }
+    .title-section h1 { font-size:1.5rem; font-weight:550; color:var(--title-color); }
+    .badge {
+      font-size:0.85rem; color:var(--badge-color); background:var(--badge-bg);
+      padding:4px 12px; border-radius:24px; border:1px solid var(--cat-btn-border);
+    }
+
+    /* 查找工具栏 */
+    .search-bar {
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .search-input {
+      flex:1;
+      min-width:150px;
+      height:38px;
+      padding:0 14px;
+      border:1px solid var(--input-border);
+      border-radius:24px;
+      background:var(--panel-bg);
+      color:var(--text-color);
+      font-size:0.95rem;
+      outline:none;
+    }
+    .search-input:focus { border-color:var(--input-focus-border); }
+    .search-btn {
+      background:var(--go-btn-bg);
+      border:none;
+      color:white;
+      padding:8px 18px;
+      border-radius:24px;
+      font-size:0.9rem;
+      font-weight:600;
+      cursor:pointer;
+      transition:0.15s;
+      white-space:nowrap;
+    }
+    .search-btn:hover { background:var(--go-btn-hover-bg); }
+    .nav-btn {
+      background:var(--tool-btn-bg);
+      border:1px solid var(--tool-btn-border);
+      color:var(--tool-btn-color);
+      padding:8px 14px;
+      border-radius:24px;
+      font-size:0.85rem;
+      font-weight:550;
+      cursor:pointer;
+      transition:0.15s;
+      white-space:nowrap;
+    }
+    .nav-btn:hover { background:var(--cat-btn-hover-bg); }
+    .nav-btn:disabled {
+      opacity:0.5;
+      cursor:not-allowed;
+    }
+
+    .search-info {
+      font-size:0.85rem;
+      color:var(--corner-text-color);
+    }
+
+    /* 内容区域 */
+    .content-wrapper {
+      flex:1;
+      overflow-y:auto;
+      border-top:1px solid var(--panel-border);
+      padding-top:10px;
+      padding-right:4px;
+      min-height:200px;
+      max-height:65vh;
+    }
+    .content {
+      white-space:pre-wrap;
+      word-wrap:break-word;
+      font-size:0.95rem;
+      line-height:1.6;
+      color:var(--text-color);
+      font-family:'Consolas','Monaco','Courier New',monospace;
+    }
+    mark {
+      background:var(--mark-bg);
+      color:var(--mark-text);
+      padding:0 1px;
+      border-radius:2px;
+    }
+    .loading {
+      text-align:center;
+      padding:40px;
+      color:var(--corner-text-color);
+    }
+    .error {
+      text-align:center;
+      padding:40px;
+      color:#c62828;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="corner-tl">不自由毋宁死 · Give me liberty or give me death</div>
+  <div class="corner-tr" id="fpsDisplay">FPS: --</div>
+  <div class="corner-br">made by ZZC-jeizuchin, github</div>
+
+  <button class="theme-toggle" id="themeToggle">深色</button>
+  <a class="back-btn" href="/index.html">← 返回主站</a>
+
+  <div class="main-panel">
+    <div class="title-section">
+      <h1>📖 A733um 阅读器</h1>
+      <span class="badge">a733um.txt</span>
+    </div>
+
+    <!-- 查找工具栏 -->
+    <div class="search-bar">
+      <input type="text" id="searchInput" class="search-input" placeholder="输入关键词查找..." autocomplete="off">
+      <button id="searchBtn" class="search-btn">查找</button>
+      <button id="prevBtn" class="nav-btn" disabled>↑ 上一个</button>
+      <button id="nextBtn" class="nav-btn" disabled>↓ 下一个</button>
+      <span id="searchInfo" class="search-info"></span>
+    </div>
+
+    <!-- 内容区域 -->
+    <div id="contentWrapper" class="content-wrapper">
+      <div class="loading">正在加载文本...</div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      // ========== 主题切换 ==========
+      const themeToggle = document.getElementById('themeToggle');
+      const currentTheme = localStorage.getItem('swc_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', currentTheme);
+      themeToggle.textContent = currentTheme === 'light' ? '深色' : '亮色';
+      themeToggle.addEventListener('click', () => {
+        const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('swc_theme', newTheme);
+        themeToggle.textContent = newTheme === 'light' ? '深色' : '亮色';
+      });
+
+      // ========== FPS 显示 ==========
+      const fpsDisplay = document.getElementById('fpsDisplay');
+      let frameCount = 0, lastFpsUpdate = performance.now();
+      function updateFPS() {
+        frameCount++;
+        const now = performance.now();
+        if (now - lastFpsUpdate >= 1000) {
+          fpsDisplay.textContent = `FPS: ${Math.round((frameCount * 1000) / (now - lastFpsUpdate))}`;
+          frameCount = 0;
+          lastFpsUpdate = now;
+        }
+        requestAnimationFrame(updateFPS);
+      }
+      requestAnimationFrame(updateFPS);
+
+      // ========== 阅读器逻辑 ==========
+      const contentWrapper = document.getElementById('contentWrapper');
+      const searchInput = document.getElementById('searchInput');
+      const searchBtn = document.getElementById('searchBtn');
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const searchInfo = document.getElementById('searchInfo');
+
+      let originalText = '';
+      let currentMatches = [];   // 保存当前匹配的 DOM 元素列表
+      let currentMatchIndex = -1;
+
+      // 加载文件
+      async function loadText() {
+        try {
+          const response = await fetch('a733um.txt');
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          originalText = await response.text();
+          renderContent();
+        } catch (err) {
+          contentWrapper.innerHTML = `<div class="error">⚠️ 加载失败：${err.message}</div>`;
+        }
+      }
+
+      // 转义 HTML 特殊字符
+      function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
+      // 渲染内容（可传入查找词，高亮所有匹配）
+      function renderContent(searchTerm = '') {
+        if (!originalText) return;
+        let html;
+        if (searchTerm.trim()) {
+          // 查找模式：高亮匹配项
+          const escapedTerm = escapeHtml(searchTerm.trim());
+          const regex = new RegExp('(' + escapedTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+          const escapedText = escapeHtml(originalText);
+          html = escapedText.replace(regex, '<mark>$1</mark>');
+        } else {
+          // 普通模式
+          html = escapeHtml(originalText);
+        }
+        // 使用 pre-wrap 保持换行
+        contentWrapper.innerHTML = `<div class="content">${html}</div>`;
+      }
+
+      // 更新匹配信息
+      function updateMatchInfo() {
+        if (currentMatches.length === 0) {
+          searchInfo.textContent = '无匹配';
+          prevBtn.disabled = true;
+          nextBtn.disabled = true;
+          return;
+        }
+        searchInfo.textContent = `共 ${currentMatches.length} 个匹配，当前 ${currentMatchIndex + 1}`;
+        prevBtn.disabled = false;
+        nextBtn.disabled = false;
+      }
+
+      // 滚动到指定匹配元素
+      function scrollToMatch(index) {
+        if (index < 0 || index >= currentMatches.length) return;
+        const el = currentMatches[index];
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // 移除之前的强调样式
+        currentMatches.forEach((m, i) => {
+          if (i !== index) m.style.outline = 'none';
+        });
+        el.style.outline = '2px solid var(--input-focus-border)';
+        currentMatchIndex = index;
+        updateMatchInfo();
+      }
+
+      // 执行查找
+      function performSearch() {
+        const term = searchInput.value;
+        renderContent(term);
+        // 重新收集所有 mark 元素
+        const marks = document.querySelectorAll('mark');
+        currentMatches = Array.from(marks);
+        if (currentMatches.length > 0) {
+          currentMatchIndex = -1; // 重置，第一次按下下一个
+          scrollToMatch(0);
+        } else {
+          currentMatchIndex = -1;
+          updateMatchInfo();
+        }
+      }
+
+      // 上一个匹配
+      function prevMatch() {
+        if (currentMatches.length === 0) return;
+        let newIndex = (currentMatchIndex - 1 + currentMatches.length) % currentMatches.length;
+        scrollToMatch(newIndex);
+      }
+
+      // 下一个匹配
+      function nextMatch() {
+        if (currentMatches.length === 0) return;
+        let newIndex = (currentMatchIndex + 1) % currentMatches.length;
+        scrollToMatch(newIndex);
+      }
+
+      // 事件绑定
+      searchBtn.addEventListener('click', performSearch);
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') performSearch();
+      });
+      prevBtn.addEventListener('click', prevMatch);
+      nextBtn.addEventListener('click', nextMatch);
+
+      // 初始加载
+      loadText();
+    })();
+  </script>
+</body>
+</html>
