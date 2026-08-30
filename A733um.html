@@ -206,12 +206,25 @@
       padding-right:4px;
       min-height:200px;
       max-height:65vh;
+      /* 自定义滚动条样式 */
+      scrollbar-width: thin;
+      scrollbar-color: var(--input-border) transparent;
+    }
+    .content-wrapper::-webkit-scrollbar {
+      width: 8px;
+    }
+    .content-wrapper::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .content-wrapper::-webkit-scrollbar-thumb {
+      background-color: var(--input-border);
+      border-radius: 10px;
     }
     .content {
       white-space:pre-wrap;
       word-wrap:break-word;
-      font-size:0.95rem;
-      line-height:1.6;
+      font-size:0.8rem;              /* 字体调小 */
+      line-height:1.5;
       color:var(--text-color);
       font-family:'Consolas','Monaco','Courier New',monospace;
     }
@@ -301,15 +314,17 @@
       const searchInfo = document.getElementById('searchInfo');
 
       let originalText = '';
-      let currentMatches = [];   // 保存当前匹配的 DOM 元素列表
+      let currentMatches = [];
       let currentMatchIndex = -1;
 
       // 加载文件
       async function loadText() {
         try {
-          const response = await fetch('A733um.txt');
+          const response = await fetch('a733um.txt');
           if (!response.ok) throw new Error('HTTP ' + response.status);
           originalText = await response.text();
+          // 自动省略空行：将连续两个及以上的换行合并为单个换行
+          originalText = originalText.replace(/\n{2,}/g, '\n');
           renderContent();
         } catch (err) {
           contentWrapper.innerHTML = `<div class="error">⚠️ 加载失败：${err.message}</div>`;
@@ -328,16 +343,13 @@
         if (!originalText) return;
         let html;
         if (searchTerm.trim()) {
-          // 查找模式：高亮匹配项
           const escapedTerm = escapeHtml(searchTerm.trim());
           const regex = new RegExp('(' + escapedTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
           const escapedText = escapeHtml(originalText);
           html = escapedText.replace(regex, '<mark>$1</mark>');
         } else {
-          // 普通模式
           html = escapeHtml(originalText);
         }
-        // 使用 pre-wrap 保持换行
         contentWrapper.innerHTML = `<div class="content">${html}</div>`;
       }
 
@@ -359,7 +371,6 @@
         if (index < 0 || index >= currentMatches.length) return;
         const el = currentMatches[index];
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // 移除之前的强调样式
         currentMatches.forEach((m, i) => {
           if (i !== index) m.style.outline = 'none';
         });
@@ -372,11 +383,10 @@
       function performSearch() {
         const term = searchInput.value;
         renderContent(term);
-        // 重新收集所有 mark 元素
         const marks = document.querySelectorAll('mark');
         currentMatches = Array.from(marks);
         if (currentMatches.length > 0) {
-          currentMatchIndex = -1; // 重置，第一次按下下一个
+          currentMatchIndex = -1;
           scrollToMatch(0);
         } else {
           currentMatchIndex = -1;
