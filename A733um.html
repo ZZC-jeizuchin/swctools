@@ -320,7 +320,7 @@
       // 加载文件
       async function loadText() {
         try {
-          const response = await fetch('a733um.txt');
+          const response = await fetch('A733um.txt');
           if (!response.ok) throw new Error('HTTP ' + response.status);
           originalText = await response.text();
           // 自动省略空行：将连续两个及以上的换行合并为单个换行
