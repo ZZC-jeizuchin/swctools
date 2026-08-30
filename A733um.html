@@ -307,7 +307,7 @@
       // 加载文件
       async function loadText() {
         try {
-          const response = await fetch('a733um.txt');
+          const response = await fetch('A733um.txt');
           if (!response.ok) throw new Error('HTTP ' + response.status);
           originalText = await response.text();
           renderContent();
