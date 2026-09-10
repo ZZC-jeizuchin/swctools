@@ -200,7 +200,7 @@
     .modal-card {
       background: var(--modal-card-bg); width: 90vw; max-width: 700px; max-height: 70vh;
       border-radius: calc(var(--main-w) * 0.04); border: 1px solid var(--panel-border);
-      box-shadow: 0 calc(var(--main-h) * 0.02) calc(var(--main-h) * 0.04) rgba(28, 60, 84, 0.25);
+      box-shadow: calc(var(--main-h) * 0.02) calc(var(--main-h) * 0.04) rgba(28, 60, 84, 0.25);
       padding: calc(var(--main-h) * 0.03) calc(var(--main-w) * 0.03); overflow-y: auto;
       flex-shrink: 0; margin: 0 5vw; position: relative;
       opacity: 1; transition: opacity 0.15s, transform 0.2s, filter 0.1s;
@@ -302,7 +302,7 @@
     <button class="cat-btn" data-cat="search">搜索引擎</button>
     <button class="cat-btn" data-cat="media">通信音乐</button>
     <button class="cat-btn" data-cat="dev">开发</button>
-    <button class="cat-btn" data-cat="music" onclick="location.href='music.html'">播放器</button>
+    <button class="cat-btn" data-cat="music">播放器</button>
     <button class="cat-btn" data-cat="other">其他</button>
     <button class="cat-btn" id="loginBtn" style="display:none;">登录</button>
   </div>
@@ -383,10 +383,11 @@
     search: [{ name: 'Google', url: 'https://www.google.com' },{ name: 'Bing (国内)', url: 'https://cn.bing.com' },{ name: 'Bing (国际)', url: 'https://www.bing.com' },{ name: 'MSN', url: 'https://www.msn.com' },{ name: 'DuckDuckGo', url: 'https://duckduckgo.com' },{ name: 'Baidu', url: 'https://baidu.com' },{ name: 'Yandex', url: 'https://yandex.com' },{ name: 'Yandex RU', url: 'https://yandex.ru' },{ name: 'Bilibili', url: 'https://bilibili.com' }],
     media: [{ name: '自由公园', url: 'https://ziyoupark.com' },{ name: 'XCloud Music', url: 'https://music.xcloudv.top' },{ name: 'PJMP3', url: 'https://pjmp3.com' },{ name: 'PeanutDL', url: 'https://peanutdl.com' },{ name: 'WyAPI', url: 'https://wyapi.toubiec.cn' },{ name: 'GDStudio Music', url: 'https://music.gdstudio.org' },{ name: 'outlook', url: 'https://outlook.com' },{ name: 'yymp3', url: 'https://www.yymp3.com' }],
     dev: [{ name: 'GitHub', url: 'https://github.com' },{ name: 'IP.SB', url: 'https://www.ip.sb' },{ name: 'Intel', url: 'https://www.intel.com' },{ name: 'AMD', url: 'https://www.amd.com' },{ name: 'NVIDIA', url: 'https://www.nvidia.com' },{ name: 'Lenovo', url: 'https://www.lenovo.com' },{ name: 'Huawei', url: 'https://www.huawei.com' },{ name: 'Apple', url: 'https://www.apple.com' },{ name: 'Microsoft', url: 'https://www.microsoft.com' },{ name: 'cpp.sh', url: 'https://cpp.sh' },{ name: 'Python (官网)', url: 'https://www.python.org' },{ name: 'Python IDE', url: 'https://www.programiz.com/python-programming/online-compiler/' },{ name: 'Cloudflare', url: 'https://www.cloudflare.com' }],
+    music: [],
     other: [{ name: 'MMPan.top', url: 'https://mmpan.top' },{ name: 'CNN Edition', url: 'https://edition.cnn.com' },{ name: 'Poki', url: 'https://poki.com' },{ name: 'Steam', url: 'https://store.steampowered.com' },{ name: 'Slow Roads', url: 'https://slowroads.io' },{ name: 'CopyOS', url: 'https://copy.sh/v86' },{ name: 'GitHub同项目', url: 'https://zzc-jeizuchin.github.io' },{ name: '作者主页', url: 'https://github.com/ZZC-jeizuchin' }]
   };
-  const catNames = { ai:'AI工具', search:'搜索引擎', media:'通信音乐', dev:'开发', other:'其他', login:'未登录' };
-  const categories = ['ai','search','media','dev','other','login'];
+  const catNames = { ai:'AI工具', search:'搜索引擎', media:'通信音乐', dev:'开发', music:'播放器', other:'其他', login:'未登录' };
+  const categories = ['ai','search','media','dev','music','other','login'];
   const drawerTypes = ['device','ide','stress','base64'];
 
   function performJump(url, addTimestamp = true) {
@@ -560,6 +561,14 @@
     modalSlides.innerHTML = categories.map(cat => {
       if (cat === 'login') {
         return buildLoginCard();
+      } else if (cat === 'music') {
+        return `
+          <div class="modal-card" data-cat="music">
+            <div class="modal-header"><h3>音乐播放器(如无跳转手动点击)</h3><button class="modal-close" data-close-modal>&times;</button></div>
+            <div style="display:flex;justify-content:center;padding:16px 0;">
+              <button class="nav-btn" style="max-width:260px;" onclick="location.href='music.html'">即将跳转</button>
+            </div>
+          </div>`;
       } else {
         return `
           <div class="modal-card" data-cat="${cat}">
@@ -778,7 +787,7 @@
   document.querySelectorAll('[data-cat]').forEach((btn, idx) => btn.addEventListener('click', ()=> openModalAt(idx)));
   loginBtn.addEventListener('click', () => {
     buildModalSlides();
-    openModalAt(5);
+    openModalAt(6);
   });
 
   // ========== 抽屉系统 ==========
@@ -860,17 +869,36 @@
     const distanceY = Math.abs(deltaY);
 
     if (distanceY > distanceX) {
+      // 垂直滑动
+      const panel = drawerSlides.children[currentDrawerIndex];
       if (deltaY > 0) {
-        isVerticalDrag = true;
-        const panel = drawerSlides.children[currentDrawerIndex];
-        if (panel) {
-          panel.style.transform = `translateY(${deltaY}px) scale(1)`;
-          panel.style.filter = 'blur(0)';
+        // 向下滑动 —— 只有内部内容已滚动到顶部时，才允许拖拽关闭抽屉
+        const contentEl = document.getElementById('drawer-' + drawerTypes[currentDrawerIndex]);
+        const atTop = !contentEl || contentEl.scrollTop <= 0;
+        if (atTop) {
+          isVerticalDrag = true;
+          if (panel) {
+            panel.style.transform = `translateY(${deltaY}px) scale(1)`;
+            panel.style.filter = 'blur(0)';
+          }
+        } else {
+          // 内部内容还没滚到顶部，让内容自行滚动，不接管手势
+          isVerticalDrag = false;
+          if (panel) {
+            panel.style.transform = '';
+            panel.style.filter = '';
+          }
         }
       } else {
+        // 向上滑动 —— 交给内容滚动
         isVerticalDrag = false;
+        if (panel) {
+          panel.style.transform = '';
+          panel.style.filter = '';
+        }
       }
     } else {
+      // 水平滑动 —— 切换抽屉面板
       isVerticalDrag = false;
       const panel = drawerSlides.children[currentDrawerIndex];
       if (panel) {
