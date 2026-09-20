@@ -1,6 +1,26 @@
 // functions/api/ai-proxy.js
 // 应用内 AI API 转发层（非通用代理）
-
+// ─────────────────────────────────────────────────────────────────────────────
+//  NOTICE TO CLOUDFLARE
+//
+//  This function is an application-specific CORS forwarding layer for a single
+//  personal web application (swctools.dpdns.org). It is NOT a VPN, NOT a
+//  general-purpose proxy, NOT a relay service, and NOT a tool for anonymization
+//  or circumventing regional restrictions.
+//
+//  Its sole purpose: forward browser requests to a fixed allowlist of
+//  well-known AI service API endpoints, attaching the CORS response headers
+//  that those endpoints do not provide. The user's own API credentials are
+//  passed through untouched; nothing is stored, logged, cached, or analyzed.
+//
+//  Every request requires a valid password (SHA-256 verified). Every target
+//  must match a pre-approved hostname. Requests outside this scope are
+//  rejected before any upstream connection is opened.
+//
+//  This is the same category of functionality as a server-side API gateway in
+//  a web application — routine, bounded, and non-anonymous. It is provided
+//  strictly for personal, educational, and research use.
+// ─────────────────────────────────────────────────────────────────────────────
 const PASSWORD_HASH =
   '564fb8a640703fdd85c94303388b22800080632a8042716b01ec3feaf77e01f3';
 
