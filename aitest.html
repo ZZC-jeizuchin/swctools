@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SwC AI · 连接诊断</title>
+  <style>
+    :root {
+      --bg: #e8edf2; --panel: #fff; --border: #bdd1e6;
+      --text: #173e58; --muted: #3a6a8e;
+      --ok: #2e7d32; --warn: #ef6c00; --err: #c62828;
+      --code: #f0f4f8;
+    }
+    [data-theme="dark"] {
+      --bg: #0a0f14; --panel: #0d1b2a; --border: #1e3a5a;
+      --text: #c0d8f0; --muted: #7a9ab0;
+      --ok: #66bb6a; --warn: #ffa726; --err: #ef5350;
+      --code: #122a3e;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .container { max-width: 1000px; margin: 0 auto; }
+    h1 {
+      font-size: 1.3rem;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+    .config-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      font-size: 0.85rem;
+    }
+    .config-box .row {
+      display: flex;
+      padding: 4px 0;
+      border-bottom: 1px dashed var(--border);
+    }
+    .config-box .row:last-child { border-bottom: none; }
+    .config-box .k {
+      color: var(--muted);
+      width: 130px;
+      flex-shrink: 0;
+    }
+    .config-box .v {
+      flex: 1;
+      word-break: break-all;
+      font-family: 'Consolas', monospace;
+    }
+    .config-box .v.empty { color: var(--err); }
+    .config-box .v.ok { color: var(--ok); }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: #4f7f9e;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    button:hover { background: #3a6b8c; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    button.secondary:hover { background: var(--code); }
+
+    .test-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .test {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: 0.15s;
+    }
+    .test-header {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .test-status {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: bold;
+      color: #fff;
+      background: var(--border);
+    }
+    .test-status.pending { background: #b0bec5; }
+    .test-status.running { background: #42a5f5; animation: pulse 1s infinite; }
+    .test-status.ok { background: var(--ok); }
+    .test-status.warn { background: var(--warn); }
+    .test-status.err { background: var(--err); }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .test-title {
+      flex: 1;
+      font-size: 0.92rem;
+      font-weight: 500;
+    }
+    .test-time {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-family: 'Consolas', monospace;
+    }
+    .test-arrow {
+      font-size: 0.75rem;
+      color: var(--muted);
+      transition: transform 0.15s;
+    }
+    .test.open .test-arrow { transform: rotate(90deg); }
+
+    .test-body {
+      display: none;
+      border-top: 1px solid var(--border);
+      padding: 14px 16px;
+      font-size: 0.82rem;
+      line-height: 1.6;
+    }
+    .test.open .test-body { display: block; }
+    .test-body .section {
+      margin-bottom: 12px;
+    }
+    .test-body .section:last-child { margin-bottom: 0; }
+    .test-body .section-title {
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .test-body pre {
+      background: var(--code);
+      padding: 10px 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-family: 'Consolas', monospace;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .summary {
+      background: var(--panel);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 20px;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .summary.show { display: block; }
+    .summary.ok { border-color: var(--ok); }
+    .summary.err { border-color: var(--err); }
+    .summary h3 { margin-bottom: 10px; }
+    .summary ul { padding-left: 20px; }
+    .summary li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>SwC AI · 连接诊断</h1>
+  <div class="subtitle">
+    读取 ai.html 相同的 localStorage 配置，逐级测试 Workers 与 API 的连通性。
+    任何一步失败都会显示原始响应。
+  </div>
+
+  <div class="config-box" id="configBox"></div>
+
+  <div class="toolbar">
+    <button id="btnRunAll">▶ 全部运行</button>
+    <button id="btnClear" class="secondary">清空结果</button>
+    <button id="btnCopy" class="secondary">复制全部结果</button>
+  </div>
+
+  <div class="test-list" id="testList"></div>
+
+  <div class="summary" id="summary"></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  document.documentElement.setAttribute('data-theme', localStorage.getItem('swc_theme') || 'light');
+
+  // ============ 读取配置 ============
+  const CONFIG_KEY = 'swc_ai_config';
+  let config = {};
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    config = raw ? JSON.parse(raw) : {};
+  } catch {}
+
+  const cfgBox = document.getElementById('configBox');
+  function row(k, v, isOk) {
+    const cls = v ? (isOk === false ? 'empty' : 'ok') : 'empty';
+    const display = v || '(空)';
+    return `<div class="row"><div class="k">${k}</div><div class="v ${cls}">${escapeHtml(String(display))}</div></div>`;
+  }
+  function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  cfgBox.innerHTML =
+    row('Worker URL', config.workerUrl, !!config.workerUrl) +
+    row('Worker 密码', config.workerPassword ? '已填(' + config.workerPassword.length + '字符)' : '', !!config.workerPassword) +
+    row('API 地址', config.apiBase, !!config.apiBase) +
+    row('API Key', config.apiKey ? '已填(' + config.apiKey.length + '字符)' : '', !!config.apiKey) +
+    row('模型', config.model, !!config.model) +
+    `<div class="row"><div class="k">当前页面</div><div class="v">${escapeHtml(window.location.href)}</div></div>` +
+    `<div class="row"><div class="k">当前 Origin</div><div class="v">${escapeHtml(window.location.origin)}</div></div>`;
+
+  // ============ 测试框架 ============
+  const tests = [];
+  const testListEl = document.getElementById('testList');
+
+  function defineTest(id, title) {
+    const el = document.createElement('div');
+    el.className = 'test';
+    el.id = 'test-' + id;
+    el.innerHTML = `
+      <div class="test-header">
+        <div class="test-status pending" data-status>·</div>
+        <div class="test-title">${escapeHtml(title)}</div>
+        <div class="test-time" data-time></div>
+        <div class="test-arrow">▶</div>
+      </div>
+      <div class="test-body" data-body></div>
+    `;
+    el.querySelector('.test-header').addEventListener('click', () => el.classList.toggle('open'));
+    testListEl.appendChild(el);
+    return {
+      id,
+      title,
+      el,
+      statusEl: el.querySelector('[data-status]'),
+      bodyEl: el.querySelector('[data-body]'),
+      timeEl: el.querySelector('[data-time]'),
+      setStatus(status, text) {
+        this.statusEl.className = 'test-status ' + status;
+        this.statusEl.textContent = text || (status === 'ok' ? '✓' : status === 'err' ? '✗' : status === 'warn' ? '!' : '·');
+      },
+      setTime(ms) {
+        this.timeEl.textContent = ms !== undefined ? ms + ' ms' : '';
+      },
+      setBody(html) {
+        this.bodyEl.innerHTML = html;
+      },
+      open() { el.classList.add('open'); }
+    };
+  }
+
+  function section(title, content) {
+    return `<div class="section"><div class="section-title">${escapeHtml(title)}</div><pre>${escapeHtml(content)}</pre></div>`;
+  }
+  function sectionHtml(title, html) {
+    return `<div class="section"><div class="section-title">${escapeHtml(title)}</div>${html}</div>`;
+  }
+
+  function headersToText(headers) {
+    const lines = [];
+    headers.forEach((v, k) => lines.push(k + ': ' + v));
+    return lines.join('\n');
+  }
+
+  // 带详细诊断的 fetch
+  async function diagFetch(url, options) {
+    const start = performance.now();
+    const info = {
+      url,
+      method: options?.method || 'GET',
+      requestHeaders: {},
+      requestBody: null,
+      status: null,
+      statusText: '',
+      responseType: '',
+      responseHeaders: '',
+      bodyText: '',
+      error: null,
+      elapsed: 0
+    };
+    if (options?.headers) {
+      if (options.headers instanceof Headers) {
+        options.headers.forEach((v, k) => info.requestHeaders[k] = v);
+      } else {
+        Object.assign(info.requestHeaders, options.headers);
+      }
+    }
+    if (options?.body) {
+      info.requestBody = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+    }
+
+    try {
+      const res = await fetch(url, options);
+      info.elapsed = Math.round(performance.now() - start);
+      info.status = res.status;
+      info.statusText = res.statusText;
+      info.responseType = res.type;
+      info.responseHeaders = headersToText(res.headers);
+      try {
+        info.bodyText = await res.text();
+      } catch (e) {
+        info.bodyText = '[读取 body 失败: ' + e.message + ']';
+      }
+      return { ok: res.ok, res, info };
+    } catch (e) {
+      info.elapsed = Math.round(performance.now() - start);
+      info.error = {
+        name: e.name,
+        message: e.message,
+        stack: e.stack || ''
+      };
+      return { ok: false, res: null, info };
+    }
+  }
+
+  function renderFetchInfo(info) {
+    let html = '';
+    html += section('请求', [
+      info.method + ' ' + info.url,
+      '',
+      '请求头:',
+      Object.entries(info.requestHeaders).map(([k, v]) => '  ' + k + ': ' + v).join('\n') || '  (无)',
+      '',
+      '请求体:',
+      info.requestBody ? ('  ' + info.requestBody.slice(0, 2000) + (info.requestBody.length > 2000 ? '\n  ...(截断)' : '')) : '  (无)'
+    ].join('\n'));
+
+    if (info.error) {
+      html += section('❌ 网络层异常（请求未发出或响应被拦截）', [
+        '异常名: ' + info.error.name,
+        '异常信息: ' + info.error.message,
+        '',
+        '耗时: ' + info.elapsed + ' ms',
+        '',
+        '可能原因:',
+        '  • CORS 预检失败（Worker 未返回正确的 Access-Control-Allow-* 头）',
+        '  • DNS 解析失败 / Worker 未部署 / 域名拼错',
+        '  • Worker 返回了 3xx 重定向，浏览器拒绝跨域跟随',
+        '  • 混合内容（HTTPS 页面请求 HTTP 资源）',
+        '  • 本地网络 / 防火墙 / 代理拦截',
+        '  • Cloudflare WAF / Access 拦截'
+      ].join('\n'));
+    } else {
+      html += section('响应', [
+        '状态: ' + info.status + ' ' + info.statusText,
+        '类型: ' + info.responseType,
+        '耗时: ' + info.elapsed + ' ms',
+        '',
+        '响应头:',
+        info.responseHeaders || '(无)'
+      ].join('\n'));
+
+      html += section('响应体', info.bodyText.slice(0, 5000) + (info.bodyText.length > 5000 ? '\n...(截断)' : ''));
+    }
+    return html;
+  }
+
+  // ============================================================
+  // 测试 1：Worker DNS / 网络可达性（no-cors 探测）
+  // ============================================================
+  const T1 = defineTest('t1', '1. Worker 基础可达性（no-cors 探测）');
+  async function runT1() {
+    T1.setStatus('running', '…');
+    T1.setTime();
+    const url = config.workerUrl;
+    if (!url) {
+      T1.setStatus('err', '✗');
+      T1.setBody(section('错误', '配置中没有 Worker URL。'));
+      T1.open();
+      return false;
+    }
+    try {
+      const start = performance.now();
+      // no-cors 模式只测试网络可达，不涉及 CORS
+      // 不会抛 CORS 错误，但拿不到响应内容
+      await fetch(url, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' });
+      const ms = Math.round(performance.now() - start);
+      T1.setStatus('ok', '✓');
+      T1.setTime(ms);
+      T1.setBody(section('结果', [
+        '网络层可达。',
+        '',
+        'HEAD ' + url,
+        '耗时: ' + ms + ' ms',
+        '',
+        '说明：no-cors 模式不会触发 CORS 检查，只要能发出去就说明',
+        'DNS 解析、TLS 握手、Worker 部署都没问题。',
+        '',
+        '如果这一步通过但后续步骤失败，说明问题在 CORS 头或 Worker 逻辑。'
+      ].join('\n')));
+      return true;
+    } catch (e) {
+      T1.setStatus('err', '✗');
+      T1.open();
+      T1.setBody(section('❌ 失败', [
+        '异常名: ' + e.name,
+        '异常信息: ' + e.message,
+        '',
+        '连 no-cors 请求都失败，说明：',
+        '  • Worker URL 拼错',
+        '  • Worker 未部署 / 已删除',
+        '  • DNS 解析失败',
+        '  • 本地网络不通',
+        '',
+        '请先在浏览器直接打开: ' + url
+      ].join('\n')));
+      return false;
+    }
+  }
+
+  // ============================================================
+  // 测试 2：Worker OPTIONS 预检
+  // ============================================================
+  const T2 = defineTest('t2', '2. Worker OPTIONS 预检（CORS 头检查）');
+  async function runT2() {
+    T2.setStatus('running', '…');
+    T2.setTime();
+    const url = config.workerUrl;
+    if (!url) {
+      T2.setStatus('err', '✗');
+      T2.setBody(section('错误', '配置中没有 Worker URL。'));
+      T2.open();
+      return false;
+    }
+
+    const origin = window.location.origin;
+    const { ok, info } = await diagFetch(url, {
+      method: 'OPTIONS',
+      headers: {
+        'Origin': origin,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type'
+      }
+    });
+
+    T2.setTime(info.elapsed);
+    T2.setBody(renderFetchInfo(info));
+
+    if (info.error) {
+      T2.setStatus('err', '✗');
+      T2.open();
+      return false;
+    }
+    if (info.status !== 204 && info.status !== 200) {
+      T2.setStatus('warn', '!');
+      T2.open();
+      return false;
+    }
+
+    // 检查关键 CORS 头
+    const h = info.responseHeaders.toLowerCase();
+    const hasAllowOrigin = h.includes('access-control-allow-origin');
+    const hasAllowMethods = h.includes('access-control-allow-methods');
+    const hasAllowHeaders = h.includes('access-control-allow-headers');
+
+    if (!hasAllowOrigin || !hasAllowMethods) {
+      T2.setStatus('err', '✗');
+      T2.setBody(renderFetchInfo(info) + sectionHtml('❌ CORS 头缺失',
+        '<p>Worker 没有返回完整的 CORS 头，浏览器会拒绝后续的 POST 请求。</p>' +
+        '<p>必须包含：</p>' +
+        '<pre>Access-Control-Allow-Origin: *\nAccess-Control-Allow-Methods: POST, OPTIONS\nAccess-Control-Allow-Headers: Content-Type, Authorization</pre>'
+      ));
+      T2.open();
+      return false;
+    }
+
+    T2.setStatus('ok', '✓');
+    return true;
+  }
+
+  // ============================================================
+  // 测试 3：Worker 密码校验（用错误密码，期望 403）
+  // ============================================================
+  const T3 = defineTest('t3', '3. Worker 密码校验（错误密码应返回 403）');
+  async function runT3() {
+    T3.setStatus('running', '…');
+    T3.setTime();
+    const url = config.workerUrl;
+    if (!url) {
+      T3.setStatus('err', '✗');
+      T3.setBody(section('错误', '配置中没有 Worker URL。'));
+      T3.open();
+      return false;
+    }
+
+    const { info } = await diagFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        password: '__deliberately_wrong__',
+        target: 'https://api.deepseek.com/models',
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer test' }
+      })
+    });
+
+    T3.setTime(info.elapsed);
+    T3.setBody(renderFetchInfo(info));
+
+    if (info.error) {
+      T3.setStatus('err', '✗');
+      T3.open();
+      return false;
+    }
+    if (info.status === 403) {
+      T3.setStatus('ok', '✓');
+      return true;
+    }
+    if (info.status === 200) {
+      T3.setStatus('err', '✗');
+      T3.setBody(renderFetchInfo(info) + section('❌ 严重问题',
+        'Worker 用错误密码也返回了 200！密码校验失效或代码不是最新版。'));
+      T3.open();
+      return false;
+    }
+    T3.setStatus('warn', '!');
+    T3.open();
+    return false;
+  }
+
+  // ============================================================
+  // 测试 4：Worker 密码正确 + 请求 /models
+  // ============================================================
+  const T4 = defineTest('t4', '4. 通过 Worker 请求 /models（获取模型列表）');
+  async function runT4() {
+    T4.setStatus('running', '…');
+    T4.setTime();
+    const { workerUrl, workerPassword, apiBase, apiKey } = config;
+    if (!workerUrl || !workerPassword || !apiBase || !apiKey) {
+      T4.setStatus('err', '✗');
+      T4.setBody(section('错误', '配置不完整：需要 Worker URL、Worker 密码、API 地址、API Key。'));
+      T4.open();
+      return false;
+    }
+
+    const target = apiBase.replace(/\/+$/, '') + '/models';
+
+    const { info } = await diagFetch(workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        password: workerPassword,
+        target,
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + apiKey }
+      })
+    });
+
+    T4.setTime(info.elapsed);
+    T4.setBody(renderFetchInfo(info));
+
+    if (info.error) {
+      T4.setStatus('err', '✗');
+      T4.open();
+      return false;
+    }
+    if (info.status === 403) {
+      T4.setStatus('err', '✗');
+      T4.setBody(renderFetchInfo(info) + section('❌ 密码错误',
+        'Worker 拒绝了请求。检查 ai.html 配置里的代理密码是否与 Worker 哈希一致。\n\n' +
+        'Worker 侧哈希: 564fb8a640703fdd85c94303388b22800080632a8042716b01ec3feaf77e01f3\n' +
+        '对应明文: Workers20100325\n\n' +
+        '你当前填的密码长度: ' + (workerPassword ? workerPassword.length : 0) + ' 字符'));
+      T4.open();
+      return false;
+    }
+    if (info.status === 502) {
+      T4.setStatus('err', '✗');
+      T4.setBody(renderFetchInfo(info) + section('❌ Worker 转发失败',
+        'Worker 无法连接到上游 API。可能原因：\n' +
+        '  • API 地址写错\n' +
+        '  • 上游域名不在 Worker 白名单\n' +
+        '  • 上游拒绝了请求（检查 API Key）'));
+      T4.open();
+      return false;
+    }
+    if (!info.status || info.status >= 400) {
+      T4.setStatus('err', '✗');
+      T4.open();
+      return false;
+    }
+
+    // 尝试解析模型数量
+    try {
+      const data = JSON.parse(info.bodyText);
+      let list = [];
+      if (Array.isArray(data.data)) list = data.data;
+      else if (Array.isArray(data.models)) list = data.models;
+      else if (Array.isArray(data)) list = data;
+
+      if (list.length > 0) {
+        T4.setStatus('ok', '✓');
+        T4.setBody(renderFetchInfo(info) + section('✓ 解析结果',
+          '成功获取 ' + list.length + ' 个模型：\n' +
+          list.slice(0, 20).map(m => '  - ' + (m.id || m.name || m.model)).join('\n') +
+          (list.length > 20 ? '\n  ...(还有 ' + (list.length - 20) + ' 个)' : '')));
+        return true;
+      } else {
+        T4.setStatus('warn', '!');
+        T4.setBody(renderFetchInfo(info) + section('⚠️ 未解析到模型',
+          '响应成功但没有 model 数组，可能格式不标准。'));
+        T4.open();
+        return false;
+      }
+    } catch (e) {
+      T4.setStatus('warn', '!');
+      T4.setBody(renderFetchInfo(info) + section('⚠️ 响应不是 JSON', e.message));
+      T4.open();
+      return false;
+    }
+  }
+
+  // ============================================================
+  // 测试 5：Worker 密码正确 + 请求 /chat/completions（非流式）
+  // ============================================================
+  const T5 = defineTest('t5', '5. 通过 Worker 请求 /chat/completions（非流式）');
+  async function runT5() {
+    T5.setStatus('running', '…');
+    T5.setTime();
+    const { workerUrl, workerPassword, apiBase, apiKey, model } = config;
+    if (!workerUrl || !workerPassword || !apiBase || !apiKey || !model) {
+      T5.setStatus('err', '✗');
+      T5.setBody(section('错误', '配置不完整：需要 Worker URL、密码、API 地址、API Key、模型。'));
+      T5.open();
+      return false;
+    }
+
+    const target = apiBase.replace(/\/+$/, '') + '/chat/completions';
+
+    const { info } = await diagFetch(workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        password: workerPassword,
+        target,
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + apiKey,
+          'Content-Type': 'application/json'
+        },
+        body: {
+          model,
+          messages: [{ role: 'user', content: '说"连接正常"四个字，不要标点。' }],
+          stream: false,
+          max_tokens: 20
+        }
+      })
+    });
+
+    T5.setTime(info.elapsed);
+    T5.setBody(renderFetchInfo(info));
+
+    if (info.error) {
+      T5.setStatus('err', '✗');
+      T5.open();
+      return false;
+    }
+    if (info.status === 401 || info.status === 403) {
+      T5.setStatus('err', '✗');
+      T5.setBody(renderFetchInfo(info) + section('❌ 鉴权失败',
+        'API Key 或 Worker 密码错误。'));
+      T5.open();
+      return false;
+    }
+    if (info.status === 404) {
+      T5.setStatus('err', '✗');
+      T5.setBody(renderFetchInfo(info) + section('❌ 404',
+        'API 地址或路径错误。\n当前请求: ' + target));
+      T5.open();
+      return false;
+    }
+    if (!info.status || info.status >= 400) {
+      T5.setStatus('err', '✗');
+      T5.open();
+      return false;
+    }
+
+    try {
+      const data = JSON.parse(info.bodyText);
+      const content = data.choices?.[0]?.message?.content || '';
+      if (content) {
+        T5.setStatus('ok', '✓');
+        T5.setBody(renderFetchInfo(info) + section('✓ API 回复', content));
+        return true;
+      }
+    } catch (e) {}
+
+    T5.setStatus('warn', '!');
+    T5.open();
+    return false;
+  }
+
+  // ============================================================
+  // 测试 6：SSE 流式
+  // ============================================================
+  const T6 = defineTest('t6', '6. 通过 Worker 请求 /chat/completions（流式 SSE）');
+  async function runT6() {
+    T6.setStatus('running', '…');
+    T6.setTime();
+    const { workerUrl, workerPassword, apiBase, apiKey, model } = config;
+    if (!workerUrl || !workerPassword || !apiBase || !apiKey || !model) {
+      T6.setStatus('err', '✗');
+      T6.setBody(section('错误', '配置不完整。'));
+      T6.open();
+      return false;
+    }
+
+    const target = apiBase.replace(/\/+$/, '') + '/chat/completions';
+    const start = performance.now();
+
+    let res;
+    try {
+      res = await fetch(workerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: workerPassword,
+          target,
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + apiKey,
+            'Content-Type': 'application/json'
+          },
+          body: {
+            model,
+            messages: [{ role: 'user', content: '从1数到5，每个数字一行。' }],
+            stream: true,
+            max_tokens: 50
+          }
+        })
+      });
+    } catch (e) {
+      T6.setStatus('err', '✗');
+      T6.setBody(section('❌ 网络异常', e.name + ': ' + e.message));
+      T6.open();
+      return false;
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      T6.setStatus('err', '✗');
+      T6.setBody(section('❌ HTTP 错误', res.status + ' ' + res.statusText + '\n\n' + text.slice(0, 2000)));
+      T6.open();
+      return false;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
+    let chunkCount = 0;
+    let eventCount = 0;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunkCount++;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          const t = line.trim();
+          if (!t.startsWith('data:')) continue;
+          const p = t.slice(5).trim();
+          if (!p || p === '[DONE]') continue;
+          eventCount++;
+          try {
+            const j = JSON.parse(p);
+            const d = j.choices?.[0]?.delta?.content || '';
+            if (d) fullText += d;
+          } catch {}
+        }
+      }
+    } catch (e) {
+      T6.setStatus('err', '✗');
+      T6.setBody(section('❌ 读取流失败', e.message));
+      T6.open();
+      return false;
+    }
+
+    const ms = Math.round(performance.now() - start);
+    T6.setTime(ms);
+
+    if (eventCount === 0) {
+      T6.setStatus('warn', '!');
+      T6.setBody(section('⚠️ 未收到 SSE 事件', [
+        '收到 ' + chunkCount + ' 个数据块，但没有解析到 data: 事件。',
+        '可能上游不支持 stream，或者返回格式非标准 SSE。'
+      ].join('\n')));
+      T6.open();
+      return false;
+    }
+
+    T6.setStatus('ok', '✓');
+    T6.setBody(section('✓ 流式响应成功', [
+      '数据块: ' + chunkCount,
+      'SSE 事件: ' + eventCount,
+      '耗时: ' + ms + ' ms',
+      '',
+      '累计内容:',
+      fullText
+    ].join('\n')));
+    return true;
+  }
+
+  // ============================================================
+  // 全部运行
+  // ============================================================
+  async function runAll() {
+    const btn = document.getElementById('btnRunAll');
+    btn.disabled = true;
+    btn.textContent = '运行中…';
+
+    document.getElementById('summary').classList.remove('show');
+
+    const results = [];
+    results.push(['Worker 可达性', await runT1()]);
+    results.push(['OPTIONS 预检', await runT2()]);
+    results.push(['密码校验', await runT3()]);
+    results.push(['获取模型', await runT4()]);
+    results.push(['非流式对话', await runT5()]);
+    results.push(['流式对话', await runT6()]);
+
+    // 汇总
+    const passed = results.filter(r => r[1]).length;
+    const total = results.length;
+    const summary = document.getElementById('summary');
+    const allPassed = passed === total;
+
+    summary.className = 'summary show ' + (allPassed ? 'ok' : 'err');
+    summary.innerHTML = `
+      <h3>${allPassed ? '✓ 全部通过' : '❌ 存在失败项'} (${passed}/${total})</h3>
+      <ul>
+        ${results.map(([name, ok]) => `<li>${ok ? '✓' : '✗'} ${escapeHtml(name)}</li>`).join('')}
+      </ul>
+      ${!allPassed ? '<p style="margin-top:10px;color:var(--muted);font-size:0.85rem;">展开失败的测试项查看原始响应，把内容复制给我。</p>' : ''}
+    `;
+
+    btn.disabled = false;
+    btn.textContent = '▶ 全部运行';
+  }
+
+  document.getElementById('btnRunAll').addEventListener('click', runAll);
+  document.getElementById('btnClear').addEventListener('click', () => {
+    testListEl.innerHTML = '';
+    document.getElementById('summary').classList.remove('show');
+    initTests();
+  });
+  document.getElementById('btnCopy').addEventListener('click', () => {
+    const lines = [];
+    document.querySelectorAll('.test').forEach(el => {
+      const title = el.querySelector('.test-title').textContent;
+      const status = el.querySelector('[data-status]').textContent;
+      const time = el.querySelector('[data-time]').textContent;
+      const body = el.querySelector('[data-body]').innerText;
+      lines.push('===== ' + title + ' [' + status + '] ' + time + ' =====');
+      lines.push(body);
+      lines.push('');
+    });
+    navigator.clipboard.writeText(lines.join('\n'))
+      .then(() => alert('已复制全部结果到剪贴板'))
+      .catch(e => alert('复制失败: ' + e.message));
+  });
+
+  // 重新初始化（供清空按钮用）
+  function initTests() {
+    tests.length = 0;
+    // 定义顺序不能变，这里只是复用 defineTest 的结构
+    // 实际测试对象在顶层已定义，所以这里跳过重建
+  }
+
+  // 自动运行一次
+  window.addEventListener('load', () => {
+    setTimeout(runAll, 100);
+  });
+
+})();
+</script>
+</body>
+</html>
