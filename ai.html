@@ -37,7 +37,7 @@
     .conv-list { flex:1; overflow-y:auto; padding:8px; }
     .conv-list::-webkit-scrollbar { width:5px; }
     .conv-list::-webkit-scrollbar-thumb { background:var(--panel-border); border-radius:3px; }
-    .conv-item { padding:10px 12px; border-radius:8px; cursor:pointer; font-size:0.87rem; color:var(--text-color); margin-bottom:3px; display:flex; align-items:center; gap:6px; position:relative; }
+    .conv-item { padding:10px 12px; border-radius:8px; cursor:pointer; font-size:0.87rem; color:var(--text-color); margin-bottom:3px; display:flex; align-items:center; gap:6px; }
     .conv-item:hover { background:var(--tool-btn-bg); }
     .conv-item.active { background:var(--active-conv-bg); font-weight:500; }
     .conv-item .title { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -102,8 +102,6 @@
     .modal-card input, .modal-card textarea, .modal-card select { width:100%; padding:9px 12px; border:1px solid var(--input-border); border-radius:8px; background:var(--bg-body); color:var(--text-color); font-size:0.88rem; font-family:inherit; outline:none; }
     .modal-card input:focus, .modal-card textarea:focus, .modal-card select:focus { border-color:var(--input-focus-border); }
     .modal-card textarea { min-height:70px; resize:vertical; }
-    .modal-row { display:flex; gap:8px; }
-    .modal-row > * { flex:1; }
     .input-with-btn { display:flex; gap:8px; }
     .input-with-btn input { flex:1; }
     .input-with-btn button { padding:9px 14px; border:1px solid var(--tool-btn-border); background:var(--tool-btn-bg); color:var(--tool-btn-color); border-radius:8px; font-size:0.82rem; font-weight:500; cursor:pointer; white-space:nowrap; }
@@ -119,7 +117,6 @@
     .modal-actions button:hover { opacity:0.9; }
     .sidebar-mask { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:40; }
     .sidebar-mask.show { display:block; }
-    /* 诊断弹窗 */
     .diag-modal { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; align-items:center; justify-content:center; z-index:9999; padding:20px; }
     .diag-modal.show { display:flex; }
     .diag-box { background:#1e1e1e; color:#d4d4d4; font-family:'Consolas',monospace; font-size:0.82rem; border-radius:10px; max-width:900px; width:100%; max-height:90vh; overflow:auto; padding:20px; white-space:pre-wrap; word-break:break-all; line-height:1.5; }
@@ -131,8 +128,7 @@
       .sidebar { position:absolute; top:0; left:0; bottom:0; transform:translateX(-100%); }
       .sidebar.open { transform:translateX(0); }
       .menu-btn { display:flex; align-items:center; justify-content:center; }
-      .topbar .model-badge { display:none; }
-      .topbar .ctx-badge { display:none; }
+      .topbar .model-badge, .topbar .ctx-badge { display:none; }
     }
   </style>
 </head>
@@ -182,7 +178,7 @@
 <div class="modal" id="settingsModal">
   <div class="modal-card">
     <h3>设置</h3>
-    <div class="subtitle">配置代理和 API 参数</div>
+    <div class="subtitle">只填 API 地址，程序会自动拼接 /models 和 /chat/completions</div>
 
     <label>代理地址 (Worker URL)</label>
     <input id="cfgWorkerUrl" placeholder="https://ai.swctools.workers.dev/">
@@ -190,18 +186,11 @@
     <label>代理密码</label>
     <input id="cfgWorkerPassword" type="password" placeholder="Worker 密码">
 
-    <label>API Base URL</label>
+    <label>API 地址</label>
     <input id="cfgApiBase" placeholder="https://api.deepseek.com">
-
-    <div class="modal-row" style="margin-top:12px;">
-      <div>
-        <label style="margin-top:0;">模型列表路径</label>
-        <input id="cfgModelsPath" placeholder="/models">
-      </div>
-      <div>
-        <label style="margin-top:0;">对话路径</label>
-        <input id="cfgChatPath" placeholder="/chat/completions">
-      </div>
+    <div style="font-size:0.72rem;color:var(--muted-color);margin-top:4px;line-height:1.5;">
+      例：<code>https://api.deepseek.com</code> 或 <code>https://api.openai.com/v1</code><br>
+      程序自动请求 <code>${API地址}/models</code> 和 <code>${API地址}/chat/completions</code>
     </div>
 
     <label>API Key</label>
@@ -264,8 +253,13 @@
   document.documentElement.setAttribute('data-theme', localStorage.getItem('swc_theme') || 'light');
 
   // ============================================================
-  // 诊断系统
+  // 诊断
   // ============================================================
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
   function showDiag(title, lines) {
     const modal = document.getElementById('diagModal');
     document.getElementById('diagTitle').textContent = title;
@@ -277,75 +271,10 @@
     modal.classList.add('show');
   }
 
-  /**
-   * 诊断 fetch：把请求、响应、body 全部记录，失败时抛错并触发 alert
-   */
-  async function diagFetch(url, options = {}, label = 'fetch') {
-    const log = [];
-    log.push({ k: '请求 URL', v: url });
-    log.push({ k: '请求方法', v: options.method || 'GET' });
-    if (options.headers) {
-      log.push({ k: '请求头', v: JSON.stringify(options.headers) });
-    }
-    if (options.body) {
-      const b = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
-      log.push({ k: '请求体', v: b.length > 2000 ? b.slice(0, 2000) + '...(截断)' : b });
-    }
-
-    let res;
-    try {
-      res = await fetch(url, { ...options, redirect: 'manual' });
-    } catch (e) {
-      log.push({ k: '❌ 网络层异常', v: e.name + ': ' + e.message });
-      showDiag(`[${label}] 网络请求失败`, log);
-      throw e;
-    }
-
-    log.push({ k: '响应状态', v: res.status + ' ' + res.statusText });
-
-    // 收集响应头
-    const headers = {};
-    res.headers.forEach((v, k) => { headers[k] = v; });
-    log.push({ k: '响应头', v: JSON.stringify(headers, null, 2) });
-
-    // 读取响应体（保留一份文本，因为 body 只能读一次）
-    let bodyText = '';
-    try {
-      bodyText = await res.text();
-    } catch (e) {
-      log.push({ k: '❌ 读取响应体失败', v: e.message });
-    }
-    log.push({ k: '响应体', v: bodyText.length > 3000 ? bodyText.slice(0, 3000) + '\n...(截断)' : bodyText });
-
-    // 检查重定向
-    if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
-      log.push({ k: '❌ 检测到重定向', v: '上游返回了 3xx，可能 Authorization 头被丢弃，或者地址写错' });
-      showDiag(`[${label}] 重定向错误`, log);
-      throw new Error('上游返回重定向 ' + res.status);
-    }
-
-    if (!res.ok) {
-      log.push({ k: '❌ HTTP 错误', v: `状态码 ${res.status}，不是 2xx` });
-      showDiag(`[${label}] 请求失败`, log);
-      throw new Error(`HTTP ${res.status}: ${bodyText.slice(0, 200)}`);
-    }
-
-    // 返回一个解析后的 JSON 或原始文本
-    let parsed = null;
-    try {
-      parsed = JSON.parse(bodyText);
-    } catch {
-      // 不是 JSON
-    }
-
-    return { res, bodyText, parsed, log };
-  }
-
   // ============================================================
   // 工具
   // ============================================================
   function uuid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
-  function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
   function renderMarkdown(text) {
     try { return DOMPurify.sanitize(marked.parse(text || '')); }
     catch { return escapeHtml(text || ''); }
@@ -359,8 +288,6 @@
     workerUrl: 'https://ai.swctools.workers.dev/',
     workerPassword: '',
     apiBase: 'https://api.deepseek.com',
-    modelsPath: '/models',
-    chatPath: '/chat/completions',
     apiKey: '',
     model: 'deepseek-chat',
     systemPrompt: '你是一个乐于助人的AI助手。',
@@ -378,91 +305,57 @@
   function saveConfigToStorage(cfg) { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); }
   let config = loadConfig();
 
-  // ============================================================
-  // 存储层：每轮独立 LS
-  // ============================================================
-  // 结构：
-  //   swc_ai_index                 → ["convId1", "convId2", ...]
-  //   swc_ai_conv:<id>:meta        → { id, title, model, createdAt, updatedAt, turnCount, summary }
-  //   swc_ai_conv:<id>:turn:<n>    → { user: {...}, assistant: {...}, ts }
-  //
-  // 优势：
-  //   - 单轮写入只改一个 key，快
-  //   - 单轮出错不影响其他轮
-  //   - 可以只加载最近 N 轮，节省内存
-  // ============================================================
+  // 根据 apiBase 拼出两个 URL
+  function getModelsUrl() {
+    return config.apiBase.replace(/\/+$/, '') + '/models';
+  }
+  function getChatUrl() {
+    return config.apiBase.replace(/\/+$/, '') + '/chat/completions';
+  }
 
+  // ============================================================
+  // 存储层（LS 分层）
+  // ============================================================
   const INDEX_KEY = 'swc_ai_index';
   const CONV_PREFIX = 'swc_ai_conv:';
 
   const Storage = {
     getIndex() {
-      try {
-        const raw = localStorage.getItem(INDEX_KEY);
-        return raw ? JSON.parse(raw) : [];
-      } catch { return []; }
+      try { const r = localStorage.getItem(INDEX_KEY); return r ? JSON.parse(r) : []; }
+      catch { return []; }
     },
-    setIndex(ids) {
-      localStorage.setItem(INDEX_KEY, JSON.stringify(ids));
-    },
+    setIndex(ids) { localStorage.setItem(INDEX_KEY, JSON.stringify(ids)); },
     addToIndex(id) {
       const ids = this.getIndex();
-      if (!ids.includes(id)) {
-        ids.unshift(id);
-        this.setIndex(ids);
-      }
+      if (!ids.includes(id)) { ids.unshift(id); this.setIndex(ids); }
     },
-    removeFromIndex(id) {
-      const ids = this.getIndex().filter(x => x !== id);
-      this.setIndex(ids);
-    },
+    removeFromIndex(id) { this.setIndex(this.getIndex().filter(x => x !== id)); },
     getMeta(id) {
-      try {
-        const raw = localStorage.getItem(CONV_PREFIX + id + ':meta');
-        return raw ? JSON.parse(raw) : null;
-      } catch { return null; }
+      try { const r = localStorage.getItem(CONV_PREFIX + id + ':meta'); return r ? JSON.parse(r) : null; }
+      catch { return null; }
     },
-    setMeta(id, meta) {
-      localStorage.setItem(CONV_PREFIX + id + ':meta', JSON.stringify(meta));
-    },
-    deleteMeta(id) {
-      localStorage.removeItem(CONV_PREFIX + id + ':meta');
-    },
+    setMeta(id, meta) { localStorage.setItem(CONV_PREFIX + id + ':meta', JSON.stringify(meta)); },
+    deleteMeta(id) { localStorage.removeItem(CONV_PREFIX + id + ':meta'); },
     getTurn(id, n) {
-      try {
-        const raw = localStorage.getItem(CONV_PREFIX + id + ':turn:' + n);
-        return raw ? JSON.parse(raw) : null;
-      } catch { return null; }
+      try { const r = localStorage.getItem(CONV_PREFIX + id + ':turn:' + n); return r ? JSON.parse(r) : null; }
+      catch { return null; }
     },
-    setTurn(id, n, turn) {
-      localStorage.setItem(CONV_PREFIX + id + ':turn:' + n, JSON.stringify(turn));
-    },
-    deleteTurn(id, n) {
-      localStorage.removeItem(CONV_PREFIX + id + ':turn:' + n);
-    },
+    setTurn(id, n, turn) { localStorage.setItem(CONV_PREFIX + id + ':turn:' + n, JSON.stringify(turn)); },
+    deleteTurn(id, n) { localStorage.removeItem(CONV_PREFIX + id + ':turn:' + n); },
     getAllTurns(id, count) {
       const turns = [];
-      for (let i = 0; i < count; i++) {
-        const t = this.getTurn(id, i);
-        if (t) turns.push(t);
-      }
+      for (let i = 0; i < count; i++) { const t = this.getTurn(id, i); if (t) turns.push(t); }
       return turns;
     },
     deleteConv(id) {
       const meta = this.getMeta(id);
       const count = meta?.turnCount || 0;
-      for (let i = 0; i < count; i++) {
-        this.deleteTurn(id, i);
-      }
+      for (let i = 0; i < count; i++) this.deleteTurn(id, i);
       this.deleteMeta(id);
       this.removeFromIndex(id);
     },
-    listConvIds() {
-      return this.getIndex();
-    },
-    listConvMetas() {
-      return this.getIndex().map(id => this.getMeta(id)).filter(Boolean);
-    }
+    listConvIds() { return this.getIndex(); },
+    listConvMetas() { return this.getIndex().map(id => this.getMeta(id)).filter(Boolean); }
   };
 
   // ============================================================
@@ -470,24 +363,19 @@
   // ============================================================
   let currentConvId = null;
   let currentConvMeta = null;
-  let currentTurns = [];  // 数组，每个元素 { user: {content}, assistant: {content, reasoning_content} }
+  let currentTurns = [];
 
   function newConv() {
     const id = uuid();
     const meta = {
-      id,
-      title: '新对话',
-      model: config.model,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      turnCount: 0,
-      summary: ''
+      id, title: '新对话', model: config.model,
+      createdAt: Date.now(), updatedAt: Date.now(),
+      turnCount: 0, summary: ''
     };
     Storage.setMeta(id, meta);
     Storage.addToIndex(id);
     return meta;
   }
-
   function loadConv(id) {
     const meta = Storage.getMeta(id);
     if (!meta) return false;
@@ -496,7 +384,6 @@
     currentTurns = Storage.getAllTurns(id, meta.turnCount || 0);
     return true;
   }
-
   function deleteConv(id) {
     Storage.deleteConv(id);
     if (currentConvId === id) {
@@ -507,11 +394,9 @@
   }
 
   // ============================================================
-  // 上下文管理（DeepSeek Harness 风格）
+  // 上下文管理
   // ============================================================
   const ContextManager = {
-    // 粗略 token 估算：中文字符约 1.5 token/字，英文约 0.25 token/字
-    // 用统一公式：按字节数 / 3 估算
     estimateTokens(text) {
       if (!text) return 0;
       let bytes = 0;
@@ -523,116 +408,49 @@
       }
       return Math.ceil(bytes / 3);
     },
-
-    // 计算一组消息的总 token
     countMessages(messages) {
       let total = 0;
       for (const m of messages) {
-        total += this.estimateTokens(m.content || '');
-        total += 4; // 每条消息的结构开销
+        total += this.estimateTokens(m.content || '') + 4;
       }
       return total;
     },
-
-    /**
-     * 构造发送给 API 的 messages
-     * 策略：
-     *   1. 永远带 system prompt
-     *   2. 如果存在 summary，作为一条额外的 system 消息
-     *   3. 从最近轮次往前填，直到接近窗口限制
-     *   4. 最少保留最近 3 轮，保证连贯性
-     */
     buildContext(turns, opts = {}) {
-      const {
-        systemPrompt = '',
-        summary = '',
-        ctxWindow = 64000,
-        summaryThreshold = 75
-      } = opts;
-
+      const { systemPrompt = '', summary = '', ctxWindow = 64000, summaryThreshold = 75 } = opts;
       const maxTokens = Math.floor(ctxWindow * (summaryThreshold / 100));
       const messages = [];
-
       let fixedTokens = 0;
       if (systemPrompt) {
         messages.push({ role: 'system', content: systemPrompt });
         fixedTokens += this.estimateTokens(systemPrompt) + 4;
       }
       if (summary) {
-        const summaryMsg = `以下是之前对话的摘要，请在回答时参考：\n\n${summary}`;
-        messages.push({ role: 'system', content: summaryMsg });
-        fixedTokens += this.estimateTokens(summaryMsg) + 4;
+        const s = `以下是之前对话的摘要，请在回答时参考：\n\n${summary}`;
+        messages.push({ role: 'system', content: s });
+        fixedTokens += this.estimateTokens(s) + 4;
       }
-
-      // 从最近往前收集
       const recent = [];
-      let runningTokens = fixedTokens;
+      let running = fixedTokens;
       for (let i = turns.length - 1; i >= 0; i--) {
         const t = turns[i];
-        const uTokens = this.estimateTokens(t.user.content) + 4;
-        const aTokens = this.estimateTokens(t.assistant.content) + 4;
-        const total = uTokens + aTokens;
-
-        if (runningTokens + total > maxTokens && recent.length >= 3) {
-          break;
-        }
+        const total = this.estimateTokens(t.user.content) + this.estimateTokens(t.assistant.content) + 8;
+        if (running + total > maxTokens && recent.length >= 3) break;
         recent.unshift(t);
-        runningTokens += total;
+        running += total;
       }
-
       for (const t of recent) {
         messages.push({ role: 'user', content: t.user.content });
-        if (t.assistant.content) {
-          messages.push({ role: 'assistant', content: t.assistant.content });
-        }
+        if (t.assistant.content) messages.push({ role: 'assistant', content: t.assistant.content });
       }
-
-      return {
-        messages,
-        usedTokens: runningTokens,
-        totalTokens: this.countMessages(turns.flatMap(t => [
-          { content: t.user.content },
-          { content: t.assistant.content }
-        ])),
-        truncated: recent.length < turns.length,
-        keptTurns: recent.length
-      };
+      return { messages, usedTokens: running, truncated: recent.length < turns.length };
     },
-
-    /**
-     * 检查是否需要生成摘要
-     */
-    needsSummary(usedTokens, ctxWindow, threshold) {
-      return usedTokens > ctxWindow * (threshold / 100);
-    },
-
-    /**
-     * 用 LLM 生成摘要（非流式）
-     */
-    async generateSummary(turns) {
-      if (turns.length === 0) return '';
-      const transcript = turns.map((t, i) => {
-        return `[第${i + 1}轮]\n用户：${t.user.content}\n助手：${t.assistant.content}`;
-      }).join('\n\n');
-
-      const prompt = `请把以下对话压缩成一份简洁的摘要。摘要需要保留：\n1. 用户的核心诉求和背景\n2. 已经达成的结论\n3. 关键事实、数据、代码片段（如有）\n4. 待解决的问题\n\n不要添加评价，不要遗漏关键信息。摘要使用第三人称，控制在 500 字以内。\n\n对话原文：\n${transcript}`;
-
-      // 这里调用一个非流式请求，我们复用 chat 接口
-      return prompt;
+    needsSummary(used, window, threshold) {
+      return used > window * (threshold / 100);
     }
   };
 
   // ============================================================
-  // 构造一轮的消息对
-  // ============================================================
-  function buildTurnsFromStorage(convId) {
-    const meta = Storage.getMeta(convId);
-    if (!meta) return [];
-    return Storage.getAllTurns(convId, meta.turnCount || 0);
-  }
-
-  // ============================================================
-  // DOM 引用
+  // DOM
   // ============================================================
   const chatEl = document.getElementById('chat');
   const welcomeEl = document.getElementById('welcome');
@@ -659,56 +477,31 @@
   // ============================================================
   // 渲染
   // ============================================================
-  function createTurnEl(turn, turnIndex) {
+  function createTurnEl(turn) {
     const frag = document.createDocumentFragment();
 
-    // 用户消息
     const userEl = document.createElement('div');
     userEl.className = 'msg user';
-    const userAvatar = document.createElement('div');
-    userAvatar.className = 'avatar';
-    userAvatar.textContent = '你';
-    const userBubbleWrap = document.createElement('div');
-    userBubbleWrap.className = 'bubble-wrap';
-    const userBubble = document.createElement('div');
-    userBubble.className = 'bubble';
-    userBubble.textContent = turn.user.content;
-    userBubbleWrap.appendChild(userBubble);
-    userEl.appendChild(userAvatar);
-    userEl.appendChild(userBubbleWrap);
+    userEl.innerHTML = '<div class="avatar">你</div><div class="bubble-wrap"><div class="bubble" style="white-space:pre-wrap;"></div></div>';
+    userEl.querySelector('.bubble').textContent = turn.user.content;
     frag.appendChild(userEl);
 
-    // 助手消息
     const aiEl = document.createElement('div');
     aiEl.className = 'msg assistant';
-    const aiAvatar = document.createElement('div');
-    aiAvatar.className = 'avatar';
-    aiAvatar.textContent = 'AI';
-    const aiBubbleWrap = document.createElement('div');
-    aiBubbleWrap.className = 'bubble-wrap';
+    aiEl.innerHTML = '<div class="avatar">AI</div><div class="bubble-wrap"><div class="bubble"></div></div>';
+    const aiWrap = aiEl.querySelector('.bubble-wrap');
+    const aiBubble = aiEl.querySelector('.bubble');
 
     if (turn.assistant.reasoning_content) {
       const details = document.createElement('details');
       details.className = 'reasoning-box';
-      const summary = document.createElement('summary');
-      summary.textContent = '推理过程';
-      const content = document.createElement('div');
-      content.className = 'reasoning-content';
-      content.textContent = turn.assistant.reasoning_content;
-      details.appendChild(summary);
-      details.appendChild(content);
-      aiBubbleWrap.appendChild(details);
+      details.innerHTML = '<summary>推理过程</summary><div class="reasoning-content"></div>';
+      details.querySelector('.reasoning-content').textContent = turn.assistant.reasoning_content;
+      aiWrap.insertBefore(details, aiBubble);
     }
 
-    const aiBubble = document.createElement('div');
-    aiBubble.className = 'bubble';
     aiBubble.innerHTML = turn.assistant.content ? renderMarkdown(turn.assistant.content) : '';
-    aiBubbleWrap.appendChild(aiBubble);
-
-    aiEl.appendChild(aiAvatar);
-    aiEl.appendChild(aiBubbleWrap);
     frag.appendChild(aiEl);
-
     return frag;
   }
 
@@ -720,9 +513,7 @@
       chatEl.appendChild(welcomeEl);
       convTitleEl.textContent = 'SwC AI';
     } else {
-      currentTurns.forEach((t, i) => {
-        chatEl.appendChild(createTurnEl(t, i));
-      });
+      currentTurns.forEach(t => chatEl.appendChild(createTurnEl(t)));
       convTitleEl.textContent = currentConvMeta?.title || 'SwC AI';
       scrollToBottom();
     }
@@ -732,10 +523,9 @@
   }
 
   function updateModelBadge() {
-    const model = currentConvMeta?.model || config.model || '';
-    modelBadgeEl.textContent = model || '未设置模型';
+    const m = currentConvMeta?.model || config.model || '';
+    modelBadgeEl.textContent = m || '未设置模型';
   }
-
   function updateCtxBadge() {
     if (currentTurns.length === 0) {
       ctxBadgeEl.textContent = '上下文: 空';
@@ -743,13 +533,12 @@
       return;
     }
     const allMsgs = currentTurns.flatMap(t => [
-      { content: t.user.content },
-      { content: t.assistant.content }
+      { content: t.user.content }, { content: t.assistant.content }
     ]);
     const used = ContextManager.countMessages(allMsgs);
-    const window = config.ctxWindow || 64000;
-    const pct = Math.round((used / window) * 100);
-    ctxBadgeEl.textContent = `上下文: ${used} / ${window} (${pct}%)`;
+    const win = config.ctxWindow || 64000;
+    const pct = Math.round((used / win) * 100);
+    ctxBadgeEl.textContent = `上下文: ${used} / ${win} (${pct}%)`;
     ctxBadgeEl.classList.toggle('warn', pct >= config.summaryThreshold);
   }
 
@@ -760,17 +549,14 @@
       const item = document.createElement('div');
       item.className = 'conv-item' + (m.id === currentConvId ? ' active' : '');
       item.innerHTML = `<span class="title">${escapeHtml(m.title || '新对话')}</span>`;
-      const delBtn = document.createElement('button');
-      delBtn.className = 'del';
-      delBtn.textContent = '✕';
-      delBtn.addEventListener('click', (e) => {
+      const del = document.createElement('button');
+      del.className = 'del';
+      del.textContent = '✕';
+      del.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (confirm('确定删除这个对话？')) {
-          deleteConv(m.id);
-          renderCurrentConversation();
-        }
+        if (confirm('确定删除这个对话？')) { deleteConv(m.id); renderCurrentConversation(); }
       });
-      item.appendChild(delBtn);
+      item.appendChild(del);
       item.addEventListener('click', () => {
         loadConv(m.id);
         renderCurrentConversation();
@@ -782,37 +568,28 @@
   }
 
   // ============================================================
-  // 发送逻辑
+  // 发送
   // ============================================================
   let abortController = null;
   let generating = false;
 
   function setGenerating(on) {
     generating = on;
-    if (on) {
-      btnSend.textContent = '停止';
-      btnSend.classList.add('stop');
-    } else {
-      btnSend.textContent = '发送';
-      btnSend.classList.remove('stop');
-    }
+    if (on) { btnSend.textContent = '停止'; btnSend.classList.add('stop'); }
+    else { btnSend.textContent = '发送'; btnSend.classList.remove('stop'); }
   }
 
   async function sendMessage() {
-    if (generating) {
-      if (abortController) abortController.abort();
-      return;
-    }
+    if (generating) { if (abortController) abortController.abort(); return; }
 
     const text = inputEl.value.trim();
     if (!text) return;
 
-    // 前置校验
     if (!config.workerUrl || !config.workerPassword || !config.apiBase || !config.apiKey || !config.model) {
       showDiag('配置不完整', [
         { k: '代理地址', v: config.workerUrl || '(空)' },
         { k: '代理密码', v: config.workerPassword ? '(已填)' : '(空)' },
-        { k: 'API Base URL', v: config.apiBase || '(空)' },
+        { k: 'API 地址', v: config.apiBase || '(空)' },
         { k: 'API Key', v: config.apiKey ? '(已填)' : '(空)' },
         { k: '模型', v: config.model || '(空)' }
       ]);
@@ -820,7 +597,6 @@
       return;
     }
 
-    // 首次发送 → 新建对话
     if (!currentConvId) {
       const meta = newConv();
       currentConvId = meta.id;
@@ -828,7 +604,6 @@
       currentTurns = [];
     }
 
-    // 保存用户输入
     const turnIndex = currentTurns.length;
     const turn = {
       user: { content: text },
@@ -837,7 +612,6 @@
     };
     currentTurns.push(turn);
 
-    // 首次发送生成标题
     if (currentConvMeta.turnCount === 0) {
       const t = text.replace(/\s+/g, ' ').trim();
       currentConvMeta.title = t.length > 20 ? t.slice(0, 20) + '…' : (t || '新对话');
@@ -851,17 +625,15 @@
     inputEl.style.height = 'auto';
     if (welcomeEl.parentNode) welcomeEl.remove();
 
-    // 渲染 user 消息
     const userEl = document.createElement('div');
     userEl.className = 'msg user';
-    userEl.innerHTML = `<div class="avatar">你</div><div class="bubble-wrap"><div class="bubble" style="white-space:pre-wrap;"></div></div>`;
+    userEl.innerHTML = '<div class="avatar">你</div><div class="bubble-wrap"><div class="bubble" style="white-space:pre-wrap;"></div></div>';
     userEl.querySelector('.bubble').textContent = text;
     chatEl.appendChild(userEl);
 
-    // 渲染空的 assistant 消息
     const aiEl = document.createElement('div');
     aiEl.className = 'msg assistant';
-    aiEl.innerHTML = `<div class="avatar">AI</div><div class="bubble-wrap"><div class="bubble"></div></div>`;
+    aiEl.innerHTML = '<div class="avatar">AI</div><div class="bubble-wrap"><div class="bubble"></div></div>';
     const aiWrap = aiEl.querySelector('.bubble-wrap');
     const aiBubble = aiEl.querySelector('.bubble');
     chatEl.appendChild(aiEl);
@@ -877,8 +649,6 @@
       ctxWindow: config.ctxWindow || 64000,
       summaryThreshold: config.summaryThreshold || 75
     });
-
-    // 加上当前轮的用户消息
     ctx.messages.push({ role: 'user', content: text });
 
     const body = {
@@ -890,10 +660,10 @@
     if (!isNaN(t)) body.temperature = t;
     if (config.reasoningEffort) body.reasoning_effort = config.reasoningEffort;
 
-    const targetUrl = config.apiBase.replace(/\/+$/, '') + config.chatPath;
+    const chatUrl = getChatUrl();
     const envelope = {
       password: config.workerPassword,
-      target: targetUrl,
+      target: chatUrl,
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + config.apiKey,
@@ -910,42 +680,31 @@
     let autoCollapsedReason = false;
 
     try {
-      // 用诊断 fetch
       let res;
       try {
         res = await fetch(config.workerUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(envelope),
-          signal: abortController.signal,
-          redirect: 'manual'
+          signal: abortController.signal
         });
       } catch (e) {
-        showDiag('网络请求异常（chat）', [
-          { k: '目标 Worker', v: config.workerUrl },
-          { k: '真实目标', v: targetUrl },
-          { k: '异常', v: e.name + ': ' + e.message }
+        showDiag('网络请求异常', [
+          { k: 'Worker URL', v: config.workerUrl },
+          { k: '上游 URL', v: chatUrl },
+          { k: '异常', v: e.name + ': ' + e.message },
+          { k: '提示', v: '可能是 Worker 没有正确处理 OPTIONS 预检，或 Worker 未部署最新代码' }
         ]);
         throw e;
-      }
-
-      if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
-        showDiag('Worker 返回重定向', [
-          { k: '状态码', v: res.status },
-          { k: '提示', v: 'Worker 把上游的 3xx 传回来了，或 Worker 本身路由错误' },
-          { k: 'Worker URL', v: config.workerUrl },
-          { k: '上游 URL', v: targetUrl }
-        ]);
-        throw new Error('Worker 返回重定向 ' + res.status);
       }
 
       if (!res.ok) {
         let bodyText = '';
         try { bodyText = await res.text(); } catch {}
-        showDiag('请求失败（非 2xx）', [
+        showDiag('请求失败：HTTP ' + res.status, [
           { k: '状态码', v: res.status + ' ' + res.statusText },
           { k: 'Worker URL', v: config.workerUrl },
-          { k: '上游 URL', v: targetUrl },
+          { k: '上游 URL', v: chatUrl },
           { k: '响应体', v: bodyText || '(空)' }
         ]);
         throw new Error('HTTP ' + res.status);
@@ -979,12 +738,8 @@
                 reasonDetailsEl = document.createElement('details');
                 reasonDetailsEl.className = 'reasoning-box';
                 reasonDetailsEl.open = true;
-                const s = document.createElement('summary');
-                s.textContent = '推理过程';
-                reasonContentEl = document.createElement('div');
-                reasonContentEl.className = 'reasoning-content';
-                reasonDetailsEl.appendChild(s);
-                reasonDetailsEl.appendChild(reasonContentEl);
+                reasonDetailsEl.innerHTML = '<summary>推理过程</summary><div class="reasoning-content"></div>';
+                reasonContentEl = reasonDetailsEl.querySelector('.reasoning-content');
                 aiWrap.insertBefore(reasonDetailsEl, aiBubble);
               }
               reasonContentEl.textContent = turn.assistant.reasoning_content;
@@ -996,12 +751,8 @@
                 reasonDetailsEl = document.createElement('details');
                 reasonDetailsEl.className = 'reasoning-box';
                 reasonDetailsEl.open = true;
-                const s = document.createElement('summary');
-                s.textContent = '推理过程';
-                reasonContentEl = document.createElement('div');
-                reasonContentEl.className = 'reasoning-content';
-                reasonDetailsEl.appendChild(s);
-                reasonDetailsEl.appendChild(reasonContentEl);
+                reasonDetailsEl.innerHTML = '<summary>推理过程</summary><div class="reasoning-content"></div>';
+                reasonContentEl = reasonDetailsEl.querySelector('.reasoning-content');
                 aiWrap.insertBefore(reasonDetailsEl, aiBubble);
               }
               reasonContentEl.textContent = turn.assistant.reasoning_content;
@@ -1026,22 +777,9 @@
         aiBubble.innerHTML = renderMarkdown(turn.assistant.content);
       }
 
-      // 保存本轮
       Storage.setTurn(currentConvId, turnIndex, turn);
       currentConvMeta.updatedAt = Date.now();
       Storage.setMeta(currentConvId, currentConvMeta);
-
-      // 检查是否需要摘要（暂时只标记，不自动触发，避免意外调用）
-      const allMsgs = currentTurns.flatMap(t => [
-        { content: t.user.content },
-        { content: t.assistant.content }
-      ]);
-      const used = ContextManager.countMessages(allMsgs);
-      if (ContextManager.needsSummary(used, config.ctxWindow, config.summaryThreshold)) {
-        ctxBadgeEl.classList.add('warn');
-        // 提示用户，但不自动触发
-        // 未来可加"生成摘要"按钮
-      }
 
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -1049,15 +787,13 @@
           turn.assistant.content = '（已停止）';
           aiBubble.innerHTML = renderMarkdown(turn.assistant.content);
         }
-        Storage.setTurn(currentConvId, turnIndex, turn);
       } else {
         if (!turn.assistant.content) {
           turn.assistant.content = '⚠️ ' + err.message;
           aiBubble.innerHTML = renderMarkdown(turn.assistant.content);
         }
-        // 出错的轮次也存（保留上下文）
-        Storage.setTurn(currentConvId, turnIndex, turn);
       }
+      Storage.setTurn(currentConvId, turnIndex, turn);
       currentConvMeta.updatedAt = Date.now();
       Storage.setMeta(currentConvId, currentConvMeta);
     } finally {
@@ -1075,8 +811,6 @@
     document.getElementById('cfgWorkerUrl').value = config.workerUrl || '';
     document.getElementById('cfgWorkerPassword').value = config.workerPassword || '';
     document.getElementById('cfgApiBase').value = config.apiBase || '';
-    document.getElementById('cfgModelsPath').value = config.modelsPath || '/models';
-    document.getElementById('cfgChatPath').value = config.chatPath || '/chat/completions';
     document.getElementById('cfgApiKey').value = config.apiKey || '';
     document.getElementById('cfgModel').value = config.model || '';
     document.getElementById('cfgReasoning').value = config.reasoningEffort || '';
@@ -1093,8 +827,6 @@
     config.workerUrl = document.getElementById('cfgWorkerUrl').value.trim();
     config.workerPassword = document.getElementById('cfgWorkerPassword').value;
     config.apiBase = document.getElementById('cfgApiBase').value.trim();
-    config.modelsPath = document.getElementById('cfgModelsPath').value.trim() || '/models';
-    config.chatPath = document.getElementById('cfgChatPath').value.trim() || '/chat/completions';
     config.apiKey = document.getElementById('cfgApiKey').value;
     config.model = document.getElementById('cfgModel').value.trim();
     config.reasoningEffort = document.getElementById('cfgReasoning').value;
@@ -1112,19 +844,18 @@
   }
 
   // ============================================================
-  // 获取模型（带完整诊断）
+  // 获取模型
   // ============================================================
   async function fetchModels() {
     const workerUrl = document.getElementById('cfgWorkerUrl').value.trim();
     const workerPass = document.getElementById('cfgWorkerPassword').value;
     const apiBase = document.getElementById('cfgApiBase').value.trim();
-    const modelsPath = document.getElementById('cfgModelsPath').value.trim() || '/models';
     const apiKey = document.getElementById('cfgApiKey').value;
 
     const missing = [];
     if (!workerUrl) missing.push('代理地址');
     if (!workerPass) missing.push('代理密码');
-    if (!apiBase) missing.push('API Base URL');
+    if (!apiBase) missing.push('API 地址');
     if (!apiKey) missing.push('API Key');
     if (missing.length > 0) {
       modelStatusEl.textContent = '缺少必填项：' + missing.join('、');
@@ -1132,84 +863,65 @@
       return;
     }
 
-    const targetUrl = apiBase.replace(/\/+$/, '') + modelsPath;
+    const modelsUrl = apiBase.replace(/\/+$/, '') + '/models';
+
     btnFetchModels.disabled = true;
     btnFetchModels.textContent = '获取中…';
-    modelStatusEl.textContent = '正在请求 ' + targetUrl;
+    modelStatusEl.textContent = '正在请求 ' + modelsUrl;
     modelStatusEl.className = 'model-status';
 
-    const diagLog = [];
-    diagLog.push({ k: 'Worker URL', v: workerUrl });
-    diagLog.push({ k: 'Worker 密码', v: workerPass ? '已填(' + workerPass.length + '字符)' : '空' });
-    diagLog.push({ k: 'API Base', v: apiBase });
-    diagLog.push({ k: '模型列表路径', v: modelsPath });
-    diagLog.push({ k: '完整目标 URL', v: targetUrl });
-    diagLog.push({ k: 'API Key', v: apiKey ? '已填(' + apiKey.length + '字符)' : '空' });
+    const diagLog = [
+      { k: 'Worker URL', v: workerUrl },
+      { k: 'API 地址', v: apiBase },
+      { k: '请求 URL', v: modelsUrl },
+      { k: 'API Key', v: apiKey ? '已填(' + apiKey.length + '字符)' : '空' }
+    ];
 
     try {
       const envelope = {
         password: workerPass,
-        target: targetUrl,
+        target: modelsUrl,
         method: 'GET',
         headers: { 'Authorization': 'Bearer ' + apiKey }
       };
-
-      diagLog.push({ k: '--- 请求体 ---', v: JSON.stringify(envelope, null, 2) });
 
       let res;
       try {
         res = await fetch(workerUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(envelope),
-          redirect: 'manual'
+          body: JSON.stringify(envelope)
         });
       } catch (e) {
         diagLog.push({ k: '❌ 网络异常', v: e.name + ': ' + e.message });
+        diagLog.push({ k: '提示', v: 'Worker 未处理 OPTIONS 预检 / Worker URL 错误 / Worker 未部署最新代码' });
         showDiag('获取模型失败：网络层', diagLog);
         throw e;
       }
 
       diagLog.push({ k: '响应状态', v: res.status + ' ' + res.statusText });
-      diagLog.push({ k: '响应类型', v: res.type });
 
       const respHeaders = {};
       res.headers.forEach((v, k) => { respHeaders[k] = v; });
       diagLog.push({ k: '响应头', v: JSON.stringify(respHeaders, null, 2) });
-
-      // 重定向检测
-      if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
-        diagLog.push({ k: '❌ 检测到重定向', v: 'Worker 返回了 3xx，很可能是 Worker 的 fetch 上游失败、或者 Worker URL 路由错误' });
-        // 尝试读取 body（重定向时可能读不到）
-        try {
-          const loc = res.headers.get('location');
-          if (loc) diagLog.push({ k: 'Location', v: loc });
-        } catch {}
-        showDiag('获取模型失败：重定向', diagLog);
-        throw new Error('重定向 ' + res.status);
-      }
 
       let bodyText = '';
       try { bodyText = await res.text(); } catch (e) { diagLog.push({ k: '读取响应体失败', v: e.message }); }
       diagLog.push({ k: '响应体', v: bodyText.length > 5000 ? bodyText.slice(0, 5000) + '\n...(截断)' : bodyText });
 
       if (!res.ok) {
-        diagLog.push({ k: '❌ HTTP 错误', v: '状态码 ' + res.status });
         showDiag('获取模型失败：HTTP ' + res.status, diagLog);
         throw new Error('HTTP ' + res.status);
       }
 
-      // 解析 JSON
       let data;
-      try {
-        data = JSON.parse(bodyText);
-      } catch (e) {
+      try { data = JSON.parse(bodyText); }
+      catch (e) {
         diagLog.push({ k: '❌ JSON 解析失败', v: e.message });
         showDiag('获取模型失败：响应不是 JSON', diagLog);
         throw new Error('响应不是 JSON');
       }
 
-      // 提取模型列表（兼容多种格式）
       let list = [];
       if (Array.isArray(data.data)) list = data.data;
       else if (Array.isArray(data.models)) list = data.models;
@@ -1218,12 +930,10 @@
       diagLog.push({ k: '解析到的模型数', v: list.length });
 
       if (list.length === 0) {
-        diagLog.push({ k: '⚠️ 未解析到模型', v: '响应结构可能不标准，请检查上方响应体' });
         showDiag('获取模型失败：列表为空', diagLog);
         throw new Error('列表为空');
       }
 
-      // 填充 datalist
       modelListEl.innerHTML = '';
       list.forEach(m => {
         const id = m.id || m.name || m.model;
@@ -1233,7 +943,6 @@
         modelListEl.appendChild(opt);
       });
 
-      // 自动填第一个
       if (!document.getElementById('cfgModel').value.trim()) {
         const first = list[0].id || list[0].name || list[0].model;
         if (first) document.getElementById('cfgModel').value = first;
@@ -1291,13 +1000,11 @@
   btnFetchModels.addEventListener('click', fetchModels);
   btnCloudSync.addEventListener('click', () => {
     showDiag('云端同步未实现', [
-      '当前版本预留了云同步接口，但需要你先提供 py.html / cpp.html 里上传云端的具体调用方式。',
+      '当前版本预留了云同步接口，需要 py.html / cpp.html 里上传云端的具体调用方式。',
       '',
-      '请把 py.html 中类似下面这段代码发给我：',
+      '请把 py.html 里类似下面的代码发给我：',
       '  fetch("/api/code/save", {...})',
-      '  fetch("/api/code/load?type=...", {...})',
-      '',
-      '我拿到接口格式后就能对接。'
+      '  fetch("/api/code/load?type=...", {...})'
     ]);
   });
   settingsModal.addEventListener('click', (e) => {
@@ -1314,14 +1021,9 @@
   // ============================================================
   (function init() {
     const ids = Storage.listConvIds();
-    if (ids.length > 0) {
-      loadConv(ids[0]);
-    }
+    if (ids.length > 0) loadConv(ids[0]);
     renderCurrentConversation();
-
-    if (!config.workerPassword || !config.apiKey) {
-      openSettings();
-    }
+    if (!config.workerPassword || !config.apiKey) openSettings();
   })();
 
 })();
