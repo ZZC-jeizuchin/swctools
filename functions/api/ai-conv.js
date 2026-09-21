@@ -2,9 +2,10 @@
 // 用户配置 + 对话云同步，存储在 AIKV
 //
 // 键结构：
-//   <username>:configs       → [{id, name, apiBase, apiKey, ...}]
-//   <username>:index         → 会话索引 [{id, title, configId, ..., savedAt, turnCount}]
-//   <username>:conv:<id>     → 单个会话 {schema, id, title, ..., turns}
+//   <username>:cfg_index        → 配置索引 [{id, name, savedAt, apiBase, model}]
+//   <username>:cfg:<id>         → 单套配置完整 JSON
+//   <username>:index            → 会话索引 [{id, title, ..., savedAt, turnCount}]
+//   <username>:conv:<id>        → 单个会话 {schema, id, title, ..., turns}
 
 async function sign(data, secret) {
   const key = await crypto.subtle.importKey(
@@ -41,9 +42,8 @@ function json(data, status = 200) {
 
 const MAX_CONV_SIZE = 20 * 1024 * 1024;
 const MAX_CONFIG_SIZE = 200 * 1024;
-const MAX_INDEX_SIZE = 100;
+const MAX_INDEX_SIZE = 200;
 
-// 升级旧数据为 schema 2
 function upgradeConv(c) {
   if (!c) return c;
   if (!c.schema || c.schema < 2) {
@@ -54,10 +54,7 @@ function upgradeConv(c) {
 }
 function upgradeIndexItem(x) {
   if (!x) return x;
-  return {
-    ...x,
-    savedAt: x.savedAt || x.updatedAt || x.createdAt || 0
-  };
+  return { ...x, savedAt: x.savedAt || x.updatedAt || x.createdAt || 0 };
 }
 
 export async function onRequest(context) {
@@ -79,34 +76,76 @@ export async function onRequest(context) {
 
   // ═══════════ 配置 ═══════════
   if (type === 'config') {
+    // 尝试迁移旧的 <user>:configs
+    await migrateOldConfigs(env, username);
+
+    // GET
     if (method === 'GET') {
-      const raw = await env.AIKV.get(`${username}:configs`);
-      let configs = [];
-      try { configs = raw ? JSON.parse(raw) : []; } catch {}
-      return json({ configs });
+      if (id) {
+        const raw = await env.AIKV.get(`${username}:cfg:${id}`);
+        if (!raw) return json({ error: '配置不存在' }, 404);
+        try { return json({ config: JSON.parse(raw) }); }
+        catch { return json({ error: '配置数据损坏' }, 500); }
+      }
+      const raw = await env.AIKV.get(`${username}:cfg_index`);
+      let index = [];
+      try { index = raw ? JSON.parse(raw) : []; } catch {}
+      return json({ index });
     }
+
+    // PUT
     if (method === 'PUT') {
+      if (!id) return json({ error: '缺少 id' }, 400);
       let body;
       try { body = await request.json(); }
       catch { return json({ error: 'Invalid JSON' }, 400); }
-      if (!body || !Array.isArray(body.configs)) {
-        return json({ error: '缺少 configs 数组' }, 400);
-      }
-      const raw = JSON.stringify(body.configs);
+      if (!body || !body.config) return json({ error: '缺少 config' }, 400);
+      const cfg = body.config;
+      if (cfg.id !== id) return json({ error: 'id 不匹配' }, 400);
+
+      const raw = JSON.stringify(cfg);
       if (raw.length > MAX_CONFIG_SIZE) return json({ error: '配置过大' }, 413);
-      await env.AIKV.put(`${username}:configs`, raw);
+
+      await env.AIKV.put(`${username}:cfg:${id}`, raw);
+
+      let index = [];
+      try {
+        const ir = await env.AIKV.get(`${username}:cfg_index`);
+        index = ir ? JSON.parse(ir) : [];
+      } catch {}
+      index = index.filter(x => x.id !== id);
+      index.unshift({
+        id: cfg.id,
+        name: cfg.name || '未命名',
+        savedAt: cfg.savedAt || Date.now(),
+        apiBase: cfg.apiBase || '',
+        model: cfg.model || ''
+      });
+      if (index.length > MAX_INDEX_SIZE) index = index.slice(0, MAX_INDEX_SIZE);
+      await env.AIKV.put(`${username}:cfg_index`, JSON.stringify(index));
+
       return json({ success: true });
     }
+
+    // DELETE
     if (method === 'DELETE') {
-      await env.AIKV.delete(`${username}:configs`);
+      if (!id) return json({ error: '缺少 id' }, 400);
+      await env.AIKV.delete(`${username}:cfg:${id}`);
+      let index = [];
+      try {
+        const ir = await env.AIKV.get(`${username}:cfg_index`);
+        index = ir ? JSON.parse(ir) : [];
+      } catch {}
+      index = index.filter(x => x.id !== id);
+      await env.AIKV.put(`${username}:cfg_index`, JSON.stringify(index));
       return json({ success: true });
     }
+
     return json({ error: 'Method Not Allowed' }, 405);
   }
 
   // ═══════════ 会话 ═══════════
   if (method === 'GET') {
-    // 单会话
     if (id) {
       const raw = await env.AIKV.get(`${username}:conv:${id}`);
       if (!raw) return json({ error: '会话不存在' }, 404);
@@ -120,7 +159,6 @@ export async function onRequest(context) {
       }
       return json({ conversation: conv });
     }
-    // 索引
     const raw = await env.AIKV.get(`${username}:index`);
     let index = [];
     try { index = raw ? JSON.parse(raw) : []; } catch {}
@@ -177,4 +215,45 @@ export async function onRequest(context) {
   }
 
   return json({ error: 'Method Not Allowed' }, 405);
+}
+
+// 旧键迁移：<user>:configs → <user>:cfg_index + <user>:cfg:<id>
+async function migrateOldConfigs(env, username) {
+  try {
+    const oldRaw = await env.AIKV.get(`${username}:configs`);
+    if (!oldRaw) return;
+
+    // 已经有新索引，说明迁移过了，清理旧键
+    const idxRaw = await env.AIKV.get(`${username}:cfg_index`);
+    if (idxRaw) {
+      await env.AIKV.delete(`${username}:configs`);
+      return;
+    }
+
+    let oldConfigs = [];
+    try { oldConfigs = JSON.parse(oldRaw); } catch { oldConfigs = []; }
+    if (!Array.isArray(oldConfigs) || oldConfigs.length === 0) {
+      await env.AIKV.delete(`${username}:configs`);
+      return;
+    }
+
+    const index = [];
+    const now = Date.now();
+    for (const c of oldConfigs) {
+      if (!c || !c.id) continue;
+      if (!c.savedAt) c.savedAt = now;
+      await env.AIKV.put(`${username}:cfg:${c.id}`, JSON.stringify(c));
+      index.push({
+        id: c.id,
+        name: c.name || '未命名',
+        savedAt: c.savedAt,
+        apiBase: c.apiBase || '',
+        model: c.model || ''
+      });
+    }
+    await env.AIKV.put(`${username}:cfg_index`, JSON.stringify(index));
+    await env.AIKV.delete(`${username}:configs`);
+  } catch {
+    // 静默
+  }
 }
