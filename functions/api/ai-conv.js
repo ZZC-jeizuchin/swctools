@@ -1,9 +1,10 @@
 // functions/api/ai-conv.js
-// 用户对话云同步，存储在 AIKV 命名空间下
+// 用户配置 + 对话云同步，存储在 AIKV
 //
-// 键结构（第一级为用户名）：
-//   <username>:index         → 会话索引 [{id, title, updatedAt, turnCount, model}]
-//   <username>:conv:<id>     → 单个会话完整数据 {title, model, turns, ...}
+// 键结构：
+//   <username>:configs       → [{id, name, apiBase, apiKey, ...}]
+//   <username>:index         → 会话索引
+//   <username>:conv:<id>     → 单个会话
 
 async function sign(data, secret) {
   const key = await crypto.subtle.importKey(
@@ -38,7 +39,8 @@ function json(data, status = 200) {
   });
 }
 
-const MAX_CONV_SIZE = 20 * 1024 * 1024;  // 20 MB
+const MAX_CONV_SIZE = 20 * 1024 * 1024;
+const MAX_CONFIG_SIZE = 200 * 1024;
 const MAX_INDEX_SIZE = 100;
 
 export async function onRequest(context) {
@@ -53,19 +55,49 @@ export async function onRequest(context) {
   const username = payload.sub;
   if (!username) return json({ error: 'token 缺少用户名' }, 401);
 
-  if (!env.AIKV) return json({ error: 'AIKV 未绑定，请在 Pages 设置中添加 KV 命名空间绑定' }, 500);
+  if (!env.AIKV) return json({ error: 'AIKV 未绑定' }, 500);
 
   const url = new URL(request.url);
   const method = request.method;
+  const type = url.searchParams.get('type') || 'conv';
+  const id = url.searchParams.get('id');
 
-  // ─── GET：拉取索引或单个会话 ───
+  // ═══════════ 配置 ═══════════
+  if (type === 'config') {
+    if (method === 'GET') {
+      const raw = await env.AIKV.get(`${username}:configs`);
+      let configs = [];
+      try { configs = raw ? JSON.parse(raw) : []; } catch {}
+      return json({ configs });
+    }
+    if (method === 'PUT') {
+      let body;
+      try { body = await request.json(); }
+      catch { return json({ error: 'Invalid JSON' }, 400); }
+      if (!body || !Array.isArray(body.configs)) {
+        return json({ error: '缺少 configs 数组' }, 400);
+      }
+      const raw = JSON.stringify(body.configs);
+      if (raw.length > MAX_CONFIG_SIZE) {
+        return json({ error: '配置过大' }, 413);
+      }
+      await env.AIKV.put(`${username}:configs`, raw);
+      return json({ success: true });
+    }
+    if (method === 'DELETE') {
+      await env.AIKV.delete(`${username}:configs`);
+      return json({ success: true });
+    }
+    return json({ error: 'Method Not Allowed' }, 405);
+  }
+
+  // ═══════════ 会话 ═══════════
   if (method === 'GET') {
-    const id = url.searchParams.get('id');
     if (id) {
       const raw = await env.AIKV.get(`${username}:conv:${id}`);
       if (!raw) return json({ error: '会话不存在' }, 404);
       try { return json({ conversation: JSON.parse(raw) }); }
-      catch { return json({ error: '会话数据损坏' }, 500); }
+      catch { return json({ error: '数据损坏' }, 500); }
     }
     const raw = await env.AIKV.get(`${username}:index`);
     let index = [];
@@ -73,51 +105,41 @@ export async function onRequest(context) {
     return json({ index });
   }
 
-  // ─── PUT：保存会话 ───
   if (method === 'PUT') {
     let body;
     try { body = await request.json(); }
-    catch { return json({ error: 'Invalid JSON body' }, 400); }
-
+    catch { return json({ error: 'Invalid JSON' }, 400); }
     if (!body || typeof body.id !== 'string' || !body.conversation) {
       return json({ error: '缺少 id 或 conversation' }, 400);
     }
-
-    const { id, conversation } = body;
-    const rawData = JSON.stringify(conversation);
+    const rawData = JSON.stringify(body.conversation);
     if (rawData.length > MAX_CONV_SIZE) {
-      return json({ error: `会话过大（${(rawData.length / 1024 / 1024).toFixed(1)}MB），上限 20MB` }, 413);
+      return json({ error: '会话过大' }, 413);
     }
-
-    await env.AIKV.put(`${username}:conv:${id}`, rawData);
+    await env.AIKV.put(`${username}:conv:${body.id}`, rawData);
 
     let index = [];
     try {
       const raw = await env.AIKV.get(`${username}:index`);
       index = raw ? JSON.parse(raw) : [];
     } catch {}
-
-    index = index.filter(x => x.id !== id);
+    index = index.filter(x => x.id !== body.id);
     index.unshift({
-      id,
-      title: conversation.title || '未命名对话',
-      updatedAt: conversation.updatedAt || Date.now(),
-      turnCount: Array.isArray(conversation.turns) ? conversation.turns.length : 0,
-      model: conversation.model || ''
+      id: body.id,
+      title: body.conversation.title || '未命名',
+      updatedAt: body.conversation.updatedAt || Date.now(),
+      turnCount: Array.isArray(body.conversation.turns) ? body.conversation.turns.length : 0,
+      model: body.conversation.model || '',
+      configName: body.conversation.configName || ''
     });
     if (index.length > MAX_INDEX_SIZE) index = index.slice(0, MAX_INDEX_SIZE);
     await env.AIKV.put(`${username}:index`, JSON.stringify(index));
-
     return json({ success: true, index });
   }
 
-  // ─── DELETE：删除会话 ───
   if (method === 'DELETE') {
-    const id = url.searchParams.get('id');
     if (!id) return json({ error: '缺少 id' }, 400);
-
     await env.AIKV.delete(`${username}:conv:${id}`);
-
     let index = [];
     try {
       const raw = await env.AIKV.get(`${username}:index`);
@@ -125,7 +147,6 @@ export async function onRequest(context) {
     } catch {}
     index = index.filter(x => x.id !== id);
     await env.AIKV.put(`${username}:index`, JSON.stringify(index));
-
     return json({ success: true, index });
   }
 
