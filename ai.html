@@ -80,8 +80,9 @@ html, body {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  z-index: 60;
+  z-index: 200;
   transition: transform 0.22s ease;
+  position: relative;
 }
 .sb-head {
   padding: 10px 12px;
@@ -420,7 +421,7 @@ html, body {
   position: fixed;
   background: var(--panel);
   border: 1px solid var(--border);
-  z-index: 200;
+  z-index: 220;
   display: none;
   flex-direction: column;
   max-height: 70vh;
@@ -728,13 +729,17 @@ html, body {
   font-size: 13px;
   cursor: pointer;
   border-radius: 8px;
+  flex-wrap: wrap;
 }
 .conf-item:hover { background: var(--btn); }
 .conf-item.active { background: var(--active); border-color: var(--acc); }
-.conf-item .n { flex: 1; font-weight: 500; }
+.conf-item .n { flex: 1; font-weight: 500; min-width: 100px; }
 .conf-item .m {
   font-size: 11px;
   color: var(--muted);
+  flex-basis: 100%;
+  order: 3;
+  margin-top: 4px;
 }
 .conf-item button {
   padding: 4px 10px;
@@ -749,7 +754,6 @@ html, body {
 .conf-item button:hover { background: var(--btn); }
 .conf-item button.danger { color: var(--danger); }
 
-/* 配置管理 Modal */
 .config-manager .modal-card {
   max-width: 600px;
 }
@@ -832,11 +836,13 @@ html, body {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,.3);
-  z-index: 150;
+  z-index: 100;
 }
 .mask.show { display: block; }
 
-/* ─── 移动端竖屏适配 ─── */
+#popupMask { z-index: 210; }
+
+/* ─── 移动端竖屏 ─── */
 @media (max-width: 768px) {
   .sidebar {
     position: absolute;
@@ -858,7 +864,7 @@ html, body {
   }
   .msg.user .ops, .msg.ai .ops { left: auto; right: auto; }
 
-  .msg .wrap { max-width: 92%; }
+  .msg .wrap { max-width: 88%; }
   .chat { padding: 12px 12px; }
   .input-area { padding: 8px 12px 12px; }
   .input-box textarea { min-height: 38px; padding: 8px 12px; }
@@ -882,7 +888,7 @@ html, body {
   .cloud-row .info .t { max-width: 140px; }
 }
 
-/* 横屏移动端保持桌面端布局 */
+/* 横屏移动端保持桌面布局 */
 @media (max-width: 768px) and (orientation: landscape) {
   .sidebar {
     position: static;
@@ -951,7 +957,7 @@ html, body {
   </main>
 </div>
 
-<!-- 配置管理入口 Popup -->
+<!-- 配置快速切换 Popup -->
 <div class="popup" id="configPopup" style="width:300px;">
   <div class="popup-head">
     <span style="flex:1;font-size:12px;color:var(--muted);font-weight:600;">配置</span>
@@ -963,7 +969,7 @@ html, body {
   </div>
 </div>
 
-<!-- 模型选择面板 -->
+<!-- 模型选择 -->
 <div class="popup" id="modelPopup" style="width:320px;">
   <div class="popup-head">
     <input id="modelSearch" placeholder="搜索模型...">
@@ -992,7 +998,7 @@ html, body {
   </div>
 </div>
 
-<!-- 云同步面板 -->
+<!-- 云同步 -->
 <div class="popup" id="cloudPopup" style="width:340px;">
   <div class="popup-head">
     <span style="flex:1;font-size:12px;color:var(--muted);font-weight:600;">云端对话</span>
@@ -1012,7 +1018,7 @@ html, body {
   <button data-act="delete" class="danger">删除</button>
 </div>
 
-<!-- 配置管理 Modal（浏览器风格） -->
+<!-- 配置管理 Modal -->
 <div class="modal config-manager" id="configManagerModal">
   <div class="modal-card">
     <h3>配置管理</h3>
@@ -1024,7 +1030,7 @@ html, body {
   </div>
 </div>
 
-<!-- 编辑单个配置 Modal -->
+<!-- 编辑单个配置 -->
 <div class="modal" id="configEditModal">
   <div class="modal-card">
     <h3 id="configEditTitle">新建配置</h3>
@@ -1128,9 +1134,13 @@ html, body {
     const m = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]*)'));
     return m ? decodeURIComponent(m[2]) : '';
   }
+  function delCookie(name) {
+    document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
+  }
 
-  // ─── 配置管理 ───
-  const CFG_KEY = 'swc_ai_configs';
+  // ─── 配置（每个配置独立 cookie）───
+  const CFG_PREFIX = 'swc_ai_cfg_';
+  const IDS_KEY = 'swc_ai_cfg_ids';
   const CUR_KEY = 'swc_ai_current';
 
   function defaultConfig(name) {
@@ -1151,17 +1161,48 @@ html, body {
   }
 
   function loadConfigs() {
+    let ids = [];
     try {
-      const raw = getCookie(CFG_KEY);
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr) && arr.length > 0) return arr;
-      }
-    } catch {}
-    return [];
+      const raw = getCookie(IDS_KEY);
+      if (raw) ids = JSON.parse(raw);
+    } catch { ids = []; }
+    const arr = [];
+    for (const id of ids) {
+      const c = getCookie(CFG_PREFIX + id);
+      if (!c) continue;
+      try { arr.push(JSON.parse(c)); } catch {}
+    }
+    return arr;
   }
-  function saveConfigs(arr) {
-    setCookie(CFG_KEY, JSON.stringify(arr));
+
+  function saveAllConfigs(arr) {
+    // 删除不在新列表里的旧 cookie
+    let oldIds = [];
+    try {
+      const raw = getCookie(IDS_KEY);
+      if (raw) oldIds = JSON.parse(raw);
+    } catch {}
+    const newIds = arr.map(c => c.id);
+    for (const oid of oldIds) {
+      if (!newIds.includes(oid)) delCookie(CFG_PREFIX + oid);
+    }
+    // 写每套配置
+    for (const c of arr) {
+      setCookie(CFG_PREFIX + c.id, JSON.stringify(c));
+    }
+    // 写 id 列表
+    setCookie(IDS_KEY, JSON.stringify(newIds));
+  }
+
+  function deleteConfigCookie(id) {
+    delCookie(CFG_PREFIX + id);
+    let ids = [];
+    try {
+      const raw = getCookie(IDS_KEY);
+      if (raw) ids = JSON.parse(raw);
+    } catch {}
+    ids = ids.filter(x => x !== id);
+    setCookie(IDS_KEY, JSON.stringify(ids));
   }
 
   let configs = loadConfigs();
@@ -1171,7 +1212,7 @@ html, body {
     const c = defaultConfig('配置 1');
     configs = [c];
     currentConfigId = c.id;
-    saveConfigs(configs);
+    saveAllConfigs(configs);
     setCookie(CUR_KEY, c.id);
   }
   if (!configs.find(c => c.id === currentConfigId)) {
@@ -1479,7 +1520,11 @@ html, body {
 
       it.addEventListener('click', () => {
         if (it.classList.contains('renaming')) return;
-        loadConv(m.id); renderChat(); closeSidebar();
+        loadConv(m.id); renderChat();
+        // 只在竖屏窄屏上关闭侧边栏
+        if (window.innerWidth <= 768 && window.innerHeight > window.innerWidth) {
+          closeSidebar();
+        }
       });
       convListEl.appendChild(it);
     });
@@ -1630,9 +1675,9 @@ html, body {
       const it = document.createElement('div');
       it.className = 'conf-item' + (c.id === currentConfigId ? ' active' : '');
       it.innerHTML = '<span class="n">' + esc(c.name) + '</span>' +
-        '<span class="m">' + esc(c.apiBase || '未设置地址') + '</span>' +
         '<button data-act="edit">编辑</button>' +
-        '<button data-act="switch">' + (c.id === currentConfigId ? '当前' : '切换') + '</button>';
+        '<button data-act="switch">' + (c.id === currentConfigId ? '当前' : '切换') + '</button>' +
+        '<span class="m">' + esc(c.apiBase || '未设置地址') + '</span>';
       it.querySelector('[data-act="edit"]').addEventListener('click', (e) => {
         e.stopPropagation();
         closeConfigManager();
@@ -1678,7 +1723,8 @@ html, body {
     if (!curId) {
       const c = curConfig();
       c.model = name;
-      saveConfigs(configs);
+      // 单套配置更新
+      setCookie(CFG_PREFIX + c.id, JSON.stringify(c));
     } else {
       curMeta.model = name;
       curMeta.updatedAt = Date.now();
@@ -1728,7 +1774,6 @@ html, body {
     el.addEventListener('click', () => {
       const v = el.dataset.v;
       if (!curId) {
-        // 没有会话时提示用户
         alert('请先开始一个对话，再设置推理强度。');
         closeAllPopups();
         return;
@@ -2058,12 +2103,12 @@ html, body {
     if (!editingConfigId) return;
     if (configs.length <= 1) { alert('至少保留一套配置。'); return; }
     if (!confirm('确定删除这套配置？')) return;
+    deleteConfigCookie(editingConfigId);
     configs = configs.filter(c => c.id !== editingConfigId);
     if (currentConfigId === editingConfigId) {
       currentConfigId = configs[0].id;
       setCookie(CUR_KEY, currentConfigId);
     }
-    saveConfigs(configs);
     closeConfigEdit();
     updateConfigLabel();
     updateModelLabel();
@@ -2096,7 +2141,9 @@ html, body {
       currentConfigId = newCfg.id;
       setCookie(CUR_KEY, newCfg.id);
     }
-    saveConfigs(configs);
+    // 保存单套 + 更新 ids 列表
+    setCookie(CFG_PREFIX + newCfg.id, JSON.stringify(newCfg));
+    setCookie(IDS_KEY, JSON.stringify(configs.map(c => c.id)));
     closeConfigEdit();
     updateConfigLabel();
     updateModelLabel();
@@ -2253,7 +2300,9 @@ html, body {
     if (ac) ac.abort();
     curId = null; curMeta = null; curTurns = [];
     renderChat();
-    closeSidebar();
+    if (window.innerWidth <= 768 && window.innerHeight > window.innerWidth) {
+      closeSidebar();
+    }
     inputEl.focus();
   });
 
@@ -2284,7 +2333,7 @@ html, body {
           const localIsEmpty = configs.length === 1 && !configs[0].apiKey;
           if (localIsEmpty) {
             configs = r.configs;
-            saveConfigs(configs);
+            saveAllConfigs(configs);
             currentConfigId = configs[0].id;
             setCookie(CUR_KEY, currentConfigId);
             updateConfigLabel();
