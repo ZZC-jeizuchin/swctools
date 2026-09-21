@@ -80,6 +80,12 @@
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; }
+
+    /* ★ iOS 修复 1：禁止双击缩放，让单击立即触发 */
+    html, body {
+      touch-action: manipulation;
+    }
+
     body {
       background: var(--bg-body);
       min-height: 100vh;
@@ -90,12 +96,16 @@
       position: relative;
     }
 
+    /* ★ iOS 修复 2：交互元素明确可点击 + 禁止双击缩放 */
     button, a, input, select, .drawer-overlay, .modal-overlay, .drawer-panel, .modal-card,
     .cat-btn, .go-btn, .tool-btn, .nav-btn, .link-item, .run-ide-btn,
     .theme-toggle, .perf-toggle {
       -webkit-tap-highlight-color: transparent;
       outline: none;
+      touch-action: manipulation;
+      cursor: pointer;
     }
+    input, textarea { cursor: text; }
 
     .corner-tl { position: fixed; top: calc(var(--main-h) * 0.015); left: calc(var(--main-w) * 0.015); font-size: calc(var(--main-h) * 0.026); color: var(--corner-text-color); opacity: 0.8; z-index: 3000; pointer-events: none; }
     .corner-tr { position: fixed; top: calc(var(--main-h) * 0.015); right: calc(var(--main-w) * 0.02); font-size: calc(var(--main-h) * 0.026); color: var(--corner-text-color); opacity: 0.8; z-index: 3000; pointer-events: none; background: var(--fps-bg); padding: calc(var(--main-h) * 0.005) calc(var(--main-w) * 0.012); border-radius: calc(var(--main-w) * 0.02); border: 1px solid var(--panel-border); }
@@ -109,7 +119,9 @@
 
     .main-panel {
       width:  min(96vw, calc(96vh * 2.5));
+      width:  min(96vw, calc(96dvh * 2.5));       /* ★ iOS 修复 3：dvh 优先 */
       height: min(96vh, calc(96vw / 1.33));
+      height: min(96dvh, calc(96vw / 1.33));      /* ★ iOS 修复 3：dvh 优先 */
       margin: auto;
       background: var(--panel-bg);
       border-radius: calc(var(--main-w) * 0.025);
@@ -220,7 +232,9 @@
     .drawer-panel {
       background: var(--drawer-panel-bg); width: 100vw;
       border-radius: calc(var(--main-w) * 0.04) calc(var(--main-w) * 0.04) 0 0; border: 1px solid var(--panel-border);
-      height: 80vh; overflow: hidden; display: flex; flex-direction: column; flex-shrink: 0;
+      height: 80vh;                                /* 旧浏览器回退 */
+      height: 80dvh;                               /* ★ iOS 修复 4：动态视口高度 */
+      overflow: hidden; display: flex; flex-direction: column; flex-shrink: 0;
       transform: translateY(100%); transition: transform 0.3s ease, filter 0.1s;
     }
     .drawer-overlay.show .drawer-panel { transform: translateY(0); }
@@ -441,7 +455,6 @@
       return;
     }
 
-    // 提取用户名（用于缓存键）
     let username;
     try {
       const parts = token.split('.');
@@ -463,16 +476,14 @@
       return;
     }
 
-    // ✅ 第一步：立即显示本地缓存的旧头像（如果有）
     const cacheKey = `cached_avatar_${username}`;
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
-      avatar.src = cached;          // 瞬间显示
+      avatar.src = cached;
     } else {
-      avatar.src = defaultSrc;      // 无缓存则显示灰色背景
+      avatar.src = defaultSrc;
     }
 
-    // ✅ 第二步：异步获取最新头像，成功后替换并更新缓存
     try {
       const res = await fetch(`/api/upload-icon?t=${Date.now()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -480,12 +491,10 @@
       if (res.ok) {
         const blob = await res.blob();
         const dataUrl = await blobToDataURL(blob);
-        avatar.src = dataUrl;                       // 更新显示
-        localStorage.setItem(cacheKey, dataUrl);    // 更新缓存
+        avatar.src = dataUrl;
+        localStorage.setItem(cacheKey, dataUrl);
       }
-      // 如果请求失败（如 404），保留已有的缓存头像，不做任何改动
     } catch {
-      // 网络错误时同样保留缓存
     }
   }
   function updateLoginButton() {
@@ -501,8 +510,6 @@
     loadUserAvatar();
   }
   updateLoginButton();
-
-  
 
   const modalOverlay = document.getElementById('modalOverlay'), modalSlides = document.getElementById('modalSlides');
   let currentCatIndex = 0, modalStartX = 0, modalCurrentX = 0, isModalDragging = false;
