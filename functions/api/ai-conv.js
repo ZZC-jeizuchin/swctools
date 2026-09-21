@@ -130,3 +130,4 @@ export async function onRequest(context) {
   }
 
   return json({ error: 'Method Not Allowed' }, 405);
+}
