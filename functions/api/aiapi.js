@@ -32,7 +32,7 @@ const ALLOWED_HOSTS = [
   'dashscope.aliyuncs.com', 'siliconflow.cn', 'siliconflow.com',
   'baidubce.com', 'volces.com', 'openrouter.ai',
   'groq.com', 'mistral.ai', 'cohere.ai', 'perplexity.ai',
-  'minimax.chat', 'minimaxi.com', 'keyless'
+  'minimax.chat', 'minimaxi.com', 'keylessapi.workers.dev', 'workers.dev'
 ];
 
 async function sha256Hex(input) {
