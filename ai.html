@@ -1,204 +1,423 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
-  <title>SwC AI</title>
-  <style>
-    :root {
-      --bg:#e8edf2; --sidebar:#dde7f0; --panel:rgba(255,255,255,0.9);
-      --border:#bdd1e6; --text:#173e58; --muted:#3a6a8e; --title:#1e4b6e;
-      --btn:#cddef0; --btn-b:#a3bed8; --btn-c:#1a4765; --btn-h:#c2d8ed;
-      --accent:#4f7f9e; --accent-h:#3a6b8c; --input-b:#b3cce2; --input-f:#4f7fa3;
-      --user-bg:#4f7f9e; --user-c:#fff; --ai-bg:#fff; --reason-bg:#f0f4f8;
-      --overlay:rgba(22,50,70,0.25); --code:#eef3f8; --active:#c2d8ed;
-    }
-    [data-theme="dark"] {
-      --bg:#0a0f14; --sidebar:#0d1a28; --panel:rgba(13,27,42,0.9);
-      --border:#1e3a5a; --text:#c0d8f0; --muted:#7a9ab0; --title:#a0c4e8;
-      --btn:#1e3a5a; --btn-b:#2a5a8a; --btn-c:#c0d8f0; --btn-h:#2a5a8a;
-      --accent:#2a6a9e; --accent-h:#1a4a7a; --input-b:#2a5a8a; --input-f:#5a9ac0;
-      --user-bg:#2a6a9e; --user-c:#fff; --ai-bg:#142838; --reason-bg:#0f1e32;
-      --overlay:rgba(0,20,40,0.5); --code:#122a3e; --active:#1e3a5a;
-    }
-    *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',system-ui,-apple-system,sans-serif;}
-    html,body{height:100%;overflow:hidden;}
-    body{background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased;}
-    .app{display:flex;height:100vh;}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+<title>SwC AI</title>
+<style>
+:root {
+  --bg: #e8edf2;
+  --panel: #ffffff;
+  --side: #dde7f0;
+  --border: #bdd1e6;
+  --text: #173e58;
+  --muted: #5a7a94;
+  --title: #1e4b6e;
+  --btn: #d9e8f4;
+  --btn-b: #adc7e0;
+  --btn-h: #c2d8ed;
+  --acc: #4f7f9e;
+  --acc-h: #3a6b8c;
+  --input-b: #b3cce2;
+  --user-bg: #4f7f9e;
+  --user-c: #ffffff;
+  --ai-bg: #ffffff;
+  --reason-bg: #f0f4f8;
+  --code-bg: #eef3f8;
+  --active: #c2d8ed;
+  --danger: #c62828;
+  --ok: #2e7d32;
+}
+[data-theme="dark"] {
+  --bg: #0a0f14;
+  --panel: #0d1b2a;
+  --side: #0d1a28;
+  --border: #1e3a5a;
+  --text: #c0d8f0;
+  --muted: #7a9ab0;
+  --title: #a0c4e8;
+  --btn: #1e3a5a;
+  --btn-b: #2a5a8a;
+  --btn-h: #2a5a8a;
+  --acc: #2a6a9e;
+  --acc-h: #1a4a7a;
+  --input-b: #2a5a8a;
+  --user-bg: #2a6a9e;
+  --user-c: #ffffff;
+  --ai-bg: #142838;
+  --reason-bg: #0f1e32;
+  --code-bg: #122a3e;
+  --active: #1e3a5a;
+  --danger: #ef5350;
+  --ok: #66bb6a;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Consolas', 'Courier New', monospace; }
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
 
-    /* 侧边栏 */
-    .sidebar{width:240px;flex-shrink:0;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:60;transition:transform .22s;}
-    .sb-head{padding:10px 12px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border);}
-    .sb-head h2{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase;flex:1;}
-    .sb-head button{background:var(--btn);border:1px solid var(--btn-b);color:var(--btn-c);padding:4px 10px;border-radius:14px;font-size:12px;cursor:pointer;}
-    .sb-head button:hover{background:var(--btn-h);}
-    .sb-list{flex:1;overflow-y:auto;padding:6px;}
-    .sb-list::-webkit-scrollbar{width:4px;}
-    .sb-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
-    .sb-item{padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;margin-bottom:2px;display:flex;align-items:center;gap:6px;}
-    .sb-item:hover{background:var(--btn);}
-    .sb-item.active{background:var(--active);font-weight:500;}
-    .sb-item .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .sb-item .d{opacity:0;border:none;background:none;color:#c62828;cursor:pointer;font-size:14px;padding:0 2px;}
-    .sb-item:hover .d{opacity:.8;}
-    .sb-item .d:hover{opacity:1;}
-    .sb-item .rn{display:none;width:100%;padding:2px 6px;font-size:12px;border:1px solid var(--input-b);border-radius:4px;background:var(--bg);color:var(--text);outline:none;font-family:inherit;}
-    .sb-item.renaming .t{display:none;}
-    .sb-item.renaming .rn{display:block;}
-    .sb-item.renaming .d{display:none;}
+.app { display: flex; height: 100vh; }
 
-    /* 主区 */
-    .main{flex:1;display:flex;flex-direction:column;min-width:0;}
+/* ─── 侧边栏 ─── */
+.sidebar {
+  width: 230px; flex-shrink: 0; background: var(--side);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  z-index: 60;
+}
+.sb-head {
+  padding: 8px 10px; display: flex; align-items: center; gap: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.sb-head h2 { font-size: 12px; color: var(--muted); flex: 1; text-transform: uppercase; letter-spacing: 1px; }
+.sb-head button {
+  background: var(--btn); border: 1px solid var(--btn-b); color: var(--text);
+  padding: 3px 8px; font-size: 12px; cursor: pointer;
+}
+.sb-head button:hover { background: var(--btn-h); }
 
-    /* 顶栏 */
-    .topbar{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--border);backdrop-filter:blur(12px);position:relative;z-index:40;}
-    .menu-btn{display:none;background:var(--btn);border:1px solid var(--btn-b);color:var(--btn-c);width:32px;height:32px;border-radius:6px;cursor:pointer;font-size:14px;align-items:center;justify-content:center;}
-    .topbar h1{font-size:14px;font-weight:600;color:var(--title);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .chip{background:var(--btn);border:1px solid var(--btn-b);color:var(--btn-c);padding:5px 11px;border-radius:16px;font-size:12.5px;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;max-width:200px;}
-    .chip:hover{background:var(--btn-h);}
-    .chip .l{max-width:150px;overflow:hidden;text-overflow:ellipsis;}
-    .chip .a{font-size:9px;opacity:.55;}
-    .chip.empty{color:var(--muted);}
-    .icon-btn{background:var(--btn);border:1px solid var(--btn-b);color:var(--btn-c);width:32px;height:32px;border-radius:16px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;}
-    .icon-btn:hover{background:var(--btn-h);}
+.sb-list { flex: 1; overflow-y: auto; }
+.sb-item {
+  padding: 8px 10px; cursor: pointer; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px;
+}
+.sb-item:hover { background: var(--btn); }
+.sb-item.active { background: var(--active); }
+.sb-item .t {
+  flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sb-item .d {
+  background: transparent; border: none; color: var(--muted);
+  cursor: pointer; padding: 0 4px; font-size: 14px;
+}
+.sb-item .d:hover { color: var(--text); }
+.sb-item .rn {
+  display: none; width: 100%; padding: 2px 4px; font-size: 12px;
+  border: 1px solid var(--input-b); background: var(--bg); color: var(--text);
+  outline: none; font-family: inherit;
+}
+.sb-item.renaming .t, .sb-item.renaming .d { display: none; }
+.sb-item.renaming .rn { display: block; }
 
-    /* 聊天区 */
-    .chat{flex:1;overflow-y:auto;padding:24px 20px;}
-    .chat::-webkit-scrollbar{width:6px;}
-    .chat::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
-    .chat::-webkit-scrollbar-thumb:hover{background:var(--muted);}
-    .msg{max-width:800px;margin:0 auto 16px;display:flex;gap:10px;animation:fadeIn .15s ease;}
-    @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
-    .msg.user{flex-direction:row-reverse;}
-    .msg .wrap{max-width:82%;min-width:0;}
-    .msg .bubble{padding:10px 14px;border-radius:14px;line-height:1.65;font-size:14px;word-wrap:break-word;overflow-wrap:break-word;}
-    .msg.user .bubble{background:var(--user-bg);color:var(--user-c);border-bottom-right-radius:4px;white-space:pre-wrap;}
-    .msg.ai .bubble{background:var(--ai-bg);border:1px solid var(--border);border-bottom-left-radius:4px;}
-    .msg .ava{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff;}
-    .msg.user .ava{background:var(--accent);}
-    .msg.ai .ava{background:#14b8a6;}
+/* ─── 主区 ─── */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
-    .reason{background:var(--reason-bg);border:1px dashed var(--border);border-radius:8px;margin-bottom:6px;font-size:13px;}
-    .reason summary{padding:7px 11px;cursor:pointer;color:var(--muted);font-size:12px;list-style:none;display:flex;align-items:center;gap:5px;}
-    .reason summary::-webkit-details-marker{display:none;}
-    .reason summary::before{content:'▸';font-size:10px;transition:transform .12s;display:inline-block;}
-    .reason[open] summary::before{transform:rotate(90deg);}
-    .reason .rc{padding:6px 11px 9px;color:var(--muted);font-style:italic;white-space:pre-wrap;word-break:break-word;border-top:1px dashed var(--border);font-size:13px;line-height:1.55;}
+.topbar {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.menu-btn {
+  display: none; background: var(--btn); border: 1px solid var(--btn-b);
+  color: var(--text); width: 30px; height: 30px; cursor: pointer; font-size: 14px;
+}
+.topbar h1 {
+  font-size: 13px; font-weight: normal; color: var(--title);
+  flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chip {
+  background: var(--btn); border: 1px solid var(--btn-b); color: var(--text);
+  padding: 4px 10px; font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 4px;
+  white-space: nowrap; max-width: 180px; overflow: hidden;
+}
+.chip:hover { background: var(--btn-h); }
+.chip .l {
+  max-width: 130px; overflow: hidden; text-overflow: ellipsis;
+}
+.chip .a { font-size: 9px; opacity: 0.6; }
+.chip.empty { color: var(--muted); }
 
-    .bubble p{margin:0 0 8px;}
-    .bubble p:last-child{margin-bottom:0;}
-    .bubble pre{background:var(--code);padding:10px 12px;border-radius:7px;overflow-x:auto;margin:8px 0;font-family:'Consolas',monospace;font-size:13px;}
-    .bubble code{background:var(--code);padding:2px 5px;border-radius:4px;font-family:'Consolas',monospace;font-size:.88em;}
-    .bubble pre code{background:none;padding:0;}
-    .bubble ul,.bubble ol{margin:8px 0 8px 20px;}
-    .bubble li{margin:3px 0;}
-    .bubble h1,.bubble h2,.bubble h3{margin:12px 0 8px;color:var(--title);}
-    .bubble a{color:var(--accent);}
-    .bubble a:hover{text-decoration:underline;}
-    .bubble blockquote{border-left:3px solid var(--border);padding-left:12px;margin:8px 0;opacity:.85;}
-    .bubble table{border-collapse:collapse;margin:8px 0;}
-    .bubble th,.bubble td{border:1px solid var(--border);padding:4px 9px;}
+/* ─── 聊天区 ─── */
+.chat { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.chat::-webkit-scrollbar { width: 6px; }
+.chat::-webkit-scrollbar-thumb { background: var(--border); }
 
-    /* 输入区 */
-    .input-area{flex:0 0 auto;padding:12px 20px 16px;background:var(--panel);border-top:1px solid var(--border);backdrop-filter:blur(12px);}
-    .input-box{max-width:800px;margin:0 auto;display:flex;gap:8px;align-items:flex-end;}
-    .input-box textarea{flex:1;min-height:40px;max-height:200px;padding:10px 14px;border:1px solid var(--input-b);border-radius:20px;background:var(--bg);color:var(--text);font-size:14px;font-family:inherit;line-height:1.45;resize:none;outline:none;overflow-y:auto;}
-    .input-box textarea:focus{border-color:var(--input-f);}
-    .input-box button{height:40px;padding:0 20px;border:none;border-radius:20px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:.12s;}
-    .input-box button:hover{background:var(--accent-h);}
-    .input-box button:disabled{opacity:.5;cursor:not-allowed;}
-    .input-box button.stop{background:#c62828;}
+.msg {
+  max-width: 820px; margin: 0 auto 16px; display: flex; gap: 8px;
+  position: relative;
+}
+.msg.user { flex-direction: row-reverse; }
+.msg .wrap { max-width: 82%; min-width: 0; }
+.msg .bubble {
+  padding: 10px 14px; font-size: 14px; line-height: 1.65;
+  word-wrap: break-word; overflow-wrap: break-word;
+}
+.msg.user .bubble { background: var(--user-bg); color: var(--user-c); white-space: pre-wrap; }
+.msg.ai .bubble { background: var(--ai-bg); border: 1px solid var(--border); }
+.msg .ava {
+  width: 26px; height: 26px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: bold; color: #fff;
+}
+.msg.user .ava { background: var(--acc); }
+.msg.ai .ava { background: #14b8a6; }
 
-    .welcome{text-align:center;padding:80px 20px;color:var(--muted);}
-    .welcome h2{font-size:20px;margin-bottom:8px;color:var(--title);font-weight:600;}
-    .welcome p{font-size:13px;}
+/* 消息操作按钮 */
+.msg .ops {
+  position: absolute; top: 4px; opacity: 0;
+  transition: none;
+}
+.msg:hover .ops { opacity: 1; }
+.msg.user .ops { left: -26px; }
+.msg.ai .ops { right: -26px; }
+.msg .ops button {
+  background: var(--btn); border: 1px solid var(--btn-b); color: var(--text);
+  width: 20px; height: 20px; cursor: pointer; font-size: 11px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.msg .ops button:hover { background: var(--btn-h); }
 
-    /* Popup 面板通用 */
-    .popup{position:fixed;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.15);backdrop-filter:blur(16px);z-index:200;display:none;flex-direction:column;overflow:hidden;}
-    .popup.show{display:flex;}
-    .popup-head{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;}
-    .popup-head input{flex:1;padding:6px 10px;font-size:13px;border:1px solid var(--input-b);border-radius:6px;background:var(--bg);color:var(--text);outline:none;font-family:inherit;}
-    .popup-head input:focus{border-color:var(--input-f);}
-    .popup-head button{width:30px;height:30px;border:1px solid var(--btn-b);background:var(--btn);color:var(--btn-c);border-radius:6px;cursor:pointer;font-size:13px;flex-shrink:0;}
-    .popup-head button:hover{background:var(--btn-h);}
-    .popup-list{flex:1;overflow-y:auto;padding:4px;max-height:340px;}
-    .popup-list::-webkit-scrollbar{width:5px;}
-    .popup-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
-    .popup-item{padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px;word-break:break-all;}
-    .popup-item:hover{background:var(--btn);}
-    .popup-item.active{background:var(--active);font-weight:500;}
-    .popup-item .n{flex:1;}
-    .popup-item .chk{color:var(--accent);font-size:13px;}
-    .popup-empty{padding:24px 16px;text-align:center;font-size:12px;color:var(--muted);}
-    .popup-foot{padding:8px 10px;border-top:1px solid var(--border);}
-    .popup-foot .manual-btn{width:100%;padding:7px;background:transparent;border:1px dashed var(--border);border-radius:6px;color:var(--muted);font-size:12px;cursor:pointer;}
-    .popup-foot .manual-btn:hover{border-color:var(--accent);color:var(--accent);}
-    .popup-manual{padding:8px 10px;border-top:1px solid var(--border);display:none;gap:6px;}
-    .popup-manual.show{display:flex;}
-    .popup-manual input{flex:1;padding:6px 10px;font-size:13px;border:1px solid var(--input-b);border-radius:6px;background:var(--bg);color:var(--text);outline:none;font-family:inherit;}
-    .popup-manual input:focus{border-color:var(--input-f);}
-    .popup-manual button{padding:6px 12px;background:var(--accent);border:none;color:#fff;border-radius:6px;font-size:12px;cursor:pointer;}
-    .popup-manual button:hover{background:var(--accent-h);}
+/* 推理块 */
+.reason { background: var(--reason-bg); border: 1px solid var(--border); margin-bottom: 6px; }
+.reason summary {
+  padding: 6px 10px; cursor: pointer; color: var(--muted); font-size: 12px;
+  list-style: none; user-select: none;
+}
+.reason summary::-webkit-details-marker { display: none; }
+.reason .rc {
+  padding: 6px 10px 8px; color: var(--muted); font-style: italic;
+  white-space: pre-wrap; word-break: break-word; font-size: 13px;
+  border-top: 1px solid var(--border);
+}
 
-    /* 推理强度 */
-    .reason-opt{padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;}
-    .reason-opt:hover{background:var(--btn);}
-    .reason-opt.active{background:var(--active);font-weight:500;}
-    .reason-opt .chk{color:var(--accent);font-size:13px;margin-left:auto;}
+/* Markdown */
+.bubble p { margin: 0 0 8px; }
+.bubble p:last-child { margin-bottom: 0; }
+.bubble pre { background: var(--code-bg); padding: 10px; overflow-x: auto; margin: 8px 0; font-size: 13px; }
+.bubble code { background: var(--code-bg); padding: 1px 4px; font-size: .9em; }
+.bubble pre code { background: none; padding: 0; }
+.bubble ul, .bubble ol { margin: 8px 0 8px 20px; }
+.bubble li { margin: 3px 0; }
+.bubble h1, .bubble h2, .bubble h3 { margin: 12px 0 8px; color: var(--title); }
+.bubble a { color: var(--acc); }
+.bubble blockquote { border-left: 3px solid var(--border); padding-left: 10px; margin: 8px 0; opacity: .85; }
+.bubble table { border-collapse: collapse; margin: 8px 0; }
+.bubble th, .bubble td { border: 1px solid var(--border); padding: 4px 8px; }
 
-    /* 云同步面板 */
-    .cloud-popup{width:360px;max-width:calc(100vw - 32px);max-height:70vh;}
-    .cloud-row{padding:10px 12px;border-radius:8px;background:var(--btn);margin:4px 6px;display:flex;align-items:center;gap:8px;font-size:13px;}
-    .cloud-row .info{flex:1;min-width:0;}
-    .cloud-row .info .t{font-weight:500;word-break:break-all;}
-    .cloud-row .info .m{font-size:11px;color:var(--muted);margin-top:2px;}
-    .cloud-row button{padding:4px 10px;border-radius:6px;border:1px solid var(--btn-b);background:transparent;color:var(--btn-c);font-size:12px;cursor:pointer;}
-    .cloud-row button.primary{background:var(--accent);color:#fff;border:none;}
-    .cloud-row button.danger{color:#c62828;}
-    .cloud-row button:hover{opacity:.85;}
-    .cloud-actions{padding:10px 12px;display:flex;gap:8px;border-bottom:1px solid var(--border);}
-    .cloud-actions button{flex:1;padding:7px;border-radius:6px;border:1px solid var(--btn-b);background:var(--btn);color:var(--btn-c);font-size:12.5px;cursor:pointer;}
-    .cloud-actions button.primary{background:var(--accent);color:#fff;border:none;}
-    .cloud-actions button:hover{opacity:.9;}
+/* ─── 输入区 ─── */
+.input-area {
+  flex: 0 0 auto; padding: 10px 20px 14px; background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+.input-box { max-width: 820px; margin: 0 auto; display: flex; gap: 6px; align-items: flex-end; }
+.input-box textarea {
+  flex: 1; min-height: 38px; max-height: 200px;
+  padding: 8px 12px; border: 1px solid var(--input-b);
+  background: var(--bg); color: var(--text); font-size: 14px;
+  font-family: inherit; line-height: 1.45; resize: none; outline: none;
+}
+.input-box textarea:focus { border-color: var(--acc); }
+.input-box button {
+  height: 38px; padding: 0 18px; border: 1px solid var(--acc);
+  background: var(--acc); color: #fff; font-size: 13px; cursor: pointer;
+  font-family: inherit;
+}
+.input-box button:hover { background: var(--acc-h); }
+.input-box button:disabled { opacity: .5; cursor: not-allowed; }
+.input-box button.stop { background: var(--danger); border-color: var(--danger); }
 
-    /* 设置模态 */
-    .modal{position:fixed;inset:0;background:var(--overlay);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:300;padding:20px;}
-    .modal.show{display:flex;}
-    .modal-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;max-width:560px;width:100%;max-height:88vh;overflow-y:auto;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,.2);}
-    .modal-card h3{margin-bottom:16px;color:var(--title);font-size:16px;}
-    .modal-card label{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-bottom:4px;margin-top:12px;}
-    .modal-card input,.modal-card textarea,.modal-card select{width:100%;padding:8px 11px;border:1px solid var(--input-b);border-radius:7px;background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;outline:none;}
-    .modal-card input:focus,.modal-card textarea:focus,.modal-card select:focus{border-color:var(--input-f);}
-    .modal-card textarea{min-height:64px;resize:vertical;}
-    .checkbox-row{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;}
-    .checkbox-row input{width:auto;margin:0;}
-    .hint{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.5;}
-    .hint code{background:var(--code);padding:1px 4px;border-radius:3px;font-family:'Consolas',monospace;}
-    .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);}
-    .modal-actions button{padding:8px 18px;border-radius:8px;border:1px solid var(--btn-b);background:var(--btn);color:var(--btn-c);font-size:13px;cursor:pointer;}
-    .modal-actions button.primary{background:var(--accent);color:#fff;border:none;}
-    .modal-actions button:hover{opacity:.9;}
+.welcome { text-align: center; padding: 60px 20px; color: var(--muted); }
+.welcome h2 { font-size: 18px; margin-bottom: 8px; color: var(--title); font-weight: normal; }
 
-    /* 诊断 */
-    .diag{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:9999;padding:20px;}
-    .diag.show{display:flex;}
-    .diag-box{background:#1e1e1e;color:#d4d4d4;font-family:'Consolas',monospace;font-size:12px;border-radius:10px;max-width:900px;width:100%;max-height:90vh;overflow:auto;padding:18px;white-space:pre-wrap;word-break:break-all;line-height:1.5;}
-    .diag-box .title{color:#ff6b6b;font-weight:bold;font-size:14px;margin-bottom:12px;}
-    .diag-box .l{color:#569cd6;}
-    .diag-box .v{color:#ce9178;}
-    .diag-box button{margin-top:16px;padding:8px 18px;background:#0e639c;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;}
+/* ─── Popup ─── */
+.popup {
+  position: fixed; background: var(--panel); border: 1px solid var(--border);
+  z-index: 200; display: none; flex-direction: column;
+  max-height: 70vh; overflow: hidden;
+}
+.popup.show { display: flex; }
+.popup-head {
+  padding: 8px 10px; border-bottom: 1px solid var(--border);
+  display: flex; gap: 6px; align-items: center;
+}
+.popup-head input {
+  flex: 1; padding: 5px 8px; font-size: 12px;
+  border: 1px solid var(--input-b); background: var(--bg); color: var(--text);
+  outline: none; font-family: inherit;
+}
+.popup-head input:focus { border-color: var(--acc); }
+.popup-head button {
+  background: var(--btn); border: 1px solid var(--btn-b); color: var(--text);
+  width: 26px; height: 26px; cursor: pointer; font-size: 12px;
+}
+.popup-head button:hover { background: var(--btn-h); }
+.popup-list { flex: 1; overflow-y: auto; max-height: 340px; }
+.popup-list::-webkit-scrollbar { width: 5px; }
+.popup-list::-webkit-scrollbar-thumb { background: var(--border); }
 
-    .mask{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:55;}
-    .mask.show{display:block;}
-    .mask.popup{z-index:150;}
+.popup-item {
+  padding: 7px 10px; cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; gap: 6px;
+  border-bottom: 1px solid var(--border);
+  word-break: break-all;
+}
+.popup-item:hover { background: var(--btn); }
+.popup-item.active { background: var(--active); }
+.popup-item .n { flex: 1; }
+.popup-item .chk { color: var(--ok); }
 
-    @media (max-width:768px) {
-      .sidebar{position:absolute;top:0;left:0;bottom:0;transform:translateX(-100%);}
-      .sidebar.open{transform:translateX(0);}
-      .menu-btn{display:flex;}
-      .chip .l{max-width:80px;}
-    }
-  </style>
+.popup-empty { padding: 24px; text-align: center; font-size: 12px; color: var(--muted); }
+.popup-foot { border-top: 1px solid var(--border); padding: 6px; }
+.popup-foot button {
+  width: 100%; padding: 6px; background: transparent;
+  border: 1px dashed var(--border); color: var(--muted);
+  font-size: 12px; cursor: pointer; font-family: inherit;
+}
+.popup-foot button:hover { color: var(--acc); border-color: var(--acc); }
+
+.popup-manual { padding: 8px 10px; border-top: 1px solid var(--border); display: none; gap: 6px; }
+.popup-manual.show { display: flex; }
+.popup-manual input {
+  flex: 1; padding: 5px 8px; font-size: 12px;
+  border: 1px solid var(--input-b); background: var(--bg); color: var(--text);
+  outline: none; font-family: inherit;
+}
+.popup-manual button {
+  padding: 5px 12px; background: var(--acc); color: #fff;
+  border: none; cursor: pointer; font-size: 12px; font-family: inherit;
+}
+
+/* 会话菜单 */
+.conv-menu {
+  position: fixed; background: var(--panel); border: 1px solid var(--border);
+  z-index: 250; display: none; flex-direction: column; min-width: 130px;
+}
+.conv-menu.show { display: flex; }
+.conv-menu button {
+  background: transparent; border: none; color: var(--text);
+  padding: 7px 12px; text-align: left; cursor: pointer; font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  font-family: inherit;
+}
+.conv-menu button:last-child { border-bottom: none; }
+.conv-menu button:hover { background: var(--btn); }
+.conv-menu button.danger { color: var(--danger); }
+
+/* 云同步 */
+.cloud-actions {
+  padding: 8px 10px; display: flex; gap: 6px; border-bottom: 1px solid var(--border);
+}
+.cloud-actions button {
+  flex: 1; padding: 6px; background: var(--btn); border: 1px solid var(--btn-b);
+  color: var(--text); font-size: 12px; cursor: pointer; font-family: inherit;
+}
+.cloud-actions button:hover { background: var(--btn-h); }
+.cloud-actions button.primary { background: var(--acc); color: #fff; border-color: var(--acc); }
+.cloud-actions button.primary:hover { background: var(--acc-h); }
+
+.cloud-row {
+  padding: 8px 10px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px; font-size: 12px;
+}
+.cloud-row .info { flex: 1; min-width: 0; }
+.cloud-row .info .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cloud-row .info .m { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.cloud-row button {
+  padding: 3px 8px; background: var(--btn); border: 1px solid var(--btn-b);
+  color: var(--text); cursor: pointer; font-size: 11px; font-family: inherit;
+}
+.cloud-row button:hover { background: var(--btn-h); }
+.cloud-row button.primary { background: var(--acc); color: #fff; border-color: var(--acc); }
+.cloud-row button.danger { color: var(--danger); }
+
+/* ─── Modal ─── */
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  display: none; align-items: center; justify-content: center;
+  z-index: 300; padding: 16px;
+}
+.modal.show { display: flex; }
+.modal-card {
+  background: var(--panel); border: 1px solid var(--border);
+  max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto;
+  padding: 18px;
+}
+.modal-card h3 {
+  margin-bottom: 14px; color: var(--title); font-size: 15px; font-weight: normal;
+  padding-bottom: 10px; border-bottom: 1px solid var(--border);
+}
+.modal-card label {
+  display: block; font-size: 12px; color: var(--muted);
+  margin-top: 12px; margin-bottom: 4px;
+}
+.modal-card input, .modal-card textarea, .modal-card select {
+  width: 100%; padding: 7px 10px; border: 1px solid var(--input-b);
+  background: var(--bg); color: var(--text); font-size: 13px;
+  font-family: inherit; outline: none;
+}
+.modal-card input:focus, .modal-card textarea:focus, .modal-card select:focus {
+  border-color: var(--acc);
+}
+.modal-card textarea { min-height: 60px; resize: vertical; }
+.modal-card .hint { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.modal-actions {
+  display: flex; justify-content: flex-end; gap: 6px;
+  margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+.modal-actions button {
+  padding: 7px 16px; background: var(--btn); border: 1px solid var(--btn-b);
+  color: var(--text); cursor: pointer; font-size: 12px; font-family: inherit;
+}
+.modal-actions button.primary { background: var(--acc); color: #fff; border-color: var(--acc); }
+.modal-actions button:hover { opacity: .9; }
+.modal-actions button.danger { color: var(--danger); }
+
+.checkbox-row { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; }
+.checkbox-row input[type=checkbox] { width: auto; margin: 0; }
+
+/* 配置项列表 */
+.conf-item {
+  padding: 8px 10px; border: 1px solid var(--border); margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px; font-size: 13px;
+  cursor: pointer;
+}
+.conf-item:hover { background: var(--btn); }
+.conf-item.active { background: var(--active); }
+.conf-item .n { flex: 1; }
+.conf-item .m { font-size: 11px; color: var(--muted); }
+.conf-item button {
+  padding: 3px 8px; background: transparent; border: 1px solid var(--btn-b);
+  color: var(--text); cursor: pointer; font-size: 11px; font-family: inherit;
+}
+.conf-item button:hover { background: var(--btn); }
+.conf-item button.danger { color: var(--danger); }
+
+/* 诊断 */
+.diag {
+  position: fixed; inset: 0; background: rgba(0,0,0,.75);
+  display: none; align-items: center; justify-content: center;
+  z-index: 9999; padding: 20px;
+}
+.diag.show { display: flex; }
+.diag-box {
+  background: #1e1e1e; color: #d4d4d4;
+  font-family: 'Consolas', monospace; font-size: 12px;
+  max-width: 900px; width: 100%; max-height: 90vh; overflow: auto;
+  padding: 16px; white-space: pre-wrap; word-break: break-all; line-height: 1.5;
+}
+.diag-box .title { color: #ff6b6b; margin-bottom: 10px; font-size: 14px; }
+.diag-box .l { color: #569cd6; }
+.diag-box .v { color: #ce9178; }
+.diag-box button {
+  margin-top: 14px; padding: 6px 16px; background: #0e639c; color: #fff;
+  border: none; cursor: pointer; font-family: inherit;
+}
+
+.mask { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 150; }
+.mask.show { display: block; }
+.mask.modal-mask { z-index: 250; }
+
+@media (max-width: 768px) {
+  .sidebar { position: absolute; top: 0; left: 0; bottom: 0; transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .menu-btn { display: flex; align-items: center; justify-content: center; }
+  .chip .l { max-width: 70px; }
+  .msg .ops { opacity: 1; position: static; margin: 0 4px; }
+  .msg.user .ops, .msg.ai .ops { left: auto; right: auto; }
+}
+</style>
 </head>
 <body>
 
@@ -206,55 +425,72 @@
   <aside class="sidebar" id="sidebar">
     <div class="sb-head">
       <h2>对话</h2>
-      <button id="btnNewConv">+ 新</button>
+      <button id="btnNewConv" title="新对话">+</button>
       <button id="btnCloud" title="云同步">☁</button>
+      <button id="btnDlAll" title="全部下载">⤓</button>
     </div>
     <div class="sb-list" id="convList"></div>
   </aside>
 
   <div class="mask" id="sidebarMask"></div>
-  <div class="mask popup" id="popupMask"></div>
+  <div class="mask" id="popupMask"></div>
 
   <main class="main">
     <div class="topbar">
-      <button class="menu-btn" id="btnMenu">☰</button>
+      <button class="menu-btn" id="btnMenu">≡</button>
       <h1 id="convTitle">SwC AI</h1>
+      <button class="chip empty" id="btnConfig">
+        <span class="l" id="configLabel">配置</span>
+        <span class="a">▾</span>
+      </button>
       <button class="chip empty" id="btnModel">
-        <span class="l" id="modelLabel">选择模型</span>
+        <span class="l" id="modelLabel">模型</span>
         <span class="a">▾</span>
       </button>
-      <button class="chip" id="btnReason">
-        <span id="reasonLabel">推理:低</span>
+      <button class="chip" id="btnReason" title="推理强度">
+        <span id="reasonLabel">低</span>
         <span class="a">▾</span>
       </button>
-      <button class="icon-btn" id="btnSettings" title="设置">⚙</button>
+      <button class="chip" id="btnTheme" title="主题">☯</button>
     </div>
 
     <div class="chat" id="chat">
       <div class="welcome" id="welcome">
-        <h2>有什么可以帮你的？</h2>
-        <p>点击右上角 ⚙ 配置 API，然后选择模型开始对话</p>
+        <h2>SwC AI</h2>
+        <p>点击顶栏「配置」新建 API 配置，然后开始对话</p>
       </div>
     </div>
 
     <div class="input-area">
       <div class="input-box">
-        <textarea id="input" placeholder="输入消息，Enter 发送，Shift+Enter 换行" rows="1"></textarea>
+        <textarea id="input" placeholder="Enter 发送，Shift+Enter 换行" rows="1"></textarea>
         <button id="btnSend">发送</button>
       </div>
     </div>
   </main>
 </div>
 
+<!-- 配置切换面板 -->
+<div class="popup" id="configPopup" style="width:280px;">
+  <div class="popup-head">
+    <span style="flex:1;font-size:12px;color:var(--muted);">配置</span>
+    <button id="btnAddConfig" title="新增配置">+</button>
+  </div>
+  <div class="popup-list" id="configList"></div>
+  <div class="popup-foot">
+    <button id="btnSyncConfigs">同步到云端</button>
+  </div>
+</div>
+
 <!-- 模型选择面板 -->
-<div class="popup" id="modelPanel" style="width:320px;">
+<div class="popup" id="modelPopup" style="width:320px;">
   <div class="popup-head">
     <input id="modelSearch" placeholder="搜索模型...">
     <button id="btnRefreshModels" title="刷新">↻</button>
   </div>
   <div class="popup-list" id="modelListPanel"></div>
   <div class="popup-foot">
-    <button class="manual-btn" id="btnShowManual">+ 手动输入模型名</button>
+    <button id="btnShowManual">+ 手动输入模型名</button>
   </div>
   <div class="popup-manual" id="manualWrap">
     <input id="manualInput" placeholder="模型名称">
@@ -262,19 +498,19 @@
   </div>
 </div>
 
-<!-- 推理强度面板 -->
-<div class="popup" id="reasonPanel" style="width:180px;">
-  <div class="popup-list" style="max-height:none;padding:4px;">
-    <div class="reason-opt" data-v="low">低推理 <span class="chk" hidden>✓</span></div>
-    <div class="reason-opt" data-v="medium">中推理 <span class="chk" hidden>✓</span></div>
-    <div class="reason-opt" data-v="high">高推理 <span class="chk" hidden>✓</span></div>
+<!-- 推理强度 -->
+<div class="popup" id="reasonPopup" style="width:140px;">
+  <div class="popup-list" style="max-height:none;">
+    <div class="popup-item" data-v="low">低</div>
+    <div class="popup-item" data-v="medium">中</div>
+    <div class="popup-item" data-v="high">高</div>
   </div>
 </div>
 
 <!-- 云同步面板 -->
-<div class="popup cloud-popup" id="cloudPanel">
-  <div class="popup-head" style="border-bottom:1px solid var(--border);padding:10px 12px;">
-    <span style="flex:1;font-size:13px;font-weight:600;color:var(--title);">云端对话</span>
+<div class="popup" id="cloudPopup" style="width:340px;">
+  <div class="popup-head">
+    <span style="flex:1;font-size:12px;color:var(--muted);">云端对话</span>
     <button id="btnCloudRefresh" title="刷新">↻</button>
   </div>
   <div class="cloud-actions">
@@ -284,45 +520,55 @@
   <div class="popup-list" id="cloudList"></div>
 </div>
 
-<!-- 设置面板 -->
-<div class="modal" id="settingsModal">
+<!-- 会话操作菜单 -->
+<div class="conv-menu" id="convMenu">
+  <button data-act="rename">重命名</button>
+  <button data-act="download">下载</button>
+  <button data-act="delete" class="danger">删除</button>
+</div>
+
+<!-- 编辑配置 Modal -->
+<div class="modal" id="configEditModal">
   <div class="modal-card">
-    <h3>设置</h3>
+    <h3 id="configEditTitle">新建配置</h3>
+
+    <label>配置名称</label>
+    <input id="ceName" placeholder="配置 1">
 
     <label>代理地址</label>
-    <input id="cfgProxyUrl" placeholder="/api/aiapi">
-    <div class="hint">同源 Pages Functions 路径，一般无需修改</div>
+    <input id="ceProxyUrl" placeholder="/api/aiapi">
+    <div class="hint">同源 Pages Functions 路径，一般不改</div>
 
     <label>代理密码</label>
-    <input id="cfgProxyPassword" type="password" placeholder="代理密码">
+    <input id="ceProxyPassword" type="password" placeholder="代理密码">
 
     <label>API 地址</label>
-    <input id="cfgApiBase" placeholder="https://api.deepseek.com">
-    <div class="hint">例：<code>https://api.deepseek.com</code> 或 <code>https://api.openai.com/v1</code></div>
+    <input id="ceApiBase" placeholder="https://api.deepseek.com">
+    <div class="hint">不带 /chat/completions，程序会自动拼</div>
 
     <label>API Key</label>
-    <input id="cfgApiKey" type="password" placeholder="sk-...">
+    <input id="ceApiKey" type="password" placeholder="sk-...">
 
     <label>系统提示词</label>
-    <textarea id="cfgSystem" placeholder="你是一个乐于助人的AI助手。"></textarea>
+    <textarea id="ceSystem" placeholder="你是一个乐于助人的AI助手。"></textarea>
 
     <label>温度 (0 ~ 2)</label>
-    <input id="cfgTemperature" type="number" min="0" max="2" step="0.1" placeholder="0.7">
+    <input id="ceTemperature" type="number" min="0" max="2" step="0.1" placeholder="0.7">
 
     <div class="checkbox-row">
-      <input type="checkbox" id="cfgAutoCollapse" checked>
-      <label for="cfgAutoCollapse" style="margin:0;cursor:pointer;">推理内容自动折叠（正文出现时）</label>
+      <input type="checkbox" id="ceAutoCollapse">
+      <label for="ceAutoCollapse" style="margin:0;cursor:pointer;">推理内容自动折叠</label>
     </div>
 
-    <label>上下文窗口大小 (tokens)</label>
-    <input id="cfgCtxWindow" type="number" min="1000" step="1000" placeholder="64000">
+    <label>上下文窗口 (tokens)</label>
+    <input id="ceCtxWindow" type="number" min="1000" step="1000" placeholder="64000">
 
-    <label>自动摘要触发阈值 (%)</label>
-    <input id="cfgSummaryThreshold" type="number" min="50" max="95" step="5" placeholder="75">
+    <label>摘要阈值 (%)</label>
+    <input id="ceSummaryThreshold" type="number" min="50" max="95" step="5" placeholder="75">
 
     <div class="modal-actions">
-      <button id="btnSettingsClose">取消</button>
-      <button id="btnSettingsSave" class="primary">保存</button>
+      <button id="ceCancel">取消</button>
+      <button class="primary" id="ceSave">保存</button>
     </div>
   </div>
 </div>
@@ -330,7 +576,7 @@
 <!-- 诊断 -->
 <div class="diag" id="diagModal">
   <div class="diag-box">
-    <div class="title" id="diagTitle">诊断信息</div>
+    <div class="title" id="diagTitle">诊断</div>
     <div id="diagBody"></div>
     <button onclick="document.getElementById('diagModal').classList.remove('show')">关闭</button>
   </div>
@@ -343,67 +589,128 @@
 (function () {
   "use strict";
 
-  document.documentElement.setAttribute('data-theme', localStorage.getItem('swc_theme') || 'light');
+  // ─── 主题 ───
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    localStorage.setItem('swc_theme', t);
+  }
+  applyTheme(localStorage.getItem('swc_theme') || 'light');
 
-  // ───── 工具 ─────
+  // ─── 工具 ───
   function uuid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
-  function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   function md(t) {
     try { return DOMPurify.sanitize(marked.parse(t || '')); }
     catch { return esc(t || ''); }
   }
   function fmtTime(ts) {
-    const d = new Date(ts);
-    const now = new Date();
-    const sameDay = d.toDateString() === now.toDateString();
-    if (sameDay) return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const d = new Date(ts), n = new Date();
+    if (d.toDateString() === n.toDateString())
+      return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    return (d.getMonth()+1) + '/' + d.getDate();
   }
   function showDiag(title, lines) {
     document.getElementById('diagTitle').textContent = title;
     document.getElementById('diagBody').innerHTML = lines.map(l => {
-      if (typeof l === 'string') return l;
-      return `<span class="l">${esc(l.k)}</span>: <span class="v">${esc(String(l.v))}</span>`;
+      if (typeof l === 'string') return esc(l);
+      return '<span class="l">' + esc(l.k) + '</span>: <span class="v">' + esc(String(l.v)) + '</span>';
     }).join('\n');
     document.getElementById('diagModal').classList.add('show');
   }
   function getToken() { return localStorage.getItem('swc_token') || ''; }
 
-  // ───── 配置 ─────
-  const CFG_KEY = 'swc_ai_config';
-  const defaultCfg = {
-    proxyUrl: '/api/aiapi',
-    proxyPassword: '',
-    apiBase: 'https://api.deepseek.com',
-    apiKey: '',
-    model: '',
-    systemPrompt: '你是一个乐于助人的AI助手。',
-    temperature: 0.7,
-    reasoningEffort: 'low',
-    autoCollapseReason: true,
-    ctxWindow: 64000,
-    summaryThreshold: 75
-  };
-  function loadCfg() {
-    try { const r = localStorage.getItem(CFG_KEY); return r ? { ...defaultCfg, ...JSON.parse(r) } : { ...defaultCfg }; }
-    catch { return { ...defaultCfg }; }
+  // ─── Cookie ───
+  function setCookie(name, value, days) {
+    days = days || 365;
+    const d = new Date();
+    d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+    document.cookie = name + '=' + encodeURIComponent(value) + '; expires=' + d.toUTCString() + '; path=/; SameSite=Lax';
   }
-  function saveCfg(c) { localStorage.setItem(CFG_KEY, JSON.stringify(c)); }
-  let cfg = loadCfg();
+  function getCookie(name) {
+    const m = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[2]) : '';
+  }
+  function delCookie(name) {
+    document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+  }
 
-  // 模型缓存
-  const MODELS_KEY = 'swc_ai_models';
+  // ─── 配置管理（存 cookie）───
+  const CFG_KEY = 'swc_ai_configs';
+  const CUR_KEY = 'swc_ai_current';
+
+  function defaultConfig(name) {
+    return {
+      id: uuid(),
+      name: name || '配置 1',
+      proxyUrl: '/api/aiapi',
+      proxyPassword: '',
+      apiBase: '',
+      apiKey: '',
+      systemPrompt: '你是一个乐于助人的AI助手。',
+      temperature: 0.7,
+      reasoningEffort: 'low',
+      autoCollapseReason: true,
+      ctxWindow: 64000,
+      summaryThreshold: 75,
+      model: ''
+    };
+  }
+
+  function loadConfigs() {
+    try {
+      const raw = getCookie(CFG_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr) && arr.length > 0) return arr;
+      }
+    } catch {}
+    return [];
+  }
+  function saveConfigs(arr) {
+    const raw = JSON.stringify(arr);
+    if (raw.length > 3500) {
+      // cookie 上限 4KB，留点余量
+      // 保存时截断
+      console.warn('配置接近 cookie 上限');
+    }
+    setCookie(CFG_KEY, raw);
+  }
+
+  let configs = loadConfigs();
+  let currentConfigId = getCookie(CUR_KEY) || '';
+
+  if (configs.length === 0) {
+    const c = defaultConfig('配置 1');
+    configs = [c];
+    currentConfigId = c.id;
+    saveConfigs(configs);
+    setCookie(CUR_KEY, c.id);
+  }
+  if (!configs.find(c => c.id === currentConfigId)) {
+    currentConfigId = configs[0].id;
+    setCookie(CUR_KEY, currentConfigId);
+  }
+
+  function curConfig() {
+    return configs.find(c => c.id === currentConfigId) || configs[0];
+  }
+  function saveCurrentConfigId(id) {
+    currentConfigId = id;
+    setCookie(CUR_KEY, id);
+    updateConfigLabel();
+    renderModelList();
+  }
+
+  // ─── 模型缓存（每个配置独立，存 ls，缓存不必进 cookie）───
+  function modelsCacheKey() { return 'swc_ai_models_' + currentConfigId; }
   function loadModels() {
-    try { const r = localStorage.getItem(MODELS_KEY); return r ? JSON.parse(r) : []; }
+    try { const r = localStorage.getItem(modelsCacheKey()); return r ? JSON.parse(r) : []; }
     catch { return []; }
   }
-  function saveModels(list) { localStorage.setItem(MODELS_KEY, JSON.stringify(list)); }
+  function saveModels(list) { localStorage.setItem(modelsCacheKey(), JSON.stringify(list)); }
   let modelsCache = loadModels();
 
-  function getChatUrl() { return cfg.apiBase.replace(/\/+$/, '') + '/chat/completions'; }
-  function getModelsUrl() { return cfg.apiBase.replace(/\/+$/, '') + '/models'; }
-
-  // ───── 存储层 ─────
+  // ─── 会话存储层 ───
   const IDX_KEY = 'swc_ai_index';
   const P = 'swc_ai_conv:';
   const S = {
@@ -423,15 +730,34 @@
       for (let i = 0; i < c; i++) this.delTurn(id, i);
       this.delMeta(id); this.rem(id);
     },
-    metas() { return this.idx().map(id => this.meta(id)).filter(Boolean); }
+    metas() { return this.idx().map(id => this.meta(id)).filter(Boolean); },
+    // 重写全部轮次（删除某轮后使用）
+    rewriteTurns(id, turns) {
+      const m = this.meta(id); if (!m) return;
+      const old = m.turnCount || 0;
+      for (let i = 0; i < Math.max(old, turns.length); i++) this.delTurn(id, i);
+      turns.forEach((t, i) => this.setTurn(id, i, t));
+      m.turnCount = turns.length;
+      m.updatedAt = Date.now();
+      this.setMeta(id, m);
+    }
   };
 
-  // ───── 会话状态 ─────
+  // ─── 会话状态 ───
   let curId = null, curMeta = null, curTurns = [];
 
   function newConv() {
+    const c = curConfig();
     const id = uuid();
-    const m = { id, title: '新对话', model: cfg.model || '', createdAt: Date.now(), updatedAt: Date.now(), turnCount: 0, summary: '', reasoning: cfg.reasoningEffort || 'low' };
+    const m = {
+      id, title: '新对话',
+      model: c.model || '',
+      configId: c.id,
+      configName: c.name,
+      reasoning: c.reasoningEffort || 'low',
+      createdAt: Date.now(), updatedAt: Date.now(),
+      turnCount: 0, summary: ''
+    };
     S.setMeta(id, m); S.add(id); return m;
   }
   function loadConv(id) {
@@ -448,7 +774,7 @@
     }
   }
 
-  // ───── 上下文管理 ─────
+  // ─── 上下文管理 ───
   const CTX = {
     tk(t) {
       if (!t) return 0;
@@ -460,13 +786,17 @@
       return Math.ceil(b / 3);
     },
     count(msgs) { let n = 0; for (const m of msgs) n += this.tk(m.content || '') + 4; return n; },
-    build(turns, o = {}) {
-      const { systemPrompt = '', summary = '', ctxWindow = 64000, summaryThreshold = 75 } = o;
-      const max = Math.floor(ctxWindow * summaryThreshold / 100);
+    build(turns, o) {
+      o = o || {};
+      const sys = o.systemPrompt || '';
+      const sum = o.summary || '';
+      const win = o.ctxWindow || 64000;
+      const thr = o.summaryThreshold || 75;
+      const max = Math.floor(win * thr / 100);
       const msgs = [];
       let fixed = 0;
-      if (systemPrompt) { msgs.push({ role: 'system', content: systemPrompt }); fixed += this.tk(systemPrompt) + 4; }
-      if (summary) { const s = `以下是之前对话的摘要：\n\n${summary}`; msgs.push({ role: 'system', content: s }); fixed += this.tk(s) + 4; }
+      if (sys) { msgs.push({ role: 'system', content: sys }); fixed += this.tk(sys) + 4; }
+      if (sum) { const s = '以下是之前对话的摘要：\n\n' + sum; msgs.push({ role: 'system', content: s }); fixed += this.tk(s) + 4; }
       const recent = []; let run = fixed;
       for (let i = turns.length - 1; i >= 0; i--) {
         const t = turns[i];
@@ -482,72 +812,62 @@
     }
   };
 
-  // ───── DOM ─────
+  // ─── DOM ───
   const chatEl = document.getElementById('chat');
   const welcomeEl = document.getElementById('welcome');
   const inputEl = document.getElementById('input');
   const btnSend = document.getElementById('btnSend');
   const convListEl = document.getElementById('convList');
   const convTitleEl = document.getElementById('convTitle');
+  const btnConfig = document.getElementById('btnConfig');
+  const configLabel = document.getElementById('configLabel');
   const btnModel = document.getElementById('btnModel');
   const modelLabel = document.getElementById('modelLabel');
   const btnReason = document.getElementById('btnReason');
   const reasonLabel = document.getElementById('reasonLabel');
-  const modelPanel = document.getElementById('modelPanel');
-  const modelListPanel = document.getElementById('modelListPanel');
-  const modelSearchEl = document.getElementById('modelSearch');
-  const reasonPanel = document.getElementById('reasonPanel');
-  const cloudPanel = document.getElementById('cloudPanel');
+  const configPopup = document.getElementById('configPopup');
+  const modelPopup = document.getElementById('modelPopup');
+  const reasonPopup = document.getElementById('reasonPopup');
+  const cloudPopup = document.getElementById('cloudPopup');
   const cloudList = document.getElementById('cloudList');
   const popupMask = document.getElementById('popupMask');
+  const modelListPanel = document.getElementById('modelListPanel');
+  const modelSearchEl = document.getElementById('modelSearch');
   const manualWrap = document.getElementById('manualWrap');
   const manualInput = document.getElementById('manualInput');
+  const convMenu = document.getElementById('convMenu');
   const sidebarEl = document.getElementById('sidebar');
   const sidebarMask = document.getElementById('sidebarMask');
   const btnMenu = document.getElementById('btnMenu');
-  const btnNewConv = document.getElementById('btnNewConv');
-  const btnCloud = document.getElementById('btnCloud');
-  const btnSettings = document.getElementById('btnSettings');
-  const settingsModal = document.getElementById('settingsModal');
-  const btnSettingsSave = document.getElementById('btnSettingsSave');
-  const btnSettingsClose = document.getElementById('btnSettingsClose');
-  const btnRefreshModels = document.getElementById('btnRefreshModels');
-  const btnShowManual = document.getElementById('btnShowManual');
-  const btnManualConfirm = document.getElementById('btnManualConfirm');
+  const configListEl = document.getElementById('configList');
 
-  // ───── 平滑滚动 ─────
-  let isAtBottom = true;
-  let scrollPending = false;
-
+  // ─── 平滑滚动 ───
+  let isAtBottom = true, scrollPending = false;
   chatEl.addEventListener('scroll', () => {
     isAtBottom = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 60;
   }, { passive: true });
-
   function autoScroll() {
-    if (!isAtBottom) return;
-    if (scrollPending) return;
+    if (!isAtBottom || scrollPending) return;
     scrollPending = true;
-    requestAnimationFrame(() => {
-      scrollPending = false;
-      chatEl.scrollTop = chatEl.scrollHeight;
-    });
-  }
-  function scrollToBottom(smooth) {
-    isAtBottom = true;
-    if (smooth) chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: 'smooth' });
-    else chatEl.scrollTop = chatEl.scrollHeight;
+    requestAnimationFrame(() => { scrollPending = false; chatEl.scrollTop = chatEl.scrollHeight; });
   }
 
-  // ───── 渲染 ─────
-  function makeTurnEl(turn) {
+  // ─── 渲染消息 ───
+  function makeTurnEl(turn, turnIdx) {
     const frag = document.createDocumentFragment();
 
+    // User
     const u = document.createElement('div');
     u.className = 'msg user';
-    u.innerHTML = '<div class="ava">你</div><div class="wrap"><div class="bubble" style="white-space:pre-wrap;"></div></div>';
+    u.innerHTML = '<div class="ava">你</div><div class="wrap"><div class="bubble"></div></div><div class="ops"><button title="操作">⋯</button></div>';
     u.querySelector('.bubble').textContent = turn.user.content;
+    u.querySelector('.ops button').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openMsgMenu(e.currentTarget, turnIdx);
+    });
     frag.appendChild(u);
 
+    // AI
     const a = document.createElement('div');
     a.className = 'msg ai';
     a.innerHTML = '<div class="ava">AI</div><div class="wrap"><div class="bubble"></div></div>';
@@ -561,40 +881,76 @@
       d.querySelector('.rc').textContent = turn.assistant.reasoning_content;
       wrap.insertBefore(d, bubble);
     }
-
     bubble.innerHTML = turn.assistant.content ? md(turn.assistant.content) : '';
     frag.appendChild(a);
     return frag;
   }
 
+  // ─── 消息操作菜单 ───
+  let msgMenu = null;
+  function openMsgMenu(anchor, turnIdx) {
+    closeMsgMenu();
+    msgMenu = document.createElement('div');
+    msgMenu.className = 'conv-menu show';
+    msgMenu.innerHTML = '<button data-act="delete">删除这轮对话</button>';
+    document.body.appendChild(msgMenu);
+    const r = anchor.getBoundingClientRect();
+    msgMenu.style.top = (r.bottom + 4) + 'px';
+    msgMenu.style.left = Math.min(r.left, window.innerWidth - 160) + 'px';
+    msgMenu.querySelector('[data-act="delete"]').addEventListener('click', () => {
+      if (confirm('删除这轮对话？（用户消息和 AI 回复都会删除）')) {
+        deleteTurn(turnIdx);
+      }
+      closeMsgMenu();
+    });
+    setTimeout(() => {
+      document.addEventListener('click', closeMsgMenu, { once: true });
+    }, 0);
+  }
+  function closeMsgMenu() {
+    if (msgMenu && msgMenu.parentNode) msgMenu.parentNode.removeChild(msgMenu);
+    msgMenu = null;
+  }
+
+  function deleteTurn(idx) {
+    if (idx < 0 || idx >= curTurns.length) return;
+    curTurns.splice(idx, 1);
+    if (curId) S.rewriteTurns(curId, curTurns);
+    renderChat();
+  }
+
+  // ─── 渲染 ───
   function renderChat() {
     chatEl.innerHTML = '';
     if (!curId || curTurns.length === 0) {
       chatEl.appendChild(welcomeEl);
       convTitleEl.textContent = 'SwC AI';
     } else {
-      curTurns.forEach(t => chatEl.appendChild(makeTurnEl(t)));
+      curTurns.forEach((t, i) => chatEl.appendChild(makeTurnEl(t, i)));
       convTitleEl.textContent = curMeta?.title || 'SwC AI';
-      scrollToBottom(false);
     }
+    updateConfigLabel();
     updateModelLabel();
     updateReasonLabel();
     renderConvList();
   }
 
+  function updateConfigLabel() {
+    const c = curConfig();
+    configLabel.textContent = c ? c.name : '无配置';
+    btnConfig.classList.toggle('empty', !c);
+  }
   function updateModelLabel() {
-    const m = (curMeta?.model) || cfg.model || '';
+    const m = (curMeta?.model) || curConfig()?.model || '';
     if (m) { modelLabel.textContent = m; btnModel.classList.remove('empty'); }
     else { modelLabel.textContent = '选择模型'; btnModel.classList.add('empty'); }
   }
-
   function currentReason() {
-    return curMeta?.reasoning || cfg.reasoningEffort || 'low';
+    return curMeta?.reasoning || curConfig()?.reasoningEffort || 'low';
   }
   function updateReasonLabel() {
-    const v = currentReason();
-    const map = { low: '推理:低', medium: '推理:中', high: '推理:高' };
-    reasonLabel.textContent = map[v] || '推理:低';
+    const map = { low: '低', medium: '中', high: '高' };
+    reasonLabel.textContent = map[currentReason()] || '低';
   }
 
   function renderConvList() {
@@ -602,39 +958,36 @@
     S.metas().forEach(m => {
       const it = document.createElement('div');
       it.className = 'sb-item' + (m.id === curId ? ' active' : '');
-      it.innerHTML = `<span class="t">${esc(m.title || '新对话')}</span><input class="rn" type="text" value="${esc(m.title || '新对话')}">`;
-      const d = document.createElement('button');
-      d.className = 'd'; d.textContent = '×';
-      d.addEventListener('click', e => {
-        e.stopPropagation();
-        if (confirm('删除这个对话？')) { delConv(m.id); renderChat(); }
-      });
-      it.appendChild(d);
-
-      // 双击重命名
-      const t = it.querySelector('.t');
+      it.innerHTML = '<span class="t">' + esc(m.title || '新对话') + '</span><button class="d" title="操作">⋯</button><input class="rn" type="text">';
       const rn = it.querySelector('.rn');
-      t.addEventListener('dblclick', e => {
+      rn.value = m.title || '新对话';
+
+      it.querySelector('.d').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openConvMenu(e.currentTarget, m.id);
+      });
+
+      // 双击标题直接重命名
+      it.querySelector('.t').addEventListener('dblclick', (e) => {
         e.stopPropagation();
         it.classList.add('renaming');
-        rn.focus();
-        rn.select();
+        rn.focus(); rn.select();
       });
       const commitRename = () => {
         const v = rn.value.trim();
-        if (v) {
-          m.title = v;
-          m.updatedAt = Date.now();
+        if (v && v !== m.title) {
+          m.title = v; m.updatedAt = Date.now();
           S.setMeta(m.id, m);
           if (m.id === curId) curMeta = m;
         }
         it.classList.remove('renaming');
-        renderChat();
+        renderConvList();
+        if (m.id === curId) convTitleEl.textContent = m.title;
       };
       rn.addEventListener('blur', commitRename);
-      rn.addEventListener('keydown', e => {
+      rn.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); rn.blur(); }
-        else if (e.key === 'Escape') { rn.value = m.title || '新对话'; rn.blur(); }
+        else if (e.key === 'Escape') { rn.value = m.title; rn.blur(); }
       });
       rn.addEventListener('click', e => e.stopPropagation());
 
@@ -646,53 +999,156 @@
     });
   }
 
-  // ───── Popup 通用 ─────
-  function showPopup(el, anchor) {
-    closeAllPopups();
-    // 定位：默认右上角
-    const rect = anchor ? anchor.getBoundingClientRect() : null;
-    el.classList.add('show');
-    popupMask.classList.add('show');
-
-    if (rect) {
-      el.style.top = (rect.bottom + 6) + 'px';
-      el.style.right = (window.innerWidth - rect.right) + 'px';
-      el.style.left = 'auto';
-      // 检查是否超出屏幕
-      requestAnimationFrame(() => {
-        const box = el.getBoundingClientRect();
-        if (box.bottom > window.innerHeight - 10) {
-          el.style.maxHeight = (window.innerHeight - rect.bottom - 20) + 'px';
-        }
-        if (box.left < 10) {
-          el.style.right = 'auto';
-          el.style.left = '10px';
-        }
-      });
-    }
+  // ─── 会话操作菜单 ───
+  let convMenuTargetId = null;
+  function openConvMenu(anchor, convId) {
+    convMenuTargetId = convId;
+    const r = anchor.getBoundingClientRect();
+    convMenu.classList.add('show');
+    convMenu.style.top = (r.bottom + 4) + 'px';
+    convMenu.style.left = Math.min(r.left, window.innerWidth - 140) + 'px';
   }
+  function closeConvMenu() {
+    convMenu.classList.remove('show');
+    convMenuTargetId = null;
+  }
+  convMenu.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const act = btn.dataset.act;
+      const id = convMenuTargetId;
+      closeConvMenu();
+      if (!id) return;
+      if (act === 'rename') {
+        const item = convListEl.querySelector('.sb-item.active');
+        const target = S.metas().find(x => x.id === id);
+        if (!target) return;
+        const el = Array.from(convListEl.querySelectorAll('.sb-item')).find(e => {
+          const t = e.querySelector('.t');
+          return t && t.textContent === target.title;
+        });
+        if (el) {
+          el.classList.add('renaming');
+          const rn = el.querySelector('.rn');
+          rn.focus(); rn.select();
+        }
+      } else if (act === 'download') {
+        downloadConv(id);
+      } else if (act === 'delete') {
+        if (confirm('确定删除这个对话？')) {
+          delConv(id);
+          renderChat();
+        }
+      }
+    });
+  });
+
+  // 点击别处关闭菜单
+  document.addEventListener('click', (e) => {
+    if (!convMenu.contains(e.target)) closeConvMenu();
+  });
+
+  // ─── 下载 ───
+  function downloadConv(id) {
+    const m = S.meta(id); if (!m) return;
+    const turns = S.turns(id, m.turnCount || 0);
+    const data = { ...m, turns };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (m.title || 'conversation').replace(/[\\/:*?"<>|]/g, '_') + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadAll() {
+    const all = S.metas().map(m => ({
+      ...m,
+      turns: S.turns(m.id, m.turnCount || 0)
+    }));
+    const blob = new Blob([JSON.stringify({ conversations: all }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'swc-ai-all-' + Date.now() + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ─── Popup 管理 ───
   function closeAllPopups() {
     document.querySelectorAll('.popup.show').forEach(p => p.classList.remove('show'));
     popupMask.classList.remove('show');
     manualWrap.classList.remove('show');
     manualInput.value = '';
   }
+  function showPopup(el, anchor) {
+    closeAllPopups();
+    el.classList.add('show');
+    popupMask.classList.add('show');
+    const r = anchor.getBoundingClientRect();
+    el.style.top = (r.bottom + 4) + 'px';
+    el.style.right = (window.innerWidth - r.right) + 'px';
+    el.style.left = 'auto';
+    requestAnimationFrame(() => {
+      const box = el.getBoundingClientRect();
+      if (box.bottom > window.innerHeight - 10) {
+        el.style.top = Math.max(10, window.innerHeight - box.height - 10) + 'px';
+      }
+      if (box.left < 10) {
+        el.style.right = 'auto';
+        el.style.left = '10px';
+      }
+    });
+  }
+  popupMask.addEventListener('click', closeAllPopups);
 
-  // ───── 模型面板 ─────
+  // ─── 配置 Popup ───
+  function renderConfigList() {
+    configListEl.innerHTML = '';
+    configs.forEach(c => {
+      const it = document.createElement('div');
+      it.className = 'popup-item' + (c.id === currentConfigId ? ' active' : '');
+      it.innerHTML = '<span class="n">' + esc(c.name) + '</span>' +
+        (c.id === currentConfigId ? '<span class="chk">✓</span>' : '');
+      it.addEventListener('click', () => {
+        saveCurrentConfigId(c.id);
+        closeAllPopups();
+      });
+      configListEl.appendChild(it);
+    });
+  }
+  btnConfig.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (configPopup.classList.contains('show')) { closeAllPopups(); return; }
+    renderConfigList();
+    showPopup(configPopup, btnConfig);
+  });
+  configPopup.addEventListener('click', e => e.stopPropagation());
+
+  document.getElementById('btnAddConfig').addEventListener('click', () => {
+    closeAllPopups();
+    openConfigEdit(null);
+  });
+
+  document.getElementById('btnSyncConfigs').addEventListener('click', syncConfigsToCloud);
+
+  // ─── 模型 Popup ───
   function renderModelList() {
     const q = (modelSearchEl.value || '').toLowerCase().trim();
     const list = q ? modelsCache.filter(m => m.toLowerCase().includes(q)) : modelsCache;
-    const curModel = curMeta?.model || cfg.model || '';
-
+    const curModel = curMeta?.model || curConfig()?.model || '';
     if (list.length === 0) {
-      modelListPanel.innerHTML = `<div class="popup-empty">${modelsCache.length === 0 ? '尚无模型列表，点击右上角 ↻ 获取' : '没有匹配的模型'}</div>`;
+      modelListPanel.innerHTML = '<div class="popup-empty">' +
+        (modelsCache.length === 0 ? '无模型，点 ↻ 拉取' : '无匹配') + '</div>';
       return;
     }
     modelListPanel.innerHTML = '';
     list.forEach(name => {
       const it = document.createElement('div');
       it.className = 'popup-item' + (name === curModel ? ' active' : '');
-      it.innerHTML = `<span class="n">${esc(name)}</span>${name === curModel ? '<span class="chk">✓</span>' : ''}`;
+      it.innerHTML = '<span class="n">' + esc(name) + '</span>' +
+        (name === curModel ? '<span class="chk">✓</span>' : '');
       it.addEventListener('click', () => { selectModel(name); closeAllPopups(); });
       modelListPanel.appendChild(it);
     });
@@ -700,54 +1156,125 @@
 
   function selectModel(name) {
     if (!name) return;
-    if (!curId) { cfg.model = name; saveCfg(cfg); }
-    else { curMeta.model = name; curMeta.updatedAt = Date.now(); S.setMeta(curId, curMeta); }
+    if (!curId) {
+      const c = curConfig();
+      c.model = name;
+      saveConfigs(configs);
+    } else {
+      curMeta.model = name;
+      curMeta.updatedAt = Date.now();
+      S.setMeta(curId, curMeta);
+    }
     updateModelLabel();
   }
 
-  // ───── 获取模型 ─────
+  btnModel.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (modelPopup.classList.contains('show')) { closeAllPopups(); return; }
+    modelsCache = loadModels();
+    renderModelList();
+    showPopup(modelPopup, btnModel);
+    if (modelsCache.length === 0) fetchModels(true);
+  });
+  modelSearchEl.addEventListener('input', renderModelList);
+  document.getElementById('btnRefreshModels').addEventListener('click', (e) => {
+    e.stopPropagation(); fetchModels(false);
+  });
+  document.getElementById('btnShowManual').addEventListener('click', () => {
+    manualWrap.classList.add('show');
+    manualInput.focus();
+  });
+  document.getElementById('btnManualConfirm').addEventListener('click', () => {
+    const v = manualInput.value.trim();
+    if (!v) return;
+    selectModel(v);
+    closeAllPopups();
+  });
+  manualInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('btnManualConfirm').click(); }
+  });
+  modelPopup.addEventListener('click', e => e.stopPropagation());
+
+  // ─── 推理强度 ───
+  btnReason.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (reasonPopup.classList.contains('show')) { closeAllPopups(); return; }
+    const cur = currentReason();
+    reasonPopup.querySelectorAll('.popup-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.v === cur);
+    });
+    showPopup(reasonPopup, btnReason);
+  });
+  reasonPopup.querySelectorAll('.popup-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const v = el.dataset.v;
+      if (!curId) {
+        const c = curConfig();
+        c.reasoningEffort = v;
+        saveConfigs(configs);
+      } else {
+        curMeta.reasoning = v;
+        curMeta.updatedAt = Date.now();
+        S.setMeta(curId, curMeta);
+      }
+      updateReasonLabel();
+      closeAllPopups();
+    });
+  });
+  reasonPopup.addEventListener('click', e => e.stopPropagation());
+
+  // ─── 主题切换 ───
+  document.getElementById('btnTheme').addEventListener('click', () => {
+    const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    applyTheme(t);
+  });
+
+  // ─── 获取模型 ───
   let fetchingModels = false;
   async function fetchModels(silent) {
     if (fetchingModels) return;
-    if (!cfg.proxyUrl || !cfg.proxyPassword || !cfg.apiBase || !cfg.apiKey) {
+    const c = curConfig();
+    if (!c.proxyUrl || !c.proxyPassword || !c.apiBase || !c.apiKey) {
       if (!silent) showDiag('配置不完整', [
-        { k: '代理地址', v: cfg.proxyUrl || '(空)' },
-        { k: '代理密码', v: cfg.proxyPassword ? '已填' : '(空)' },
-        { k: 'API 地址', v: cfg.apiBase || '(空)' },
-        { k: 'API Key', v: cfg.apiKey ? '已填' : '(空)' }
+        { k: '配置名', v: c.name },
+        { k: '代理地址', v: c.proxyUrl || '(空)' },
+        { k: '代理密码', v: c.proxyPassword ? '已填' : '(空)' },
+        { k: 'API 地址', v: c.apiBase || '(空)' },
+        { k: 'API Key', v: c.apiKey ? '已填' : '(空)' }
       ]);
       return;
     }
     fetchingModels = true;
-    btnRefreshModels.disabled = true;
-    btnRefreshModels.textContent = '…';
+    const btn = document.getElementById('btnRefreshModels');
+    btn.disabled = true; btn.textContent = '…';
+    const target = c.apiBase.replace(/\/+$/, '') + '/models';
 
-    const target = getModelsUrl();
     try {
-      const res = await fetch(cfg.proxyUrl, {
+      const res = await fetch(c.proxyUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          password: cfg.proxyPassword,
-          target,
-          method: 'GET',
-          headers: { 'Authorization': 'Bearer ' + cfg.apiKey }
+          password: c.proxyPassword,
+          target, method: 'GET',
+          headers: { 'Authorization': 'Bearer ' + c.apiKey }
         })
       });
       const bodyText = await res.text();
       if (!res.ok) {
-        showDiag('获取模型失败：HTTP ' + res.status, [
-          { k: '代理地址', v: cfg.proxyUrl },
-          { k: '目标 URL', v: target },
-          { k: '状态', v: res.status + ' ' + res.statusText },
-          { k: '响应体', v: bodyText.slice(0, 3000) }
+        showDiag('获取模型失败 HTTP ' + res.status, [
+          { k: '目标', v: target },
+          { k: '状态', v: res.status },
+          { k: '响应体', v: bodyText.slice(0, 2000) }
         ]);
         return;
       }
       let data;
       try { data = JSON.parse(bodyText); }
       catch {
-        showDiag('响应不是 JSON', [{ k: '目标 URL', v: target }, { k: '响应体', v: bodyText.slice(0, 3000) }]);
+        showDiag('响应不是 JSON', [
+          { k: '目标', v: target },
+          { k: '响应体', v: bodyText.slice(0, 2000) }
+        ]);
         return;
       }
       let list = [];
@@ -756,23 +1283,28 @@
       else if (Array.isArray(data)) list = data.map(m => (typeof m === 'string' ? m : (m.id || m.name))).filter(Boolean);
 
       if (list.length === 0) {
-        showDiag('未解析到模型', [{ k: '目标 URL', v: target }, { k: '响应体', v: bodyText.slice(0, 3000) }]);
+        showDiag('未解析到模型', [
+          { k: '目标', v: target },
+          { k: '响应体', v: bodyText.slice(0, 2000) }
+        ]);
         return;
       }
       modelsCache = list;
       saveModels(list);
       renderModelList();
-      if (!curMeta?.model && !cfg.model) selectModel(list[0]);
+      if (!curMeta?.model && !c.model) selectModel(list[0]);
     } catch (e) {
-      showDiag('获取模型网络异常', [{ k: '代理地址', v: cfg.proxyUrl }, { k: '异常', v: e.name + ': ' + e.message }]);
+      showDiag('获取模型网络异常', [
+        { k: '代理地址', v: c.proxyUrl },
+        { k: '异常', v: e.name + ': ' + e.message }
+      ]);
     } finally {
       fetchingModels = false;
-      btnRefreshModels.disabled = false;
-      btnRefreshModels.textContent = '↻';
+      btn.disabled = false; btn.textContent = '↻';
     }
   }
 
-  // ───── 发送 ─────
+  // ─── 发送 ───
   let ac = null, generating = false;
   function setGen(on) {
     generating = on;
@@ -782,25 +1314,26 @@
 
   async function send() {
     if (generating) { if (ac) ac.abort(); return; }
-
     const text = inputEl.value.trim();
     if (!text) return;
 
-    if (!cfg.proxyUrl || !cfg.proxyPassword || !cfg.apiBase || !cfg.apiKey) {
+    const c = curConfig();
+    if (!c.proxyUrl || !c.proxyPassword || !c.apiBase || !c.apiKey) {
       showDiag('配置不完整', [
-        { k: '代理地址', v: cfg.proxyUrl || '(空)' },
-        { k: '代理密码', v: cfg.proxyPassword ? '已填' : '(空)' },
-        { k: 'API 地址', v: cfg.apiBase || '(空)' },
-        { k: 'API Key', v: cfg.apiKey ? '已填' : '(空)' }
+        { k: '配置名', v: c.name },
+        { k: '代理地址', v: c.proxyUrl || '(空)' },
+        { k: '代理密码', v: c.proxyPassword ? '已填' : '(空)' },
+        { k: 'API 地址', v: c.apiBase || '(空)' },
+        { k: 'API Key', v: c.apiKey ? '已填' : '(空)' }
       ]);
-      openSettings();
+      openConfigEdit(c);
       return;
     }
 
-    const model = curMeta?.model || cfg.model;
+    const model = curMeta?.model || c.model;
     if (!model) {
-      showDiag('未选择模型', ['请点击顶部模型按钮选择或手动输入一个模型名。']);
-      showPopup(modelPanel, btnModel);
+      showDiag('未选择模型', ['点击顶栏「模型」选择或手动输入。']);
+      btnModel.click();
       return;
     }
 
@@ -828,7 +1361,7 @@
 
     const u = document.createElement('div');
     u.className = 'msg user';
-    u.innerHTML = '<div class="ava">你</div><div class="wrap"><div class="bubble" style="white-space:pre-wrap;"></div></div>';
+    u.innerHTML = '<div class="ava">你</div><div class="wrap"><div class="bubble"></div></div>';
     u.querySelector('.bubble').textContent = text;
     chatEl.appendChild(u);
 
@@ -841,20 +1374,21 @@
 
     convTitleEl.textContent = curMeta.title;
     renderConvList();
-    scrollToBottom(true);
+    isAtBottom = true;
+    chatEl.scrollTop = chatEl.scrollHeight;
 
     const ctx = CTX.build(curTurns.slice(0, -1), {
-      systemPrompt: cfg.systemPrompt,
+      systemPrompt: c.systemPrompt,
       summary: curMeta.summary || '',
-      ctxWindow: cfg.ctxWindow || 64000,
-      summaryThreshold: cfg.summaryThreshold || 75
+      ctxWindow: c.ctxWindow || 64000,
+      summaryThreshold: c.summaryThreshold || 75
     });
     ctx.messages.push({ role: 'user', content: text });
 
     const body = { model, messages: ctx.messages, stream: true };
-    const t = parseFloat(cfg.temperature);
+    const t = parseFloat(c.temperature);
     if (!isNaN(t)) body.temperature = t;
-    const re = curMeta.reasoning || cfg.reasoningEffort || 'low';
+    const re = curMeta.reasoning || c.reasoningEffort || 'low';
     if (re) body.reasoning_effort = re;
 
     ac = new AbortController();
@@ -863,15 +1397,15 @@
     let reasonEl = null, reasonContentEl = null, autoCollapsed = false;
 
     try {
-      const res = await fetch(cfg.proxyUrl, {
+      const res = await fetch(c.proxyUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          password: cfg.proxyPassword,
-          target: getChatUrl(),
+          password: c.proxyPassword,
+          target: c.apiBase.replace(/\/+$/, '') + '/chat/completions',
           method: 'POST',
           headers: {
-            'Authorization': 'Bearer ' + cfg.apiKey,
+            'Authorization': 'Bearer ' + c.apiKey,
             'Content-Type': 'application/json'
           },
           body
@@ -881,9 +1415,9 @@
 
       if (!res.ok) {
         const t2 = await res.text();
-        showDiag('对话请求失败：HTTP ' + res.status, [
-          { k: '代理地址', v: cfg.proxyUrl },
-          { k: '目标 URL', v: getChatUrl() },
+        showDiag('对话失败 HTTP ' + res.status, [
+          { k: '配置', v: c.name },
+          { k: '目标', v: c.apiBase + '/chat/completions' },
           { k: '状态', v: res.status + ' ' + res.statusText },
           { k: '响应体', v: t2.slice(0, 3000) }
         ]);
@@ -936,9 +1470,8 @@
               autoScroll();
             }
             if (typeof d.content === 'string' && d.content) {
-              if (reasonEl && cfg.autoCollapseReason !== false && !autoCollapsed) {
-                reasonEl.open = false;
-                autoCollapsed = true;
+              if (reasonEl && c.autoCollapseReason !== false && !autoCollapsed) {
+                reasonEl.open = false; autoCollapsed = true;
               }
               turn.assistant.content += d.content;
               bubble.innerHTML = md(turn.assistant.content);
@@ -965,7 +1498,7 @@
         }
       } else {
         if (!turn.assistant.content) {
-          turn.assistant.content = '⚠️ ' + err.message;
+          turn.assistant.content = '⚠ ' + err.message;
           bubble.innerHTML = md(turn.assistant.content);
         }
       }
@@ -978,27 +1511,80 @@
     }
   }
 
-  // ───── 云同步 ─────
+  // ─── 编辑配置 ───
+  let editingConfigId = null;
+  function openConfigEdit(cfg) {
+    editingConfigId = cfg ? cfg.id : null;
+    const c = cfg || defaultConfig('配置 ' + (configs.length + 1));
+    document.getElementById('configEditTitle').textContent = cfg ? '编辑配置' : '新建配置';
+    document.getElementById('ceName').value = c.name || '';
+    document.getElementById('ceProxyUrl').value = c.proxyUrl || '/api/aiapi';
+    document.getElementById('ceProxyPassword').value = c.proxyPassword || '';
+    document.getElementById('ceApiBase').value = c.apiBase || '';
+    document.getElementById('ceApiKey').value = c.apiKey || '';
+    document.getElementById('ceSystem').value = c.systemPrompt || '';
+    document.getElementById('ceTemperature').value = c.temperature ?? '';
+    document.getElementById('ceAutoCollapse').checked = c.autoCollapseReason !== false;
+    document.getElementById('ceCtxWindow').value = c.ctxWindow ?? 64000;
+    document.getElementById('ceSummaryThreshold').value = c.summaryThreshold ?? 75;
+    document.getElementById('configEditModal').classList.add('show');
+  }
+  function closeConfigEdit() {
+    document.getElementById('configEditModal').classList.remove('show');
+    editingConfigId = null;
+  }
+  document.getElementById('ceCancel').addEventListener('click', closeConfigEdit);
+  document.getElementById('ceSave').addEventListener('click', () => {
+    const name = document.getElementById('ceName').value.trim() || '未命名配置';
+    const newCfg = {
+      id: editingConfigId || uuid(),
+      name,
+      proxyUrl: document.getElementById('ceProxyUrl').value.trim() || '/api/aiapi',
+      proxyPassword: document.getElementById('ceProxyPassword').value,
+      apiBase: document.getElementById('ceApiBase').value.trim(),
+      apiKey: document.getElementById('ceApiKey').value,
+      systemPrompt: document.getElementById('ceSystem').value,
+      temperature: parseFloat(document.getElementById('ceTemperature').value) || 0.7,
+      autoCollapseReason: document.getElementById('ceAutoCollapse').checked,
+      ctxWindow: parseInt(document.getElementById('ceCtxWindow').value) || 64000,
+      summaryThreshold: parseInt(document.getElementById('ceSummaryThreshold').value) || 75,
+      reasoningEffort: 'low',
+      model: ''
+    };
+    if (editingConfigId) {
+      const idx = configs.findIndex(c => c.id === editingConfigId);
+      if (idx >= 0) {
+        // 保留原有 model 和 reasoning
+        newCfg.model = configs[idx].model || '';
+        newCfg.reasoningEffort = configs[idx].reasoningEffort || 'low';
+        configs[idx] = newCfg;
+      }
+    } else {
+      configs.push(newCfg);
+      currentConfigId = newCfg.id;
+      setCookie(CUR_KEY, newCfg.id);
+    }
+    saveConfigs(configs);
+    closeConfigEdit();
+    updateConfigLabel();
+    updateModelLabel();
+    renderConfigList();
+  });
+
+  // ─── 云同步 ───
   async function cloudApi(opts) {
     const token = getToken();
     if (!token) {
-      showDiag('云同步：未登录', [
-        '云端同步需要有效的登录状态。',
-        '请先在主站 (swctools.dpdns.org) 登录，再回到此页面。',
-        '',
-        '当前 swc_token: ' + (token ? '已存在' : '不存在')
-      ]);
+      showDiag('未登录', ['云端同步需要登录状态，请先在主站登录。']);
       return null;
     }
+    let url = '/api/ai-conv';
+    const params = [];
+    if (opts.type) params.push('type=' + encodeURIComponent(opts.type));
+    if (opts.id) params.push('id=' + encodeURIComponent(opts.id));
+    if (params.length) url += '?' + params.join('&');
 
-    const url = opts.id
-      ? `/api/ai-conv?id=${encodeURIComponent(opts.id)}`
-      : '/api/ai-conv';
-
-    const fetchOpts = {
-      method: opts.method || 'GET',
-      headers: { 'Authorization': 'Bearer ' + token }
-    };
+    const fetchOpts = { method: opts.method || 'GET', headers: { 'Authorization': 'Bearer ' + token } };
     if (opts.body) {
       fetchOpts.headers['Content-Type'] = 'application/json';
       fetchOpts.body = JSON.stringify(opts.body);
@@ -1009,12 +1595,10 @@
       const text = await res.text();
       let data = null;
       try { data = JSON.parse(text); } catch {}
-
       if (!res.ok) {
-        showDiag('云同步请求失败：HTTP ' + res.status, [
+        showDiag('云同步失败 HTTP ' + res.status, [
           { k: 'URL', v: url },
-          { k: '方法', v: fetchOpts.method },
-          { k: '状态', v: res.status + ' ' + res.statusText },
+          { k: '状态', v: res.status },
           { k: '响应体', v: text.slice(0, 2000) }
         ]);
         return null;
@@ -1029,144 +1613,136 @@
     }
   }
 
-  // 上传单个会话
-  async function uploadConv(id) {
-    const meta = S.meta(id);
-    if (!meta) return false;
-    const turns = S.turns(id, meta.turnCount || 0);
-    const conversation = { ...meta, turns };
-    const r = await cloudApi({ method: 'PUT', body: { id, conversation } });
-    return !!r;
+  async function syncConfigsToCloud() {
+    const r = await cloudApi({ type: 'config', method: 'PUT', body: { configs } });
+    if (r) alert('配置已同步到云端');
   }
 
-  // 上传所有会话
+  async function pullConfigsFromCloud() {
+    const r = await cloudApi({ type: 'config' });
+    if (!r || !Array.isArray(r.configs)) return;
+    if (r.configs.length === 0) return;
+    if (!confirm('检测到云端配置，是否覆盖本地？')) return;
+    configs = r.configs;
+    saveConfigs(configs);
+    currentConfigId = configs[0].id;
+    setCookie(CUR_KEY, currentConfigId);
+    updateConfigLabel();
+    updateModelLabel();
+  }
+
+  async function uploadConv(id) {
+    const m = S.meta(id); if (!m) return false;
+    const turns = S.turns(id, m.turnCount || 0);
+    const r = await cloudApi({ method: 'PUT', body: { id, conversation: { ...m, turns } } });
+    return !!r;
+  }
   async function uploadAll() {
     const ids = S.idx();
-    if (ids.length === 0) {
-      alert('没有本地会话可上传。');
-      return;
-    }
+    if (ids.length === 0) { alert('没有本地会话'); return; }
     let ok = 0, fail = 0;
     for (const id of ids) {
       const r = await uploadConv(id);
       if (r) ok++; else fail++;
     }
-    alert(`上传完成：成功 ${ok}，失败 ${fail}`);
-    if (cloudPanel.classList.contains('show')) refreshCloudList();
+    alert('上传完成：成功 ' + ok + '，失败 ' + fail);
+    if (cloudPopup.classList.contains('show')) refreshCloudList();
   }
-
-  // 下载云端会话
-  async function downloadConv(id) {
+  async function downloadConvFromCloud(id) {
     const data = await cloudApi({ id });
     if (!data || !data.conversation) return;
     const c = data.conversation;
-
-    // 生成新的本地 id 避免冲突（如果本地已存在就覆盖）
-    const localId = id;
     const meta = {
-      id: localId,
-      title: c.title || '未命名对话',
-      model: c.model || cfg.model || '',
-      createdAt: c.createdAt || Date.now(),
-      updatedAt: c.updatedAt || Date.now(),
+      id, title: c.title || '未命名',
+      model: c.model || '', configId: c.configId || '', configName: c.configName || '',
+      reasoning: c.reasoning || 'low',
+      createdAt: c.createdAt || Date.now(), updatedAt: c.updatedAt || Date.now(),
       turnCount: Array.isArray(c.turns) ? c.turns.length : 0,
-      summary: c.summary || '',
-      reasoning: c.reasoning || 'low'
+      summary: c.summary || ''
     };
-    S.setMeta(localId, meta);
-    const oldMeta = S.meta(localId);
-    // 清理旧 turns（如果有）
-    if (oldMeta && oldMeta.turnCount) {
-      for (let i = 0; i < oldMeta.turnCount; i++) S.delTurn(localId, i);
+    const old = S.meta(id);
+    if (old && old.turnCount) {
+      for (let i = 0; i < old.turnCount; i++) S.delTurn(id, i);
     }
-    (c.turns || []).forEach((t, i) => S.setTurn(localId, i, t));
-    S.add(localId);
-    alert(`已下载对话：「${meta.title}」`);
+    S.setMeta(id, meta);
+    (c.turns || []).forEach((t, i) => S.setTurn(id, i, t));
+    S.add(id);
+    alert('已下载：' + meta.title);
     renderChat();
   }
-
-  // 删除云端会话
   async function deleteCloudConv(id) {
-    if (!confirm('确定删除云端这个对话？')) return;
+    if (!confirm('删除云端这个对话？')) return;
     const r = await cloudApi({ method: 'DELETE', id });
-    if (r) {
-      alert('已删除');
-      refreshCloudList();
-    }
+    if (r) { alert('已删除'); refreshCloudList(); }
   }
-
-  // 刷新云端列表
   async function refreshCloudList() {
-    cloudList.innerHTML = `<div class="popup-empty">加载中…</div>`;
+    cloudList.innerHTML = '<div class="popup-empty">加载中…</div>';
     const data = await cloudApi({});
     if (!data || !Array.isArray(data.index)) {
-      cloudList.innerHTML = `<div class="popup-empty">加载失败</div>`;
+      cloudList.innerHTML = '<div class="popup-empty">加载失败</div>';
       return;
     }
     if (data.index.length === 0) {
-      cloudList.innerHTML = `<div class="popup-empty">云端暂无对话</div>`;
+      cloudList.innerHTML = '<div class="popup-empty">云端暂无对话</div>';
       return;
     }
     cloudList.innerHTML = '';
     data.index.forEach(item => {
       const row = document.createElement('div');
       row.className = 'cloud-row';
-      row.innerHTML = `
-        <div class="info">
-          <div class="t">${esc(item.title || '未命名')}</div>
-          <div class="m">${item.turnCount || 0} 轮 · ${fmtTime(item.updatedAt || 0)}</div>
-        </div>
-      `;
+      row.innerHTML = '<div class="info"><div class="t">' + esc(item.title || '未命名') + '</div>' +
+        '<div class="m">' + (item.turnCount || 0) + ' 轮 · ' + fmtTime(item.updatedAt || 0) + '</div></div>';
       const dl = document.createElement('button');
       dl.className = 'primary'; dl.textContent = '下载';
-      dl.addEventListener('click', () => downloadConv(item.id));
+      dl.addEventListener('click', () => downloadConvFromCloud(item.id));
       const del = document.createElement('button');
       del.className = 'danger'; del.textContent = '删除';
       del.addEventListener('click', () => deleteCloudConv(item.id));
-      row.appendChild(dl);
-      row.appendChild(del);
+      row.appendChild(dl); row.appendChild(del);
       cloudList.appendChild(row);
     });
   }
 
-  // ───── 设置 ─────
-  function openSettings() {
-    document.getElementById('cfgProxyUrl').value = cfg.proxyUrl || '';
-    document.getElementById('cfgProxyPassword').value = cfg.proxyPassword || '';
-    document.getElementById('cfgApiBase').value = cfg.apiBase || '';
-    document.getElementById('cfgApiKey').value = cfg.apiKey || '';
-    document.getElementById('cfgSystem').value = cfg.systemPrompt || '';
-    document.getElementById('cfgTemperature').value = cfg.temperature ?? '';
-    document.getElementById('cfgAutoCollapse').checked = cfg.autoCollapseReason !== false;
-    document.getElementById('cfgCtxWindow').value = cfg.ctxWindow ?? 64000;
-    document.getElementById('cfgSummaryThreshold').value = cfg.summaryThreshold ?? 75;
-    settingsModal.classList.add('show');
-  }
-  function closeSettings() { settingsModal.classList.remove('show'); }
-  function saveSettings() {
-    cfg.proxyUrl = document.getElementById('cfgProxyUrl').value.trim() || '/api/aiapi';
-    cfg.proxyPassword = document.getElementById('cfgProxyPassword').value;
-    cfg.apiBase = document.getElementById('cfgApiBase').value.trim();
-    cfg.apiKey = document.getElementById('cfgApiKey').value;
-    cfg.systemPrompt = document.getElementById('cfgSystem').value;
-    const t = parseFloat(document.getElementById('cfgTemperature').value);
-    cfg.temperature = isNaN(t) ? 0.7 : t;
-    cfg.autoCollapseReason = document.getElementById('cfgAutoCollapse').checked;
-    const w = parseInt(document.getElementById('cfgCtxWindow').value);
-    cfg.ctxWindow = isNaN(w) ? 64000 : w;
-    const th = parseInt(document.getElementById('cfgSummaryThreshold').value);
-    cfg.summaryThreshold = isNaN(th) ? 75 : th;
-    saveCfg(cfg);
-    updateModelLabel();
-    updateReasonLabel();
-    closeSettings();
-  }
+  document.getElementById('btnCloud').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (cloudPopup.classList.contains('show')) { closeAllPopups(); return; }
+    // 侧边栏按钮位置特殊，直接居右上
+    cloudPopup.classList.add('show');
+    popupMask.classList.add('show');
+    cloudPopup.style.top = '50px';
+    cloudPopup.style.right = '16px';
+    cloudPopup.style.left = 'auto';
+    refreshCloudList();
+  });
+  cloudPopup.addEventListener('click', e => e.stopPropagation());
+  document.getElementById('btnCloudRefresh').addEventListener('click', refreshCloudList);
+  document.getElementById('btnUploadCurrent').addEventListener('click', async () => {
+    if (!curId) { alert('没有当前对话'); return; }
+    const ok = await uploadConv(curId);
+    if (ok) { alert('已上传'); refreshCloudList(); }
+  });
+  document.getElementById('btnUploadAll').addEventListener('click', uploadAll);
 
-  // ───── 侧边栏 ─────
+  // ─── 侧边栏 ───
   function openSidebar() { sidebarEl.classList.add('open'); sidebarMask.classList.add('show'); }
   function closeSidebar() { sidebarEl.classList.remove('open'); sidebarMask.classList.remove('show'); }
+  btnMenu.addEventListener('click', openSidebar);
+  sidebarMask.addEventListener('click', closeSidebar);
 
-  // ───── 事件绑定 ─────
+  // ─── 新对话 ───
+  document.getElementById('btnNewConv').addEventListener('click', () => {
+    if (generating && !confirm('正在生成，确定新建？')) return;
+    if (ac) ac.abort();
+    curId = null; curMeta = null; curTurns = [];
+    renderChat();
+    closeSidebar();
+    inputEl.focus();
+  });
+
+  // ─── 全部下载 ───
+  document.getElementById('btnDlAll').addEventListener('click', downloadAll);
+
+  // ─── 发送事件 ───
   btnSend.addEventListener('click', send);
   inputEl.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
@@ -1175,100 +1751,31 @@
     inputEl.style.height = 'auto';
     inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + 'px';
   });
-  btnNewConv.addEventListener('click', () => {
-    if (generating && !confirm('正在生成，确定要新建对话吗？')) return;
-    if (ac) ac.abort();
-    curId = null; curMeta = null; curTurns = [];
-    renderChat();
-    closeSidebar();
-    inputEl.focus();
-  });
-  btnSettings.addEventListener('click', openSettings);
-  btnSettingsClose.addEventListener('click', closeSettings);
-  btnSettingsSave.addEventListener('click', saveSettings);
-  settingsModal.addEventListener('click', e => { if (e.target === settingsModal) closeSettings(); });
 
-  // 模型
-  btnModel.addEventListener('click', e => {
-    e.stopPropagation();
-    if (modelPanel.classList.contains('show')) { closeAllPopups(); return; }
-    renderModelList();
-    showPopup(modelPanel, btnModel);
-    if (modelsCache.length === 0) fetchModels(true);
-  });
-  modelSearchEl.addEventListener('input', renderModelList);
-  btnRefreshModels.addEventListener('click', e => { e.stopPropagation(); fetchModels(false); });
-  btnShowManual.addEventListener('click', () => {
-    manualWrap.classList.add('show');
-    manualInput.focus();
-  });
-  btnManualConfirm.addEventListener('click', () => {
-    const v = manualInput.value.trim();
-    if (!v) return;
-    selectModel(v);
-    closeAllPopups();
-  });
-  manualInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); btnManualConfirm.click(); }
-  });
-  modelPanel.addEventListener('click', e => e.stopPropagation());
-
-  // 推理
-  btnReason.addEventListener('click', e => {
-    e.stopPropagation();
-    if (reasonPanel.classList.contains('show')) { closeAllPopups(); return; }
-    // 高亮当前
-    const cur = currentReason();
-    reasonPanel.querySelectorAll('.reason-opt').forEach(el => {
-      const active = el.dataset.v === cur;
-      el.classList.toggle('active', active);
-      el.querySelector('.chk').hidden = !active;
-    });
-    showPopup(reasonPanel, btnReason);
-  });
-  reasonPanel.querySelectorAll('.reason-opt').forEach(el => {
-    el.addEventListener('click', () => {
-      const v = el.dataset.v;
-      if (!curId) { cfg.reasoningEffort = v; saveCfg(cfg); }
-      else { curMeta.reasoning = v; curMeta.updatedAt = Date.now(); S.setMeta(curId, curMeta); }
-      updateReasonLabel();
-      closeAllPopups();
-    });
-  });
-  reasonPanel.addEventListener('click', e => e.stopPropagation());
-
-  // 云同步
-  btnCloud.addEventListener('click', e => {
-    e.stopPropagation();
-    if (cloudPanel.classList.contains('show')) { closeAllPopups(); return; }
-    showPopup(cloudPanel, btnCloud);
-    refreshCloudList();
-  });
-  cloudPanel.addEventListener('click', e => e.stopPropagation());
-  document.getElementById('btnCloudRefresh').addEventListener('click', refreshCloudList);
-  document.getElementById('btnUploadCurrent').addEventListener('click', async () => {
-    if (!curId) { alert('没有当前对话。'); return; }
-    const ok = await uploadConv(curId);
-    if (ok) { alert('已上传当前对话'); refreshCloudList(); }
-  });
-  document.getElementById('btnUploadAll').addEventListener('click', uploadAll);
-
-  // 关闭 popup
-  popupMask.addEventListener('click', closeAllPopups);
-  document.addEventListener('click', () => {
-    if (document.querySelector('.popup.show')) closeAllPopups();
-  });
-
-  // 侧边栏
-  btnMenu.addEventListener('click', openSidebar);
-  sidebarMask.addEventListener('click', closeSidebar);
-
-  // ───── 启动 ─────
-  (function init() {
+  // ─── 首次启动：尝试从云端拉配置 ───
+  (async function init() {
     const ids = S.idx();
     if (ids.length > 0) loadConv(ids[0]);
     renderChat();
-    if (!cfg.proxyPassword || !cfg.apiKey) openSettings();
+    updateConfigLabel();
+    // 如果配置完整，尝试静默拉取云端配置
+    if (getToken()) {
+      try {
+        const r = await cloudApi({ type: 'config' });
+        if (r && Array.isArray(r.configs) && r.configs.length > 0) {
+          // 云端有配置且本地只有默认空配置 → 自动采用
+          const localIsEmpty = configs.length === 1 && !configs[0].apiKey;
+          if (localIsEmpty) {
+            configs = r.configs;
+            saveConfigs(configs);
+            currentConfigId = configs[0].id;
+            setCookie(CUR_KEY, currentConfigId);
+            updateConfigLabel();
+            updateModelLabel();
+          }
+        }
+      } catch {}
+    }
   })();
 
 })();
