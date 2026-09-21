@@ -12,7 +12,7 @@
   --acc:#4f7f9e; --acc-h:#3a6b8c; --input-b:#b3cce2;
   --user-bg:#4f7f9e; --user-c:#ffffff; --ai-bg:#ffffff;
   --reason-bg:#f0f4f8; --code-bg:#eef3f8; --active:#c2d8ed;
-  --danger:#c62828; --ok:#2e7d32;
+  --danger:#c62828; --ok:#2e7d32; --mark:#f5b300;
   --sync-synced:#2e7d32; --sync-ln:#f57c00; --sync-cn:#1976d2;
   --sync-only:#90a4ae; --sync-unknown:#cfd8dc; --sync-fail:#c62828;
 }
@@ -23,7 +23,7 @@
   --acc:#2a6a9e; --acc-h:#1a4a7a; --input-b:#2a5a8a;
   --user-bg:#2a6a9e; --user-c:#ffffff; --ai-bg:#142838;
   --reason-bg:#0f1e32; --code-bg:#122a3e; --active:#1e3a5a;
-  --danger:#ef5350; --ok:#66bb6a;
+  --danger:#ef5350; --ok:#66bb6a; --mark:#ffb74d;
   --sync-synced:#66bb6a; --sync-ln:#ffb74d; --sync-cn:#64b5f6;
   --sync-only:#78909c; --sync-unknown:#37474f; --sync-fail:#ef5350;
 }
@@ -114,7 +114,8 @@ html, body {
 .chat::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 .msg { max-width:820px; margin:0 auto 16px; display:flex; gap:10px; position:relative; }
 .msg.user { flex-direction:row-reverse; }
-.msg .wrap { max-width:82%; min-width:0; }
+.msg .wrap { max-width:82%; min-width:0; display:flex; flex-direction:column; }
+.msg.user .wrap { align-items:flex-end; }
 .msg .bubble {
   padding:10px 14px; font-size:14px; line-height:1.65;
   word-wrap:break-word; overflow-wrap:break-word; border-radius:10px;
@@ -127,25 +128,29 @@ html, body {
 }
 .msg.user .ava { background:var(--acc); }
 .msg.ai .ava { background:#14b8a6; }
-.msg .ops { position:absolute; top:4px; opacity:0; transition:opacity 0.12s; }
-.msg:hover .ops { opacity:1; }
-.msg.user .ops { left:-28px; }
-.msg.ai .ops { right:-28px; }
-.msg .ops button {
-  background:var(--btn); border:1px solid var(--btn-b); color:var(--text);
-  width:22px; height:22px; cursor:pointer; font-size:12px; line-height:1;
-  display:flex; align-items:center; justify-content:center; padding:0; border-radius:6px;
+
+/* ★ 消息操作栏（常显，不用 hover） */
+.msg-actions {
+  display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;
 }
-.msg .ops button:hover { background:var(--btn-h); }
-.msg .cursor-blink {
-  display:inline-block; width:6px; height:14px; background:var(--acc);
-  vertical-align:middle; margin-left:2px; animation:blink 1s infinite;
+.msg.user .msg-actions { justify-content:flex-end; }
+.msg-actions button {
+  background:transparent; border:1px solid var(--border); color:var(--muted);
+  padding:3px 10px; font-size:12px; cursor:pointer;
+  border-radius:4px; font-family:inherit;
+  transition:0.12s;
+  -webkit-tap-highlight-color:transparent;
 }
-@keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
+.msg-actions button:hover { background:var(--btn); color:var(--text); }
+.msg-actions button:active { background:var(--btn-h); }
+.msg.marked .bubble { box-shadow: 0 0 0 2px var(--mark) inset; }
+.msg.marked .msg-actions button[data-act="mark"] {
+  color:var(--mark); border-color:var(--mark); font-weight:600;
+}
 
 .reason {
   background:var(--reason-bg); border:1px solid var(--border); margin-bottom:6px;
-  border-radius:8px; overflow:hidden;
+  border-radius:8px; overflow:hidden; width:100%;
 }
 .reason summary {
   padding:7px 12px; cursor:pointer; color:var(--muted); font-size:12px;
@@ -383,13 +388,19 @@ html, body {
 .mask.show { display:block; }
 #popupMask { z-index:210; }
 
+.toast {
+  position:fixed; left:50%; bottom:80px; transform:translateX(-50%);
+  background:rgba(0,0,0,.8); color:#fff; padding:8px 16px;
+  border-radius:20px; font-size:13px; z-index:99999;
+  pointer-events:none; opacity:0; transition:opacity .2s;
+}
+.toast.show { opacity:1; }
+
 @media (max-width: 768px) {
   .sidebar { position:absolute; top:0; left:0; bottom:0; transform:translateX(-100%); width:260px; }
   .sidebar.open { transform:translateX(0); }
   .menu-btn { display:flex; }
   .chip .l { max-width:70px; }
-  .msg .ops { opacity:1; position:static; margin:0 4px; align-self:flex-start; }
-  .msg.user .ops, .msg.ai .ops { left:auto; right:auto; }
   .msg .wrap { max-width:88%; }
   .chat { padding:12px 12px; }
   .input-area { padding:8px 12px 12px; }
@@ -399,6 +410,7 @@ html, body {
   .topbar h1 { font-size:12px; }
   .msg { gap:6px; }
   .msg .bubble { padding:9px 12px; font-size:14px; }
+  .msg-actions button { padding:4px 10px; font-size:12px; }
   .popup { right:8px !important; left:8px !important; max-width:calc(100vw - 16px); }
   .modal { padding:8px; }
   .modal-card { padding:16px; max-height:94vh; }
@@ -407,10 +419,6 @@ html, body {
 @media (max-width: 768px) and (orientation: landscape) {
   .sidebar { position:static; transform:none !important; width:200px; }
   .menu-btn { display:none !important; }
-  .msg .ops { opacity:0; position:absolute; }
-  .msg:hover .ops { opacity:1; }
-  .msg.user .ops { left:-28px; right:auto; }
-  .msg.ai .ops { right:-28px; left:auto; }
 }
 </style>
 </head>
@@ -577,6 +585,8 @@ html, body {
   </div>
 </div>
 
+<div class="toast" id="toast"></div>
+
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"></script>
 
@@ -613,6 +623,16 @@ html, body {
   }
   function getToken() { return localStorage.getItem('swc_token') || ''; }
 
+  // Toast 提示
+  let toastTimer = null;
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 1500);
+  }
+
   // ─── Cookie ───
   function setCookie(name, value, days) {
     days = days || 365;
@@ -635,26 +655,19 @@ html, body {
 
   function defaultConfig(name) {
     return {
-      id: uuid(),
-      name: name || '配置 1',
-      proxyUrl: '/api/aiapi',
-      proxyPassword: '',
-      apiBase: '',
-      apiKey: '',
+      id: uuid(), name: name || '配置 1',
+      proxyUrl: '/api/aiapi', proxyPassword: '',
+      apiBase: '', apiKey: '',
       systemPrompt: '你是一个乐于助人的AI助手。',
-      temperature: 0.7,
-      autoCollapseReason: true,
-      ctxWindow: 64000,
-      summaryThreshold: 75,
+      temperature: 0.7, autoCollapseReason: true,
+      ctxWindow: 64000, summaryThreshold: 75,
       model: ''
     };
   }
   function loadConfigs() {
     let ids = [];
-    try {
-      const raw = getCookie(IDS_KEY);
-      if (raw) ids = JSON.parse(raw);
-    } catch { ids = []; }
+    try { const raw = getCookie(IDS_KEY); if (raw) ids = JSON.parse(raw); }
+    catch { ids = []; }
     const arr = [];
     for (const id of ids) {
       const c = getCookie(CFG_PREFIX + id);
@@ -665,24 +678,16 @@ html, body {
   }
   function saveAllConfigs(arr) {
     let oldIds = [];
-    try {
-      const raw = getCookie(IDS_KEY);
-      if (raw) oldIds = JSON.parse(raw);
-    } catch {}
+    try { const raw = getCookie(IDS_KEY); if (raw) oldIds = JSON.parse(raw); } catch {}
     const newIds = arr.map(c => c.id);
-    for (const oid of oldIds) {
-      if (!newIds.includes(oid)) delCookie(CFG_PREFIX + oid);
-    }
+    for (const oid of oldIds) if (!newIds.includes(oid)) delCookie(CFG_PREFIX + oid);
     for (const c of arr) setCookie(CFG_PREFIX + c.id, JSON.stringify(c));
     setCookie(IDS_KEY, JSON.stringify(newIds));
   }
   function deleteConfigCookie(id) {
     delCookie(CFG_PREFIX + id);
     let ids = [];
-    try {
-      const raw = getCookie(IDS_KEY);
-      if (raw) ids = JSON.parse(raw);
-    } catch {}
+    try { const raw = getCookie(IDS_KEY); if (raw) ids = JSON.parse(raw); } catch {}
     ids = ids.filter(x => x !== id);
     setCookie(IDS_KEY, JSON.stringify(ids));
   }
@@ -691,8 +696,7 @@ html, body {
   let currentConfigId = getCookie(CUR_KEY) || '';
   if (configs.length === 0) {
     const c = defaultConfig('配置 1');
-    configs = [c];
-    currentConfigId = c.id;
+    configs = [c]; currentConfigId = c.id;
     saveAllConfigs(configs);
     setCookie(CUR_KEY, c.id);
   }
@@ -726,9 +730,7 @@ html, body {
     },
     setMeta(id, m) { m.schema = 2; localStorage.setItem(P + id + ':meta', JSON.stringify(m)); },
     delMeta(id) { localStorage.removeItem(P + id + ':meta'); },
-    turn(id, n) {
-      try { const r = localStorage.getItem(P + id + ':turn:' + n); return r ? JSON.parse(r) : null; } catch { return null; }
-    },
+    turn(id, n) { try { const r = localStorage.getItem(P + id + ':turn:' + n); return r ? JSON.parse(r) : null; } catch { return null; } },
     setTurn(id, n, t) { localStorage.setItem(P + id + ':turn:' + n, JSON.stringify(t)); },
     delTurn(id, n) { localStorage.removeItem(P + id + ':turn:' + n); },
     turns(id, c) {
@@ -767,23 +769,14 @@ html, body {
   function loadSyncStates() {
     try { const r = localStorage.getItem(SYNC_KEY); return r ? JSON.parse(r) : {}; } catch { return {}; }
   }
-  function saveSyncStates(states) {
-    try { localStorage.setItem(SYNC_KEY, JSON.stringify(states)); } catch {}
-  }
+  function saveSyncStates(states) { try { localStorage.setItem(SYNC_KEY, JSON.stringify(states)); } catch {} }
   let syncStates = loadSyncStates();
-  function setSyncState(id, state) {
-    syncStates[id] = state;
-    saveSyncStates(syncStates);
-    renderConvList();
-  }
+  function setSyncState(id, state) { syncStates[id] = state; saveSyncStates(syncStates); renderConvList(); }
   function getSyncState(id) { return syncStates[id] || 'unknown'; }
   function delSyncState(id) { delete syncStates[id]; saveSyncStates(syncStates); }
 
   // ─── 会话状态 ───
   let curId = null, curMeta = null, curTurns = [];
-
-  // ★ 多会话并行运行态
-  // id -> { ac, turnIdx, domRef, autoCollapsed, saveTimer, startedAt }
   const runningConvs = new Map();
 
   function newConv() {
@@ -799,7 +792,6 @@ html, body {
     setSyncState(id, 'local-only');
     return m;
   }
-
   function loadConv(id) {
     const m = S.meta(id); if (!m) return false;
     curId = id; curMeta = m; curTurns = S.turns(id, m.turnCount || 0);
@@ -823,9 +815,7 @@ html, body {
     }
     return true;
   }
-
   function delConv(id) {
-    // 中止该会话的生成
     const run = runningConvs.get(id);
     if (run) {
       if (run.saveTimer) clearInterval(run.saveTimer);
@@ -840,7 +830,6 @@ html, body {
       else { curId = null; curMeta = null; curTurns = []; }
     }
   }
-
   function touchConv(id) {
     const m = S.meta(id); if (!m) return;
     m.savedAt = Date.now(); m.schema = 2;
@@ -980,14 +969,11 @@ html, body {
         else if (ct > lt) toDownload.push(id);
         else { skipped++; setSyncState(id, 'synced'); }
       }
-      for (const [id] of cloudMap) {
-        if (!localMap.has(id)) toDownload.push(id);
-      }
+      for (const [id] of cloudMap) if (!localMap.has(id)) toDownload.push(id);
       const total = toUpload.length + toDownload.length;
       for (let i = 0; i < toUpload.length; i++) {
         const id = toUpload[i];
         if (!silent) updateProgress(`上传中 ${i+1}/${total}...`);
-        // 跳过正在生成的会话
         if (runningConvs.has(id)) { skipped++; continue; }
         const ok = await uploadConv(id);
         if (ok) { uploaded++; setSyncState(id, 'synced'); }
@@ -996,7 +982,6 @@ html, body {
       for (let i = 0; i < toDownload.length; i++) {
         const id = toDownload[i];
         if (!silent) updateProgress(`下载中 ${i+1}/${total}...`);
-        // 跳过正在生成的会话
         if (runningConvs.has(id)) { skipped++; continue; }
         const ok = await downloadConv(id);
         if (ok) { downloaded++; setSyncState(id, 'synced'); }
@@ -1009,9 +994,7 @@ html, body {
       if (downloaded > 0) {
         if (!curId && S.idx().length > 0) loadConv(S.idx()[0]);
         renderChat();
-      } else {
-        renderConvList();
-      }
+      } else renderConvList();
       return { uploaded, downloaded, skipped, failed };
     } finally {
       syncing = false;
@@ -1115,9 +1098,7 @@ html, body {
         else setSyncState(id, 'synced');
       }
     }
-    for (const [id] of cloudMap) {
-      if (!localIds.includes(id)) setSyncState(id, 'cloud-only');
-    }
+    for (const [id] of cloudMap) if (!localIds.includes(id)) setSyncState(id, 'cloud-only');
     updateProgress('');
     renderConvList();
     if (cloudPopup.classList.contains('show')) renderCloudList();
@@ -1191,28 +1172,111 @@ html, body {
     scrollPending = true;
     requestAnimationFrame(() => { scrollPending = false; chatEl.scrollTop = chatEl.scrollHeight; });
   }
-  function scrollToBottom() {
-    isAtBottom = true;
-    chatEl.scrollTop = chatEl.scrollHeight;
+  function scrollToBottom() { isAtBottom = true; chatEl.scrollTop = chatEl.scrollHeight; }
+
+  // ─── 消息操作 ───
+  function copyText(text) {
+    if (!text) { showToast('无内容'); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => showToast('已复制')).catch(() => {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  }
+  function fallbackCopy(text) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('已复制');
+    } catch { showToast('复制失败'); }
+  }
+
+  function toggleMark(idx) {
+    if (idx < 0 || idx >= curTurns.length) return;
+    curTurns[idx].marked = !curTurns[idx].marked;
+    if (curId) {
+      S.setTurn(curId, idx, curTurns[idx]);
+      touchConv(curId);
+    }
+    renderChat();
+    showToast(curTurns[idx].marked ? '已标记' : '已取消标记');
+  }
+
+  function deleteTurn(idx) {
+    if (idx < 0 || idx >= curTurns.length) return;
+    if (curId && runningConvs.has(curId)) { alert('此对话正在生成中，请先停止后再删除。'); return; }
+    if (!confirm('删除这轮对话？（用户消息和 AI 回复都会删除）')) return;
+    curTurns.splice(idx, 1);
+    if (curId) { S.rewriteTurns(curId, curTurns); touchConv(curId); }
+    renderChat();
+  }
+
+  async function resendTurn(idx) {
+    if (!curId) return;
+    if (runningConvs.has(curId)) { alert('正在生成中，请先停止'); return; }
+    if (idx < 0 || idx >= curTurns.length) return;
+    const turn = curTurns[idx];
+    if (!turn) return;
+
+    const userContent = turn.user.content;
+    if (!userContent) return;
+
+    // 截断到 idx 之前（保留 idx 之前的轮次）
+    curTurns = curTurns.slice(0, idx);
+    S.rewriteTurns(curId, curTurns);
+    renderChat();
+
+    // 把内容塞回输入框并重新发送
+    inputEl.value = userContent;
+    await send();
   }
 
   // ─── 渲染 ───
   function makeTurnEl(turn, turnIdx, isGenerating) {
     const frag = document.createDocumentFragment();
+    const marked = !!turn.marked;
 
+    // User
     const u = document.createElement('div');
-    u.className = 'msg user';
-    u.innerHTML = '<div class="ava">你</div><div class="wrap"><div class="bubble"></div></div><div class="ops"><button title="操作">···</button></div>';
+    u.className = 'msg user' + (marked ? ' marked' : '');
+    u.innerHTML =
+      '<div class="ava">你</div>' +
+      '<div class="wrap">' +
+        '<div class="bubble"></div>' +
+        '<div class="msg-actions">' +
+          '<button data-act="copy" type="button">复制</button>' +
+          '<button data-act="delete" type="button">删除</button>' +
+          '<button data-act="mark" type="button">' + (marked ? '★ 已标记' : '标记') + '</button>' +
+        '</div>' +
+      '</div>';
     u.querySelector('.bubble').textContent = turn.user.content;
-    u.querySelector('.ops button').addEventListener('click', (e) => {
-      e.stopPropagation();
-      openMsgMenu(e.currentTarget, turnIdx);
-    });
+    u.querySelector('[data-act="copy"]').addEventListener('click', (e) => { e.stopPropagation(); copyText(turn.user.content); });
+    u.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); deleteTurn(turnIdx); });
+    u.querySelector('[data-act="mark"]').addEventListener('click', (e) => { e.stopPropagation(); toggleMark(turnIdx); });
     frag.appendChild(u);
 
+    // AI
     const a = document.createElement('div');
-    a.className = 'msg ai';
-    a.innerHTML = '<div class="ava">AI</div><div class="wrap"><div class="bubble"></div></div>';
+    a.className = 'msg ai' + (marked ? ' marked' : '');
+    a.innerHTML =
+      '<div class="ava">AI</div>' +
+      '<div class="wrap">' +
+        '<div class="bubble"></div>' +
+        '<div class="msg-actions">' +
+          '<button data-act="copy" type="button">复制</button>' +
+          '<button data-act="resend" type="button">重发</button>' +
+          '<button data-act="delete" type="button">删除</button>' +
+          '<button data-act="mark" type="button">' + (marked ? '★ 已标记' : '标记') + '</button>' +
+        '</div>' +
+      '</div>';
     const wrap = a.querySelector('.wrap');
     const bubble = a.querySelector('.bubble');
 
@@ -1224,6 +1288,12 @@ html, body {
       wrap.insertBefore(d, bubble);
     }
     bubble.innerHTML = turn.assistant.content ? md(turn.assistant.content) : '';
+
+    a.querySelector('[data-act="copy"]').addEventListener('click', (e) => { e.stopPropagation(); copyText(turn.assistant.content || ''); });
+    a.querySelector('[data-act="resend"]').addEventListener('click', (e) => { e.stopPropagation(); resendTurn(turnIdx); });
+    a.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); deleteTurn(turnIdx); });
+    a.querySelector('[data-act="mark"]').addEventListener('click', (e) => { e.stopPropagation(); toggleMark(turnIdx); });
+
     frag.appendChild(a);
     return frag;
   }
@@ -1242,7 +1312,6 @@ html, body {
     };
     if (ref.reasonEl && !run.autoCollapsed) ref.reasonEl.open = true;
     run.domRef = ref;
-    // 立即用内存里的最新内容刷新一次
     const curTurn = run.turn;
     if (curTurn) {
       if (curTurn.assistant.reasoning_content) {
@@ -1264,40 +1333,6 @@ html, body {
     }
   }
 
-  let msgMenu = null;
-  function openMsgMenu(anchor, turnIdx) {
-    closeMsgMenu();
-    msgMenu = document.createElement('div');
-    msgMenu.className = 'conv-menu show';
-    msgMenu.innerHTML = '<button data-act="delete">删除这轮对话</button>';
-    document.body.appendChild(msgMenu);
-    const r = anchor.getBoundingClientRect();
-    msgMenu.style.top = (r.bottom + 4) + 'px';
-    msgMenu.style.left = Math.min(r.left, window.innerWidth - 160) + 'px';
-    msgMenu.querySelector('[data-act="delete"]').addEventListener('click', () => {
-      if (curId && runningConvs.has(curId)) {
-        alert('此对话正在生成中，请先停止后再删除消息。');
-        closeMsgMenu();
-        return;
-      }
-      if (confirm('删除这轮对话？（用户消息和 AI 回复都会删除）')) deleteTurn(turnIdx);
-      closeMsgMenu();
-    });
-    setTimeout(() => {
-      document.addEventListener('click', closeMsgMenu, { once: true });
-    }, 0);
-  }
-  function closeMsgMenu() {
-    if (msgMenu && msgMenu.parentNode) msgMenu.parentNode.removeChild(msgMenu);
-    msgMenu = null;
-  }
-  function deleteTurn(idx) {
-    if (idx < 0 || idx >= curTurns.length) return;
-    curTurns.splice(idx, 1);
-    if (curId) { S.rewriteTurns(curId, curTurns); touchConv(curId); }
-    renderChat();
-  }
-
   function stateIcon(state) {
     const map = {
       synced: '✓', 'local-newer': '↑', 'cloud-newer': '↓',
@@ -1308,13 +1343,8 @@ html, body {
 
   function updateSendButton() {
     const isGenerating = !!(curId && runningConvs.has(curId));
-    if (isGenerating) {
-      btnSend.textContent = '停止';
-      btnSend.classList.add('stop');
-    } else {
-      btnSend.textContent = '发送';
-      btnSend.classList.remove('stop');
-    }
+    if (isGenerating) { btnSend.textContent = '停止'; btnSend.classList.add('stop'); }
+    else { btnSend.textContent = '发送'; btnSend.classList.remove('stop'); }
   }
 
   function renderChat() {
@@ -1331,9 +1361,7 @@ html, body {
       convTitleEl.textContent = curMeta?.title || 'SwC AI';
       scrollToBottom();
     }
-    if (curId && runningConvs.has(curId)) {
-      bindDomRefs(curId);
-    }
+    if (curId && runningConvs.has(curId)) bindDomRefs(curId);
     updateConfigLabel();
     updateModelLabel();
     updateReasonLabel();
@@ -1376,11 +1404,8 @@ html, body {
       it.className = 'sb-item' + (m.id === curId ? ' active' : '');
       const syncState = getSyncState(m.id);
       let leftPart;
-      if (isGen) {
-        leftPart = '<span class="spin" title="生成中"></span>';
-      } else {
-        leftPart = '<span class="sync-icon" data-state="' + syncState + '" title="' + syncState + '">' + stateIcon(syncState) + '</span>';
-      }
+      if (isGen) leftPart = '<span class="spin" title="生成中"></span>';
+      else leftPart = '<span class="sync-icon" data-state="' + syncState + '" title="' + syncState + '">' + stateIcon(syncState) + '</span>';
       it.innerHTML = leftPart +
         '<span class="t">' + esc(m.title || '新对话') + '</span>' +
         '<button class="d" title="操作">···</button>' +
@@ -1434,10 +1459,7 @@ html, body {
     convMenu.style.top = (r.bottom + 4) + 'px';
     convMenu.style.left = Math.min(r.left, window.innerWidth - 160) + 'px';
   }
-  function closeConvMenu() {
-    convMenu.classList.remove('show');
-    convMenuTargetId = null;
-  }
+  function closeConvMenu() { convMenu.classList.remove('show'); convMenuTargetId = null; }
   convMenu.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', async () => {
       const act = btn.dataset.act;
@@ -1566,21 +1588,16 @@ html, body {
         '<button data-act="switch">' + (c.id === currentConfigId ? '当前' : '切换') + '</button>' +
         '<span class="m">' + esc(c.apiBase || '未设置地址') + '</span>';
       it.querySelector('[data-act="edit"]').addEventListener('click', (e) => {
-        e.stopPropagation();
-        closeConfigManager();
-        openConfigEdit(c);
+        e.stopPropagation(); closeConfigManager(); openConfigEdit(c);
       });
       it.querySelector('[data-act="switch"]').addEventListener('click', (e) => {
-        e.stopPropagation();
-        switchConfig(c.id);
-        renderConfigManagerList();
+        e.stopPropagation(); switchConfig(c.id); renderConfigManagerList();
       });
       configManagerList.appendChild(it);
     });
   }
   document.getElementById('cmAdd').addEventListener('click', () => {
-    closeConfigManager();
-    openConfigEdit(null);
+    closeConfigManager(); openConfigEdit(null);
   });
   document.getElementById('cmClose').addEventListener('click', closeConfigManager);
 
@@ -1632,14 +1649,12 @@ html, body {
     e.stopPropagation(); fetchModels(false);
   });
   document.getElementById('btnShowManual').addEventListener('click', () => {
-    manualWrap.classList.add('show');
-    manualInput.focus();
+    manualWrap.classList.add('show'); manualInput.focus();
   });
   document.getElementById('btnManualConfirm').addEventListener('click', () => {
     const v = manualInput.value.trim();
     if (!v) return;
-    selectModel(v);
-    closeAllPopups();
+    selectModel(v); closeAllPopups();
   });
   manualInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); document.getElementById('btnManualConfirm').click(); }
@@ -1659,11 +1674,7 @@ html, body {
   reasonPopup.querySelectorAll('.popup-item').forEach(el => {
     el.addEventListener('click', () => {
       const v = el.dataset.v;
-      if (!curId) {
-        alert('请先开始一个对话，再设置推理强度。');
-        closeAllPopups();
-        return;
-      }
+      if (!curId) { alert('请先开始一个对话，再设置推理强度。'); closeAllPopups(); return; }
       curMeta.reasoning = v;
       curMeta.savedAt = Date.now();
       curMeta.schema = 2;
@@ -1712,8 +1723,7 @@ html, body {
       const bodyText = await res.text();
       if (!res.ok) {
         showDiag('获取模型失败 HTTP ' + res.status, [
-          { k: '目标', v: target },
-          { k: '状态', v: res.status },
+          { k: '目标', v: target }, { k: '状态', v: res.status },
           { k: '响应体', v: bodyText.slice(0, 2000) }
         ]);
         return;
@@ -1722,8 +1732,7 @@ html, body {
       try { data = JSON.parse(bodyText); }
       catch {
         showDiag('响应不是 JSON', [
-          { k: '目标', v: target },
-          { k: '响应体', v: bodyText.slice(0, 2000) }
+          { k: '目标', v: target }, { k: '响应体', v: bodyText.slice(0, 2000) }
         ]);
         return;
       }
@@ -1733,8 +1742,7 @@ html, body {
       else if (Array.isArray(data)) list = data.map(m => (typeof m === 'string' ? m : (m.id || m.name))).filter(Boolean);
       if (list.length === 0) {
         showDiag('未解析到模型', [
-          { k: '目标', v: target },
-          { k: '响应体', v: bodyText.slice(0, 2000) }
+          { k: '目标', v: target }, { k: '响应体', v: bodyText.slice(0, 2000) }
         ]);
         return;
       }
@@ -1753,11 +1761,8 @@ html, body {
     }
   }
 
-  // ═══════════════════════════════════════════════════
-  // 发送（多会话并行核心）
-  // ═══════════════════════════════════════════════════
+  // ─── 发送 ───
   async function send() {
-    // 当前会话正在生成 → 停止
     if (curId && runningConvs.has(curId)) {
       const run = runningConvs.get(curId);
       if (run.ac) try { run.ac.abort(); } catch {}
@@ -1798,10 +1803,9 @@ html, body {
       curId = m.id; curMeta = m; curTurns = [];
     }
 
-    // 立刻把 turn 写入内存 + LS
     const convId = curId;
     const ti = curTurns.length;
-    const turn = { user: { content: text }, assistant: { content: '', reasoning_content: '' }, ts: Date.now() };
+    const turn = { user: { content: text }, assistant: { content: '', reasoning_content: '' }, ts: Date.now(), marked: false };
     curTurns.push(turn);
 
     if (curMeta.turnCount === 0) {
@@ -1812,24 +1816,30 @@ html, body {
     curMeta.savedAt = Date.now();
     curMeta.schema = 2;
     S.setMeta(convId, curMeta);
-    S.setTurn(convId, ti, turn); // ★ 立刻存 LS，避免切换会话时丢失
+    S.setTurn(convId, ti, turn);
 
     inputEl.value = '';
     inputEl.style.height = 'auto';
     if (welcomeEl.parentNode) welcomeEl.remove();
 
-    // 构建 DOM
     const u = document.createElement('div');
     u.className = 'msg user';
-    u.innerHTML = '<div class="ava">你</div><div class="wrap"><div class="bubble"></div></div>';
+    u.innerHTML = '<div class="ava">你</div><div class="wrap"><div class="bubble"></div><div class="msg-actions"><button data-act="copy">复制</button><button data-act="delete">删除</button><button data-act="mark">标记</button></div></div>';
     u.querySelector('.bubble').textContent = text;
+    u.querySelector('[data-act="copy"]').addEventListener('click', (e) => { e.stopPropagation(); copyText(text); });
+    u.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); deleteTurn(ti); });
+    u.querySelector('[data-act="mark"]').addEventListener('click', (e) => { e.stopPropagation(); toggleMark(ti); });
     chatEl.appendChild(u);
 
     const a = document.createElement('div');
     a.className = 'msg ai';
-    a.innerHTML = '<div class="ava">AI</div><div class="wrap"><div class="bubble"></div></div>';
+    a.innerHTML = '<div class="ava">AI</div><div class="wrap"><div class="bubble"></div><div class="msg-actions"><button data-act="copy">复制</button><button data-act="resend">重发</button><button data-act="delete">删除</button><button data-act="mark">标记</button></div></div>';
     const wrap = a.querySelector('.wrap');
     const bubble = a.querySelector('.bubble');
+    a.querySelector('[data-act="copy"]').addEventListener('click', (e) => { e.stopPropagation(); copyText(turn.assistant.content || ''); });
+    a.querySelector('[data-act="resend"]').addEventListener('click', (e) => { e.stopPropagation(); resendTurn(ti); });
+    a.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); deleteTurn(ti); });
+    a.querySelector('[data-act="mark"]').addEventListener('click', (e) => { e.stopPropagation(); toggleMark(ti); });
     chatEl.appendChild(a);
 
     convTitleEl.textContent = curMeta.title;
@@ -1837,7 +1847,6 @@ html, body {
     isAtBottom = true;
     chatEl.scrollTop = chatEl.scrollHeight;
 
-    // 构建上下文
     const ctx = CTX.build(curTurns.slice(0, -1), {
       systemPrompt: c.systemPrompt,
       summary: curMeta.summary || '',
@@ -1853,27 +1862,20 @@ html, body {
 
     const ac = new AbortController();
     const run = {
-      ac,
-      turnIdx: ti,
-      turn,
+      ac, turnIdx: ti, turn,
       domRef: { wrap, bubble, reasonEl: null, reasonContentEl: null },
-      autoCollapsed: false,
-      saveTimer: null
+      autoCollapsed: false, saveTimer: null
     };
     runningConvs.set(convId, run);
-
-    // 更新按钮
     updateSendButton();
     renderConvList();
 
-    // 节流保存：每 2 秒
     run.saveTimer = setInterval(() => {
       const m = S.meta(convId);
       if (m) { m.savedAt = Date.now(); S.setMeta(convId, m); }
       S.setTurn(convId, ti, turn);
     }, 2000);
 
-    // 流式处理：更新内存 turn + 只在当前视图更新 DOM
     function updateStreamingUI() {
       const r = run.domRef;
       if (!r || !r.wrap || !document.contains(r.wrap)) return;
@@ -1945,7 +1947,6 @@ html, body {
           try {
             const j = JSON.parse(p);
             const d = j.choices?.[0]?.delta || j.choices?.[0]?.message || {};
-
             if (typeof d.reasoning_content === 'string' && d.reasoning_content) {
               turn.assistant.reasoning_content += d.reasoning_content;
               updateStreamingUI();
@@ -1966,7 +1967,6 @@ html, body {
         turn.assistant.content = '（无内容返回）';
         updateStreamingUI();
       }
-
     } catch (err) {
       if (err.name === 'AbortError') {
         if (!turn.assistant.content && !turn.assistant.reasoning_content) {
@@ -1980,16 +1980,12 @@ html, body {
         }
       }
     } finally {
-      // 清理
       if (run.saveTimer) clearInterval(run.saveTimer);
-      // 最终保存
       S.setTurn(convId, ti, turn);
       const m = S.meta(convId);
       if (m) { m.savedAt = Date.now(); S.setMeta(convId, m); }
       runningConvs.delete(convId);
       setSyncState(convId, 'local-newer');
-
-      // 如果当前视图是这个会话，更新按钮
       updateSendButton();
       renderConvList();
     }
@@ -2037,8 +2033,7 @@ html, body {
   document.getElementById('ceSave').addEventListener('click', () => {
     const name = document.getElementById('ceName').value.trim() || '未命名配置';
     const newCfg = {
-      id: editingConfigId || uuid(),
-      name,
+      id: editingConfigId || uuid(), name,
       proxyUrl: document.getElementById('ceProxyUrl').value.trim() || '/api/aiapi',
       proxyPassword: document.getElementById('ceProxyPassword').value,
       apiBase: document.getElementById('ceApiBase').value.trim(),
@@ -2172,14 +2167,8 @@ html, body {
   });
   cloudPopup.addEventListener('click', e => e.stopPropagation());
   document.getElementById('btnCloudRefresh').addEventListener('click', renderCloudList);
-  document.getElementById('btnSyncAll').addEventListener('click', async () => {
-    await syncAll(false);
-    renderCloudList();
-  });
-  document.getElementById('btnCheckState').addEventListener('click', async () => {
-    await checkState();
-    renderCloudList();
-  });
+  document.getElementById('btnSyncAll').addEventListener('click', async () => { await syncAll(false); renderCloudList(); });
+  document.getElementById('btnCheckState').addEventListener('click', async () => { await checkState(); renderCloudList(); });
 
   // ─── 侧边栏 ───
   function openSidebar() { sidebarEl.classList.add('open'); sidebarMask.classList.add('show'); }
@@ -2198,7 +2187,6 @@ html, body {
 
   document.getElementById('btnDlAll').addEventListener('click', downloadAll);
 
-  // ─── 发送事件 ───
   btnSend.addEventListener('click', send);
   inputEl.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
