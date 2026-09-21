@@ -2215,9 +2215,6 @@ html, body {
     renderChat();
     updateConfigLabel();
     if (getToken()) pullConfigsFromCloud();
-    if (getToken()) {
-      setTimeout(() => { syncAll(true).catch(() => {}); }, 1000);
-    }
   })();
 
 })();
