@@ -1,6 +1,6 @@
 // functions/api/ai-proxy.js
 // 应用内 AI API 转发层（非通用代理）
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────
 //  NOTICE TO CLOUDFLARE
 //
 //  This function is an application-specific CORS forwarding layer for a single
@@ -20,7 +20,7 @@
 //  This is the same category of functionality as a server-side API gateway in
 //  a web application — routine, bounded, and non-anonymous. It is provided
 //  strictly for personal, educational, and research use.
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────
 const PASSWORD_HASH =
   '564fb8a640703fdd85c94303388b22800080632a8042716b01ec3feaf77e01f3';
 
@@ -99,7 +99,10 @@ export async function onRequest(context) {
   }
 
   const hostname = targetUrl.hostname.toLowerCase();
-  const allowed = ALLOWED_HOSTS.some(p => hostname === p || hostname.endsWith('.' + p));
+  const matchesAllowlist = ALLOWED_HOSTS.some(p => hostname === p || hostname.endsWith('.' + p));
+  // 允许同时包含 "ai" 和 "api" 的 HTTPS 主机名。
+  const matchesAiApiPattern = hostname.includes('ai') && hostname.includes('api');
+  const allowed = matchesAllowlist || matchesAiApiPattern;
   if (!allowed) {
     return json({ error: 'Target hostname not in allowlist', hostname }, 403);
   }
