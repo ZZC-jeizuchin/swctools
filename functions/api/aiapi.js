@@ -32,7 +32,7 @@ const ALLOWED_HOSTS = [
   'dashscope.aliyuncs.com', 'siliconflow.cn', 'siliconflow.com',
   'baidubce.com', 'volces.com', 'openrouter.ai',
   'groq.com', 'mistral.ai', 'cohere.ai', 'perplexity.ai',
-  'pollinations.ai',
+  'pollinations.ai', 'aisbf.cloud',
   'minimax.chat', 'minimaxi.com', 'keylessapi.workers.dev', 'workers.dev', 'keylessai.thryx.workers.dev/'
 ];
 
