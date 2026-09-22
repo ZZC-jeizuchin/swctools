@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
 <title>SwC AI</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <style>
 :root {
   --bg:#e8edf2; --panel:#ffffff; --side:#dde7f0; --border:#bdd1e6;
@@ -601,8 +601,8 @@ html, body {
     <input id="ceApiKey" type="password" placeholder="sk-...">
     <label>系统提示词</label>
     <textarea id="ceSystem" placeholder="你是一个乐于助人的AI助手。"></textarea>
-    <label>温度 (0 ~ 2)</label>
-    <input id="ceTemperature" type="number" min="0" max="2" step="0.1" placeholder="0.7">
+    <label>温度 (0 ~ 2，留空则不发送)</label>
+    <input id="ceTemperature" type="number" min="0" max="2" step="0.1" placeholder="留空使用模型默认值">
     <div class="checkbox-row">
       <input type="checkbox" id="ceAutoCollapse">
       <label for="ceAutoCollapse" style="margin:0;cursor:pointer;">推理内容自动折叠</label>
@@ -644,68 +644,6 @@ html, body {
 
   function uuid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
   function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
-    function md(t) {
-    if (!t) return '';
-
-    // 1. 提取公式，用占位符保护，避免被 marked 误伤
-    const mathBlocks = [];
-    let text = String(t);
-
-    // 块级 $$...$$
-    text = text.replace(/\$\$([\s\S]+?)\$\$/g, (m, body) => {
-      mathBlocks.push({ display: true, body });
-      return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
-    });
-
-    // 块级 \[...\]
-    text = text.replace(/\\\[([\s\S]+?)\\\]/g, (m, body) => {
-      mathBlocks.push({ display: true, body });
-      return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
-    });
-
-    // 行内 $...$（避免匹配 $$）
-    text = text.replace(/(?<!\$)\$([^\$\n]+?)\$(?!\$)/g, (m, body) => {
-      mathBlocks.push({ display: false, body });
-      return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
-    });
-
-    // 行内 \(...\)
-    text = text.replace(/\\\(([\s\S]+?)\\\)/g, (m, body) => {
-      mathBlocks.push({ display: false, body });
-      return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
-    });
-
-    // 2. Markdown → HTML
-    let html;
-    try { html = marked.parse(text); }
-    catch { return esc(t); }
-
-    // 3. 消毒
-    try { html = DOMPurify.sanitize(html); }
-    catch { return esc(t); }
-
-    // 4. 恢复公式并渲染
-    if (mathBlocks.length > 0) {
-      html = html.replace(/@@@SWCMATH_(\d+)@@@/g, (m, idx) => {
-        const item = mathBlocks[parseInt(idx, 10)];
-        if (!item) return '';
-        try {
-          if (window.katex && typeof window.katex.renderToString === 'function') {
-            return window.katex.renderToString(item.body, {
-              displayMode: item.display,
-              throwOnError: false,
-              output: 'html',
-              strict: false
-            });
-          }
-        } catch {}
-        // KaTeX 不可用时回退为原始文本
-        return esc(item.display ? '$$' + item.body + '$$' : '$' + item.body + '$');
-      });
-    }
-
-    return html;
-  }
   function fmtTime(ts) {
     if (!ts) return '';
     const d = new Date(ts), n = new Date();
@@ -730,6 +668,60 @@ html, body {
     el.classList.add('show');
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove('show'), 1500);
+  }
+
+  // ─── KaTeX 渲染（占位符保护） ───
+  function md(t) {
+    if (!t) return '';
+    const mathBlocks = [];
+    let text = String(t);
+
+    text = text.replace(/\$\$([\s\S]+?)\$\$/g, (m, body) => {
+      mathBlocks.push({ display: true, body });
+      return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
+    });
+
+    text = text.replace(/\\\[([\s\S]+?)\\\]/g, (m, body) => {
+      mathBlocks.push({ display: true, body });
+      return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
+    });
+
+    text = text.replace(/(?<!\$)\$([^\$\n]+?)\$(?!\$)/g, (m, body) => {
+      mathBlocks.push({ display: false, body });
+      return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
+    });
+
+    text = text.replace(/\\\(([\s\S]+?)\\\)/g, (m, body) => {
+      mathBlocks.push({ display: false, body });
+      return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
+    });
+
+    let html;
+    try { html = marked.parse(text); }
+    catch { return esc(t); }
+
+    try { html = DOMPurify.sanitize(html); }
+    catch { return esc(t); }
+
+    if (mathBlocks.length > 0) {
+      html = html.replace(/@@@SWCMATH_(\d+)@@@/g, (m, idx) => {
+        const item = mathBlocks[parseInt(idx, 10)];
+        if (!item) return '';
+        try {
+          if (window.katex && typeof window.katex.renderToString === 'function') {
+            return window.katex.renderToString(item.body, {
+              displayMode: item.display,
+              throwOnError: false,
+              output: 'html',
+              strict: false
+            });
+          }
+        } catch {}
+        return esc(item.display ? '$$' + item.body + '$$' : '$' + item.body + '$');
+      });
+    }
+
+    return html;
   }
 
   // ─── Cookie ───
@@ -767,7 +759,7 @@ html, body {
       cfAccountId: '',
       apiKey: '',
       systemPrompt: '你是一个乐于助人的AI助手。',
-      temperature: 0.7,
+      temperature: null,
       autoCollapseReason: true,
       ctxWindow: 64000,
       summaryThreshold: 75,
@@ -836,6 +828,9 @@ html, body {
           if (!c.manualModels) c.manualModels = '';
           if (!c.modelMode) c.modelMode = 'auto';
           if (!c.cfAccountId) c.cfAccountId = '';
+          if (c.temperature === undefined || c.temperature === 0.7) {
+            // 保留原值，旧配置一般是 0.7
+          }
           localStorage.setItem(CFG_PREFIX + c.id, JSON.stringify(c));
           idx.push({
             id: c.id, name: c.name || '未命名', savedAt: c.savedAt,
@@ -1321,6 +1316,7 @@ html, body {
     if (!c.manualModels) c.manualModels = '';
     if (!c.modelMode) c.modelMode = 'auto';
     if (!c.cfAccountId) c.cfAccountId = '';
+    if (c.temperature === undefined) c.temperature = null;
     localStorage.setItem(CFG_PREFIX + id, JSON.stringify(c));
     return true;
   }
@@ -1479,6 +1475,7 @@ html, body {
         if (!c.manualModels) c.manualModels = '';
         if (!c.modelMode) c.modelMode = 'auto';
         if (!c.cfAccountId) c.cfAccountId = '';
+        if (c.temperature === undefined) c.temperature = null;
         localStorage.setItem(CFG_PREFIX + id, JSON.stringify(c));
         let index = loadConfigIndex();
         index = index.filter(x => x.id !== id);
@@ -2465,8 +2462,9 @@ html, body {
     ctx.messages.push({ role: 'user', content: text });
 
     const body = { model, messages: ctx.messages, stream: true };
-    const t = parseFloat(c.temperature);
-    if (!isNaN(t)) body.temperature = t;
+    if (typeof c.temperature === 'number' && !isNaN(c.temperature)) {
+      body.temperature = c.temperature;
+    }
     if (curMeta.reasoning) body.reasoning_effort = curMeta.reasoning;
 
     const ac = new AbortController();
@@ -2616,7 +2614,7 @@ html, body {
     document.getElementById('ceCfAccountId').value = c.cfAccountId || '';
     document.getElementById('ceApiKey').value = c.apiKey || '';
     document.getElementById('ceSystem').value = c.systemPrompt || '';
-    document.getElementById('ceTemperature').value = c.temperature ?? '';
+    document.getElementById('ceTemperature').value = (typeof c.temperature === 'number') ? c.temperature : '';
     document.getElementById('ceAutoCollapse').checked = c.autoCollapseReason !== false;
     document.getElementById('ceCtxWindow').value = c.ctxWindow ?? 64000;
     document.getElementById('ceSummaryThreshold').value = c.summaryThreshold ?? 75;
@@ -2636,6 +2634,12 @@ html, body {
   });
   document.getElementById('ceSave').addEventListener('click', () => {
     const name = document.getElementById('ceName').value.trim() || '未命名配置';
+    const tempRaw = document.getElementById('ceTemperature').value.trim();
+    let temperature = null;
+    if (tempRaw !== '') {
+      const n = parseFloat(tempRaw);
+      if (!isNaN(n)) temperature = n;
+    }
     const newCfg = {
       id: editingConfigId || uuid(),
       name,
@@ -2648,7 +2652,7 @@ html, body {
       cfAccountId: document.getElementById('ceCfAccountId').value.trim(),
       apiKey: document.getElementById('ceApiKey').value,
       systemPrompt: document.getElementById('ceSystem').value,
-      temperature: parseFloat(document.getElementById('ceTemperature').value) || 0.7,
+      temperature,
       autoCollapseReason: document.getElementById('ceAutoCollapse').checked,
       ctxWindow: parseInt(document.getElementById('ceCtxWindow').value) || 64000,
       summaryThreshold: parseInt(document.getElementById('ceSummaryThreshold').value) || 75,
