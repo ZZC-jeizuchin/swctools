@@ -17,6 +17,7 @@
   --danger:#c62828; --ok:#2e7d32; --mark:#f5b300;
   --sync-synced:#2e7d32; --sync-ln:#f57c00; --sync-cn:#1976d2;
   --sync-only:#90a4ae; --sync-unknown:#cfd8dc; --sync-fail:#c62828;
+  --search-bg:#eaf3fb; --search-border:#7fa5c5;
 }
 [data-theme="dark"] {
   --bg:#0a0f14; --panel:#0d1b2a; --side:#0d1a28; --border:#1e3a5a;
@@ -28,6 +29,7 @@
   --danger:#ef5350; --ok:#66bb6a; --mark:#ffb74d;
   --sync-synced:#66bb6a; --sync-ln:#ffb74d; --sync-cn:#64b5f6;
   --sync-only:#78909c; --sync-unknown:#37474f; --sync-fail:#ef5350;
+  --search-bg:#0f2238; --search-border:#2a5a8a;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body {
@@ -89,18 +91,19 @@ html, body {
 .topbar {
   flex:0 0 auto; display:flex; align-items:center; gap:6px;
   padding:8px 12px; background:var(--panel); border-bottom:1px solid var(--border);
+  flex-wrap:nowrap; overflow-x:auto;
 }
 .menu-btn {
   display:none; background:var(--btn); border:1px solid var(--btn-b); color:var(--text);
   width:32px; height:32px; cursor:pointer; font-size:15px; border-radius:6px;
-  align-items:center; justify-content:center;
+  align-items:center; justify-content:center; flex-shrink:0;
 }
 .back-btn {
   background:var(--btn); border:1px solid var(--btn-b); color:var(--text);
   padding:5px 12px; font-size:12px; cursor:pointer;
   border-radius:6px; text-decoration:none;
   display:inline-flex; align-items:center; gap:4px;
-  white-space:nowrap;
+  white-space:nowrap; flex-shrink:0;
 }
 .back-btn:hover { background:var(--btn-h); }
 .topbar h1 {
@@ -113,12 +116,19 @@ html, body {
   padding:5px 10px; font-size:12px; cursor:pointer;
   display:flex; align-items:center; gap:4px; white-space:nowrap;
   max-width:180px; overflow:hidden; border-radius:6px;
+  flex-shrink:0;
 }
 .chip:hover { background:var(--btn-h); }
 .chip .l { max-width:130px; overflow:hidden; text-overflow:ellipsis; }
 .chip .a { font-size:9px; opacity:0.6; }
 .chip.empty { color:var(--muted); }
 .chip.error { color:var(--danger); border-color:var(--danger); }
+.chip.search-on {
+  background:var(--acc);
+  color:#fff;
+  border-color:var(--acc);
+}
+.chip.search-on:hover { background:var(--acc-h); }
 
 .chat { flex:1; overflow-y:auto; padding:16px 20px; }
 .chat::-webkit-scrollbar { width:6px; }
@@ -173,6 +183,54 @@ html, body {
   word-break:break-word; font-size:13px; border-top:1px solid var(--border);
 }
 
+/* 联网搜索：状态提示 */
+.search-status {
+  max-width:820px;
+  margin:0 auto 16px;
+  padding:8px 14px;
+  background:var(--search-bg);
+  border:1px solid var(--search-border);
+  border-radius:8px;
+  font-size:13px;
+  color:var(--text);
+  text-align:center;
+}
+
+/* 联网搜索：引用来源 */
+.search-refs {
+  margin-top:8px;
+  font-size:12px;
+  background:var(--search-bg);
+  border:1px solid var(--search-border);
+  border-radius:8px;
+  overflow:hidden;
+  width:100%;
+}
+.search-refs summary {
+  padding:7px 12px;
+  cursor:pointer;
+  color:var(--muted);
+  list-style:none;
+  user-select:none;
+}
+.search-refs summary::-webkit-details-marker { display:none; }
+.search-refs summary::before { content:'▸ '; font-size:10px; }
+.search-refs[open] summary::before { content:'▾ '; }
+.ref-list {
+  padding:4px 12px 10px;
+  border-top:1px solid var(--search-border);
+}
+.ref-item {
+  display:block;
+  padding:4px 0;
+  color:var(--acc);
+  text-decoration:none;
+  word-break:break-all;
+  font-size:12px;
+  line-height:1.5;
+}
+.ref-item:hover { text-decoration:underline; }
+
 .bubble p { margin:0 0 8px; }
 .bubble p:last-child { margin-bottom:0; }
 .bubble pre { background:var(--code-bg); padding:10px 12px; overflow-x:auto; margin:8px 0; font-size:13px; border-radius:8px; }
@@ -185,6 +243,7 @@ html, body {
 .bubble blockquote { border-left:3px solid var(--border); padding-left:10px; margin:8px 0; opacity:.85; }
 .bubble table { border-collapse:collapse; margin:8px 0; }
 .bubble th, .bubble td { border:1px solid var(--border); padding:4px 8px; }
+.bubble .katex { font-size:1em; }
 
 .input-area { flex:0 0 auto; padding:10px 20px 14px; background:var(--panel); border-top:1px solid var(--border); }
 .input-box { max-width:820px; margin:0 auto; display:flex; gap:8px; align-items:flex-end; }
@@ -439,6 +498,7 @@ html, body {
   .modal { padding:8px; }
   .modal-card { padding:16px; max-height:94vh; }
   .cloud-row .info .t { max-width:140px; }
+  .search-refs, .search-status { font-size:12px; }
 }
 @media (max-width: 768px) and (orientation: landscape) {
   .sidebar { position:static; transform:none !important; width:200px; }
@@ -479,6 +539,9 @@ html, body {
       <button class="chip" id="btnReason" title="推理强度">
         <span id="reasonLabel">默认</span>
         <span class="a">▾</span>
+      </button>
+      <button class="chip" id="btnSearchToggle" title="联网搜索开关">
+        <span id="searchLabel">🔌 联网</span>
       </button>
     </div>
 
@@ -607,6 +670,24 @@ html, body {
       <input type="checkbox" id="ceAutoCollapse">
       <label for="ceAutoCollapse" style="margin:0;cursor:pointer;">推理内容自动折叠</label>
     </div>
+
+    <h3 style="margin-top:24px;">联网搜索</h3>
+    <div class="checkbox-row">
+      <input type="checkbox" id="ceSearchEnabled">
+      <label for="ceSearchEnabled" style="margin:0;cursor:pointer;">默认启用联网搜索</label>
+    </div>
+    <label>搜索提供商</label>
+    <select id="ceSearchProvider">
+      <option value="tavily">Tavily (AI 优化)</option>
+      <option value="serper">Serper (Google 结果)</option>
+    </select>
+    <label>Tavily API Key</label>
+    <input id="ceTavilyApiKey" type="password" placeholder="tvly-...">
+    <div class="hint">从 tavily.com 获取，每月 1000 免费积分</div>
+    <label>Serper API Key</label>
+    <input id="ceSerperApiKey" type="password" placeholder="your-serper-key">
+    <div class="hint">从 serper.dev 获取，2500 次免费搜索</div>
+
     <label>上下文窗口 (tokens)</label>
     <input id="ceCtxWindow" type="number" min="1000" step="1000" placeholder="64000">
     <label>摘要阈值 (%)</label>
@@ -670,7 +751,7 @@ html, body {
     toastTimer = setTimeout(() => el.classList.remove('show'), 1500);
   }
 
-  // ─── KaTeX 渲染（占位符保护） ───
+  // ─── KaTeX + Markdown 渲染 ───
   function md(t) {
     if (!t) return '';
     const mathBlocks = [];
@@ -764,6 +845,10 @@ html, body {
       ctxWindow: 64000,
       summaryThreshold: 75,
       model: '',
+      searchEnabled: false,
+      searchProvider: 'tavily',
+      tavilyApiKey: '',
+      serperApiKey: '',
       savedAt: Date.now()
     };
   }
@@ -828,9 +913,10 @@ html, body {
           if (!c.manualModels) c.manualModels = '';
           if (!c.modelMode) c.modelMode = 'auto';
           if (!c.cfAccountId) c.cfAccountId = '';
-          if (c.temperature === undefined || c.temperature === 0.7) {
-            // 保留原值，旧配置一般是 0.7
-          }
+          if (c.searchEnabled === undefined) c.searchEnabled = false;
+          if (!c.searchProvider) c.searchProvider = 'tavily';
+          if (c.tavilyApiKey === undefined) c.tavilyApiKey = '';
+          if (c.serperApiKey === undefined) c.serperApiKey = '';
           localStorage.setItem(CFG_PREFIX + c.id, JSON.stringify(c));
           idx.push({
             id: c.id, name: c.name || '未命名', savedAt: c.savedAt,
@@ -1317,6 +1403,10 @@ html, body {
     if (!c.modelMode) c.modelMode = 'auto';
     if (!c.cfAccountId) c.cfAccountId = '';
     if (c.temperature === undefined) c.temperature = null;
+    if (c.searchEnabled === undefined) c.searchEnabled = false;
+    if (!c.searchProvider) c.searchProvider = 'tavily';
+    if (c.tavilyApiKey === undefined) c.tavilyApiKey = '';
+    if (c.serperApiKey === undefined) c.serperApiKey = '';
     localStorage.setItem(CFG_PREFIX + id, JSON.stringify(c));
     return true;
   }
@@ -1419,6 +1509,7 @@ html, body {
       renderConfigManagerList();
       updateConfigLabel();
       updateModelLabel();
+      updateSearchToggle();
       return { uploaded, downloaded, skipped, failed };
     } finally {
       syncing = false;
@@ -1476,6 +1567,10 @@ html, body {
         if (!c.modelMode) c.modelMode = 'auto';
         if (!c.cfAccountId) c.cfAccountId = '';
         if (c.temperature === undefined) c.temperature = null;
+        if (c.searchEnabled === undefined) c.searchEnabled = false;
+        if (!c.searchProvider) c.searchProvider = 'tavily';
+        if (c.tavilyApiKey === undefined) c.tavilyApiKey = '';
+        if (c.serperApiKey === undefined) c.serperApiKey = '';
         localStorage.setItem(CFG_PREFIX + id, JSON.stringify(c));
         let index = loadConfigIndex();
         index = index.filter(x => x.id !== id);
@@ -1489,6 +1584,7 @@ html, body {
         renderConfigManagerList();
         updateConfigLabel();
         updateModelLabel();
+        updateSearchToggle();
         if (!silent) updateProgress('cfgProgress', '');
         return { ok: true, direction: 'download' };
       }
@@ -1573,6 +1669,7 @@ html, body {
     renderConfigManagerList();
     updateConfigLabel();
     updateModelLabel();
+    updateSearchToggle();
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1590,6 +1687,8 @@ html, body {
   const modelLabel = document.getElementById('modelLabel');
   const btnReason = document.getElementById('btnReason');
   const reasonLabel = document.getElementById('reasonLabel');
+  const btnSearchToggle = document.getElementById('btnSearchToggle');
+  const searchLabel = document.getElementById('searchLabel');
   const configPopup = document.getElementById('configPopup');
   const modelPopup = document.getElementById('modelPopup');
   const reasonPopup = document.getElementById('reasonPopup');
@@ -1720,6 +1819,28 @@ html, body {
     }
     bubble.innerHTML = turn.assistant.content ? md(turn.assistant.content) : '';
 
+    // 引用来源
+    if (turn.searchResults && turn.searchResults.length > 0) {
+      const refPanel = document.createElement('details');
+      refPanel.className = 'search-refs';
+      const summary = document.createElement('summary');
+      summary.textContent = '📎 参考来源 (' + turn.searchResults.length + ')';
+      refPanel.appendChild(summary);
+      const refList = document.createElement('div');
+      refList.className = 'ref-list';
+      turn.searchResults.forEach((r, i) => {
+        const item = document.createElement('a');
+        item.className = 'ref-item';
+        item.href = r.url;
+        item.target = '_blank';
+        item.rel = 'noopener';
+        item.textContent = '[' + (i + 1) + '] ' + (r.title || r.url);
+        refList.appendChild(item);
+      });
+      refPanel.appendChild(refList);
+      wrap.appendChild(refPanel);
+    }
+
     a.querySelector('[data-act="copy"]').addEventListener('click', (e) => { e.stopPropagation(); copyText(turn.assistant.content || ''); });
     a.querySelector('[data-act="resend"]').addEventListener('click', (e) => { e.stopPropagation(); resendTurn(turnIdx); });
     a.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); deleteTurn(turnIdx); });
@@ -1778,6 +1899,18 @@ html, body {
     else { btnSend.textContent = '发送'; btnSend.classList.remove('stop'); }
   }
 
+  function updateSearchToggle() {
+    const c = curConfig();
+    const on = c && c.searchEnabled === true;
+    if (on) {
+      btnSearchToggle.classList.add('search-on');
+      searchLabel.textContent = '🌐 联网';
+    } else {
+      btnSearchToggle.classList.remove('search-on');
+      searchLabel.textContent = '🔌 联网';
+    }
+  }
+
   function renderChat() {
     chatEl.innerHTML = '';
     if (!curId || curTurns.length === 0) {
@@ -1796,6 +1929,7 @@ html, body {
     updateConfigLabel();
     updateModelLabel();
     updateReasonLabel();
+    updateSearchToggle();
     updateSendButton();
     renderConvList();
   }
@@ -1986,6 +2120,7 @@ html, body {
     modelsCache = loadModels();
     updateConfigLabel();
     updateModelLabel();
+    updateSearchToggle();
     renderModelList();
   }
   btnConfig.addEventListener('click', (e) => {
@@ -2144,6 +2279,17 @@ html, body {
     });
   });
   reasonPopup.addEventListener('click', e => e.stopPropagation());
+
+  // ─── 联网开关 ───
+  btnSearchToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const c = curConfig();
+    c.searchEnabled = !c.searchEnabled;
+    saveConfig(c);
+    setSyncState(c.id, 'local-newer');
+    updateSearchToggle();
+    showToast(c.searchEnabled ? '已开启联网搜索' : '已关闭联网搜索');
+  });
 
   document.getElementById('btnTheme').addEventListener('click', () => {
     const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -2368,6 +2514,39 @@ html, body {
     }
   }
 
+  // ─── 联网搜索 ───
+  async function performSearch(query, cfg) {
+    const provider = cfg.searchProvider || 'tavily';
+    const searchKey = provider === 'tavily' ? cfg.tavilyApiKey : cfg.serperApiKey;
+
+    if (!searchKey) {
+      return { error: '搜索 API Key 未填写' };
+    }
+
+    try {
+      const res = await fetch('/api/aisearch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: cfg.proxyPassword,
+          provider: provider,
+          query: query,
+          apiKey: searchKey
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        return { error: data.error || ('搜索失败 HTTP ' + res.status) };
+      }
+
+      return { results: data.results || [] };
+    } catch (e) {
+      return { error: '搜索网络异常: ' + (e.message || e) };
+    }
+  }
+
   // ─── 发送 ───
   async function send() {
     if (curId && runningConvs.has(curId)) {
@@ -2411,7 +2590,7 @@ html, body {
 
     const convId = curId;
     const ti = curTurns.length;
-    const turn = { user: { content: text }, assistant: { content: '', reasoning_content: '' }, ts: Date.now(), marked: false };
+    const turn = { user: { content: text }, assistant: { content: '', reasoning_content: '' }, ts: Date.now(), marked: false, searchResults: null };
     curTurns.push(turn);
 
     if (curMeta.turnCount === 0) {
@@ -2428,6 +2607,7 @@ html, body {
     inputEl.style.height = 'auto';
     if (welcomeEl.parentNode) welcomeEl.remove();
 
+    // 渲染用户消息
     const u = document.createElement('div');
     u.className = 'msg user';
     u.innerHTML = '<div class="ava">你</div><div class="wrap"><div class="bubble"></div><div class="msg-actions"><button data-act="copy">复制</button><button data-act="delete">删除</button><button data-act="mark">标记</button></div></div>';
@@ -2437,6 +2617,7 @@ html, body {
     u.querySelector('[data-act="mark"]').addEventListener('click', (e) => { e.stopPropagation(); toggleMark(ti); });
     chatEl.appendChild(u);
 
+    // 渲染 AI 占位消息
     const a = document.createElement('div');
     a.className = 'msg ai';
     a.innerHTML = '<div class="ava">AI</div><div class="wrap"><div class="bubble"></div><div class="msg-actions"><button data-act="copy">复制</button><button data-act="resend">重发</button><button data-act="delete">删除</button><button data-act="mark">标记</button></div></div>';
@@ -2453,13 +2634,58 @@ html, body {
     isAtBottom = true;
     chatEl.scrollTop = chatEl.scrollHeight;
 
+    // ═══════ 联网搜索 ═══════
+    let searchContext = '';
+    if (c.searchEnabled) {
+      const provider = c.searchProvider || 'tavily';
+      const searchKey = provider === 'tavily' ? c.tavilyApiKey : c.serperApiKey;
+      if (searchKey) {
+        // 显示搜索状态
+        const statusEl = document.createElement('div');
+        statusEl.className = 'search-status';
+        statusEl.textContent = '🔍 正在搜索「' + text.slice(0, 30) + (text.length > 30 ? '…' : '') + '」...';
+        // 插到用户消息和 AI 消息之间
+        chatEl.insertBefore(statusEl, a);
+        scrollToBottom();
+
+        const searchResult = await performSearch(text, c);
+
+        if (searchResult.error) {
+          statusEl.textContent = '⚠️ 搜索失败：' + searchResult.error + '（将继续对话）';
+          statusEl.style.borderColor = 'var(--danger)';
+          setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 3000);
+        } else if (searchResult.results && searchResult.results.length > 0) {
+          turn.searchResults = searchResult.results;
+          S.setTurn(convId, ti, turn);
+
+          searchContext = '以下是相关网页搜索结果，请基于这些信息回答用户问题。如果搜索结果不相关或不足，可以忽略它们并基于你自己的知识回答。\n\n';
+          searchResult.results.forEach((r, i) => {
+            searchContext += '[' + (i + 1) + '] ' + (r.title || '') + '\n';
+            searchContext += (r.snippet || '') + '\n';
+            searchContext += '来源：' + (r.url || '') + '\n\n';
+          });
+          searchContext += '---\n\n';
+
+          statusEl.textContent = '✅ 搜索完成，共 ' + searchResult.results.length + ' 条结果';
+          setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 2000);
+        } else {
+          statusEl.textContent = '⚠️ 未找到相关结果（将继续对话）';
+          setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 2500);
+        }
+      }
+    }
+
+    // 构建上下文
     const ctx = CTX.build(curTurns.slice(0, -1), {
       systemPrompt: c.systemPrompt,
       summary: curMeta.summary || '',
       ctxWindow: c.ctxWindow || 64000,
       summaryThreshold: c.summaryThreshold || 75
     });
-    ctx.messages.push({ role: 'user', content: text });
+
+    // 把当前用户消息加上，若有搜索上下文则前置
+    const finalUserContent = searchContext ? (searchContext + '用户问题：' + text) : text;
+    ctx.messages.push({ role: 'user', content: finalUserContent });
 
     const body = { model, messages: ctx.messages, stream: true };
     if (typeof c.temperature === 'number' && !isNaN(c.temperature)) {
@@ -2595,6 +2821,11 @@ html, body {
       setSyncState(convId, 'local-newer');
       updateSendButton();
       renderConvList();
+
+      // 最终重绘以确保引用来源正确显示
+      if (curId === convId && turn.searchResults && turn.searchResults.length > 0) {
+        renderChat();
+      }
     }
   }
 
@@ -2616,6 +2847,10 @@ html, body {
     document.getElementById('ceSystem').value = c.systemPrompt || '';
     document.getElementById('ceTemperature').value = (typeof c.temperature === 'number') ? c.temperature : '';
     document.getElementById('ceAutoCollapse').checked = c.autoCollapseReason !== false;
+    document.getElementById('ceSearchEnabled').checked = c.searchEnabled === true;
+    document.getElementById('ceSearchProvider').value = c.searchProvider || 'tavily';
+    document.getElementById('ceTavilyApiKey').value = c.tavilyApiKey || '';
+    document.getElementById('ceSerperApiKey').value = c.serperApiKey || '';
     document.getElementById('ceCtxWindow').value = c.ctxWindow ?? 64000;
     document.getElementById('ceSummaryThreshold').value = c.summaryThreshold ?? 75;
     document.getElementById('ceDelete').style.display = cfg ? 'inline-block' : 'none';
@@ -2657,6 +2892,10 @@ html, body {
       ctxWindow: parseInt(document.getElementById('ceCtxWindow').value) || 64000,
       summaryThreshold: parseInt(document.getElementById('ceSummaryThreshold').value) || 75,
       model: '',
+      searchEnabled: document.getElementById('ceSearchEnabled').checked,
+      searchProvider: document.getElementById('ceSearchProvider').value || 'tavily',
+      tavilyApiKey: document.getElementById('ceTavilyApiKey').value.trim(),
+      serperApiKey: document.getElementById('ceSerperApiKey').value.trim(),
       savedAt: Date.now()
     };
     if (editingConfigId) {
@@ -2675,6 +2914,7 @@ html, body {
     closeConfigEdit();
     updateConfigLabel();
     updateModelLabel();
+    updateSearchToggle();
     renderConfigManagerList();
   });
 
@@ -2792,6 +3032,7 @@ html, body {
     if (ids.length > 0) loadConv(ids[0]);
     renderChat();
     updateConfigLabel();
+    updateSearchToggle();
   })();
 
 })();
