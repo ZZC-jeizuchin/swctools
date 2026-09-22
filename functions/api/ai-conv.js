@@ -1,11 +1,8 @@
 // functions/api/ai-conv.js
-// 用户配置 + 对话云同步，存储在 AIKV
-//
-// 键结构：
-//   <username>:cfg_index        → 配置索引 [{id, name, savedAt, apiBase, model}]
-//   <username>:cfg:<id>         → 单套配置完整 JSON
-//   <username>:index            → 会话索引 [{id, title, ..., savedAt, turnCount}]
-//   <username>:conv:<id>        → 单个会话 {schema, id, title, ..., turns}
+// 三类独立存储：
+//   1. 模型配置:  <username>:cfg_index / <username>:cfg:<id>
+//   2. 搜索配置:  <username>:search_index / <username>:search:<id>
+//   3. 对话:      <username>:index / <username>:conv:<id>
 
 async function sign(data, secret) {
   const key = await crypto.subtle.importKey(
@@ -74,12 +71,10 @@ export async function onRequest(context) {
   const id = url.searchParams.get('id');
   const metaOnly = url.searchParams.get('meta') === '1';
 
-  // ═══════════ 配置 ═══════════
+  // ═══════════ 模型配置 ═══════════
   if (type === 'config') {
-    // 尝试迁移旧的 <user>:configs
     await migrateOldConfigs(env, username);
 
-    // GET
     if (method === 'GET') {
       if (id) {
         const raw = await env.AIKV.get(`${username}:cfg:${id}`);
@@ -93,7 +88,6 @@ export async function onRequest(context) {
       return json({ index });
     }
 
-    // PUT
     if (method === 'PUT') {
       if (!id) return json({ error: '缺少 id' }, 400);
       let body;
@@ -127,7 +121,6 @@ export async function onRequest(context) {
       return json({ success: true });
     }
 
-    // DELETE
     if (method === 'DELETE') {
       if (!id) return json({ error: '缺少 id' }, 400);
       await env.AIKV.delete(`${username}:cfg:${id}`);
@@ -144,7 +137,71 @@ export async function onRequest(context) {
     return json({ error: 'Method Not Allowed' }, 405);
   }
 
-  // ═══════════ 会话 ═══════════
+  // ═══════════ 搜索配置 ═══════════
+  if (type === 'search') {
+    if (method === 'GET') {
+      if (id) {
+        const raw = await env.AIKV.get(`${username}:search:${id}`);
+        if (!raw) return json({ error: '搜索配置不存在' }, 404);
+        try { return json({ config: JSON.parse(raw) }); }
+        catch { return json({ error: '数据损坏' }, 500); }
+      }
+      const raw = await env.AIKV.get(`${username}:search_index`);
+      let index = [];
+      try { index = raw ? JSON.parse(raw) : []; } catch {}
+      return json({ index });
+    }
+
+    if (method === 'PUT') {
+      if (!id) return json({ error: '缺少 id' }, 400);
+      let body;
+      try { body = await request.json(); }
+      catch { return json({ error: 'Invalid JSON' }, 400); }
+      if (!body || !body.config) return json({ error: '缺少 config' }, 400);
+      const cfg = body.config;
+      if (cfg.id !== id) return json({ error: 'id 不匹配' }, 400);
+
+      const raw = JSON.stringify(cfg);
+      if (raw.length > MAX_CONFIG_SIZE) return json({ error: '配置过大' }, 413);
+
+      await env.AIKV.put(`${username}:search:${id}`, raw);
+
+      let index = [];
+      try {
+        const ir = await env.AIKV.get(`${username}:search_index`);
+        index = ir ? JSON.parse(ir) : [];
+      } catch {}
+      index = index.filter(x => x.id !== id);
+      index.unshift({
+        id: cfg.id,
+        name: cfg.name || '未命名',
+        savedAt: cfg.savedAt || Date.now(),
+        provider: cfg.searchProvider || 'tavily',
+        enabled: cfg.enabled === true
+      });
+      if (index.length > MAX_INDEX_SIZE) index = index.slice(0, MAX_INDEX_SIZE);
+      await env.AIKV.put(`${username}:search_index`, JSON.stringify(index));
+
+      return json({ success: true });
+    }
+
+    if (method === 'DELETE') {
+      if (!id) return json({ error: '缺少 id' }, 400);
+      await env.AIKV.delete(`${username}:search:${id}`);
+      let index = [];
+      try {
+        const ir = await env.AIKV.get(`${username}:search_index`);
+        index = ir ? JSON.parse(ir) : [];
+      } catch {}
+      index = index.filter(x => x.id !== id);
+      await env.AIKV.put(`${username}:search_index`, JSON.stringify(index));
+      return json({ success: true });
+    }
+
+    return json({ error: 'Method Not Allowed' }, 405);
+  }
+
+  // ═══════════ 对话 ═══════════
   if (method === 'GET') {
     if (id) {
       const raw = await env.AIKV.get(`${username}:conv:${id}`);
@@ -217,13 +274,11 @@ export async function onRequest(context) {
   return json({ error: 'Method Not Allowed' }, 405);
 }
 
-// 旧键迁移：<user>:configs → <user>:cfg_index + <user>:cfg:<id>
 async function migrateOldConfigs(env, username) {
   try {
     const oldRaw = await env.AIKV.get(`${username}:configs`);
     if (!oldRaw) return;
 
-    // 已经有新索引，说明迁移过了，清理旧键
     const idxRaw = await env.AIKV.get(`${username}:cfg_index`);
     if (idxRaw) {
       await env.AIKV.delete(`${username}:configs`);
@@ -253,7 +308,5 @@ async function migrateOldConfigs(env, username) {
     }
     await env.AIKV.put(`${username}:cfg_index`, JSON.stringify(index));
     await env.AIKV.delete(`${username}:configs`);
-  } catch {
-    // 静默
-  }
+  } catch {}
 }
