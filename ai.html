@@ -580,9 +580,21 @@ html, body {
     <label>API 地址</label>
     <input id="ceApiBase" placeholder="https://api.deepseek.com">
     <div class="hint">不带 /chat/completions，程序会自动拼接</div>
-    <label>备用模型地址（可选）</label>
+    <label>备用模型列表地址（可选）</label>
     <input id="ceFallbackModelsUrl" placeholder="https://backup.example.com/v1/models">
-    <div class="hint">主 API 的 /models 失败时使用，留空则跳过</div>
+    <div class="hint">完整的模型列表 URL，主 API 的 /models 失败时使用；留空则跳过</div>
+    <label>手动模型列表（可选）</label>
+    <textarea id="ceManualModels" placeholder="一行一个模型名，例如：&#10;deepseek-chat&#10;deepseek-reasoner"></textarea>
+    <div class="hint">如果填写了，将跳过所有 URL 获取，直接从列表选择</div>
+    <label>模型获取模式</label>
+    <select id="ceModelMode">
+      <option value="auto">自动（主 API /models → 备用列表）</option>
+      <option value="manual">仅手动列表</option>
+      <option value="cloudflare">Cloudflare Workers AI</option>
+    </select>
+    <label>Cloudflare Account ID（仅 Cloudflare 模式）</label>
+    <input id="ceCfAccountId" placeholder="例如：023e105f4ecef8ad9ca31a8372d0c353">
+    <div class="hint">在 Cloudflare 控制台 Workers & Pages → 账户详情中查看</div>
     <label>API Key</label>
     <input id="ceApiKey" type="password" placeholder="sk-...">
     <label>系统提示词</label>
@@ -676,7 +688,7 @@ html, body {
   }
 
   // ═══════════════════════════════════════════════════════
-  // 配置（localStorage + cookie 仅存 current）
+  // 配置
   // ═══════════════════════════════════════════════════════
   const CFG_PREFIX = 'swc_ai_cfg_';
   const CFG_IDX_KEY = 'swc_ai_cfg_index';
@@ -690,6 +702,9 @@ html, body {
       proxyPassword: '',
       apiBase: '',
       fallbackModelsUrl: '',
+      manualModels: '',
+      modelMode: 'auto',
+      cfAccountId: '',
       apiKey: '',
       systemPrompt: '你是一个乐于助人的AI助手。',
       temperature: 0.7,
@@ -740,7 +755,6 @@ html, body {
     saveConfigIndex(index);
   }
 
-  // 旧 cookie 数据迁移
   function migrateOldConfigCookies() {
     try {
       const oldIds = getCookie('swc_ai_cfg_ids');
@@ -759,6 +773,9 @@ html, body {
           const c = JSON.parse(raw);
           if (!c.savedAt) c.savedAt = Date.now();
           if (!c.fallbackModelsUrl) c.fallbackModelsUrl = '';
+          if (!c.manualModels) c.manualModels = '';
+          if (!c.modelMode) c.modelMode = 'auto';
+          if (!c.cfAccountId) c.cfAccountId = '';
           localStorage.setItem(CFG_PREFIX + c.id, JSON.stringify(c));
           idx.push({
             id: c.id, name: c.name || '未命名', savedAt: c.savedAt,
@@ -1006,7 +1023,6 @@ html, body {
     else { el.textContent = ''; el.classList.remove('show'); }
   }
 
-  // ─── 会话同步 ───
   async function uploadConv(id) {
     const m = S.meta(id); if (!m) return false;
     const turns = S.turns(id, m.turnCount || 0);
@@ -1228,7 +1244,7 @@ html, body {
   }
 
   // ═══════════════════════════════════════════════════════
-  // 配置同步（对齐会话）
+  // 配置同步
   // ═══════════════════════════════════════════════════════
   async function uploadConfig(id) {
     const c = configs.find(x => x.id === id);
@@ -1242,6 +1258,9 @@ html, body {
     const c = r.config;
     if (!c.savedAt) c.savedAt = Date.now();
     if (!c.fallbackModelsUrl) c.fallbackModelsUrl = '';
+    if (!c.manualModels) c.manualModels = '';
+    if (!c.modelMode) c.modelMode = 'auto';
+    if (!c.cfAccountId) c.cfAccountId = '';
     localStorage.setItem(CFG_PREFIX + id, JSON.stringify(c));
     return true;
   }
@@ -1397,6 +1416,9 @@ html, body {
         const c = cm;
         if (!c.savedAt) c.savedAt = Date.now();
         if (!c.fallbackModelsUrl) c.fallbackModelsUrl = '';
+        if (!c.manualModels) c.manualModels = '';
+        if (!c.modelMode) c.modelMode = 'auto';
+        if (!c.cfAccountId) c.cfAccountId = '';
         localStorage.setItem(CFG_PREFIX + id, JSON.stringify(c));
         let index = loadConfigIndex();
         index = index.filter(x => x.id !== id);
@@ -2074,20 +2096,107 @@ html, body {
   // ─── 获取模型 ───
   let fetchingModels = false;
 
-  function normalizeModelsUrl(input) {
-    return (input || '').trim();
-  }
-
   async function fetchModels(silent) {
     if (fetchingModels) return;
     const c = curConfig();
-
-    if (!c.proxyUrl || !c.proxyPassword || !c.apiKey) {
-      if (!silent) showDiag('配置不完整', [
+    if (!c.proxyUrl || !c.proxyPassword) {
+      if (!silent) showDiag('代理配置不完整', [
         { k: '配置名', v: c.name },
         { k: '代理地址', v: c.proxyUrl || '(空)' },
-        { k: '代理密码', v: c.proxyPassword ? '已填' : '(空)' },
-        { k: 'API Key', v: c.apiKey ? '已填' : '(空)' }
+        { k: '代理密码', v: c.proxyPassword ? '已填' : '(空)' }
+      ]);
+      return;
+    }
+
+    // ─── 模式 1：手动列表 ───
+    if (c.modelMode === 'manual' && c.manualModels) {
+      const list = c.manualModels.split('\n').map(s => s.trim()).filter(Boolean);
+      if (list.length > 0) {
+        modelsCache = list;
+        saveModels(list);
+        renderModelList();
+        if (!curMeta?.model && !c.model) selectModel(list[0]);
+        return;
+      }
+    }
+
+    // ─── 模式 2：Cloudflare Workers AI ───
+    if (c.modelMode === 'cloudflare') {
+      if (!c.cfAccountId || !c.apiKey) {
+        if (!silent) showDiag('Cloudflare 配置不完整', [
+          { k: '配置名', v: c.name },
+          { k: 'Account ID', v: c.cfAccountId || '(空)' },
+          { k: 'API Key', v: c.apiKey ? '已填' : '(空)' }
+        ]);
+        return;
+      }
+      fetchingModels = true;
+      const btn = document.getElementById('btnRefreshModels');
+      btn.disabled = true; btn.textContent = '…';
+      const cfUrl = 'https://api.cloudflare.com/client/v4/accounts/' + encodeURIComponent(c.cfAccountId) + '/ai/models/search';
+      try {
+        const res = await fetch(c.proxyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: c.proxyPassword,
+            target: cfUrl,
+            method: 'GET',
+            headers: { 'Authorization': 'Bearer ' + c.apiKey }
+          })
+        });
+        const bodyText = await res.text();
+        if (!res.ok) {
+          if (!silent) showDiag('Cloudflare 获取模型失败 HTTP ' + res.status, [
+            { k: '目标', v: cfUrl },
+            { k: '状态', v: res.status },
+            { k: '响应体', v: bodyText.slice(0, 2000) }
+          ]);
+          return;
+        }
+        let data;
+        try { data = JSON.parse(bodyText); }
+        catch {
+          if (!silent) showDiag('响应不是 JSON', [
+            { k: '目标', v: cfUrl },
+            { k: '响应体', v: bodyText.slice(0, 2000) }
+          ]);
+          return;
+        }
+        let list = [];
+        if (data.result && Array.isArray(data.result)) {
+          list = data.result.map(m => m.name || m.id).filter(Boolean);
+        } else if (Array.isArray(data)) {
+          list = data.map(m => m.name || m.id).filter(Boolean);
+        }
+        if (list.length === 0) {
+          if (!silent) showDiag('未解析到 Cloudflare 模型', [
+            { k: '目标', v: cfUrl },
+            { k: '响应体', v: bodyText.slice(0, 2000) }
+          ]);
+          return;
+        }
+        modelsCache = list;
+        saveModels(list);
+        renderModelList();
+        if (!curMeta?.model && !c.model) selectModel(list[0]);
+      } catch (e) {
+        if (!silent) showDiag('Cloudflare 获取模型网络异常', [
+          { k: '代理地址', v: c.proxyUrl },
+          { k: '异常', v: e.name + ': ' + e.message }
+        ]);
+      } finally {
+        fetchingModels = false;
+        btn.disabled = false; btn.textContent = '↻';
+      }
+      return;
+    }
+
+    // ─── 模式 3：自动（主 API /models → 备用列表）───
+    if (!c.apiKey) {
+      if (!silent) showDiag('API Key 未填写', [
+        { k: '配置名', v: c.name },
+        { k: '提示', v: '自动模式下需要填写 API Key' }
       ]);
       return;
     }
@@ -2100,14 +2209,14 @@ html, body {
       });
     }
     if (c.fallbackModelsUrl) {
-      const u = normalizeModelsUrl(c.fallbackModelsUrl);
-      if (u) targets.push({ label: '备用模型地址', url: u });
+      const u = (c.fallbackModelsUrl || '').trim();
+      if (u) targets.push({ label: '备用模型列表', url: u });
     }
 
     if (targets.length === 0) {
       if (!silent) showDiag('未配置 API 地址', [
         { k: '配置名', v: c.name },
-        '请在配置里填写「API 地址」或「备用模型地址」。'
+        '请在配置里填写「API 地址」或「备用模型列表地址」。'
       ]);
       return;
     }
@@ -2442,6 +2551,9 @@ html, body {
     document.getElementById('ceProxyPassword').value = c.proxyPassword || '';
     document.getElementById('ceApiBase').value = c.apiBase || '';
     document.getElementById('ceFallbackModelsUrl').value = c.fallbackModelsUrl || '';
+    document.getElementById('ceManualModels').value = c.manualModels || '';
+    document.getElementById('ceModelMode').value = c.modelMode || 'auto';
+    document.getElementById('ceCfAccountId').value = c.cfAccountId || '';
     document.getElementById('ceApiKey').value = c.apiKey || '';
     document.getElementById('ceSystem').value = c.systemPrompt || '';
     document.getElementById('ceTemperature').value = c.temperature ?? '';
@@ -2471,6 +2583,9 @@ html, body {
       proxyPassword: document.getElementById('ceProxyPassword').value,
       apiBase: document.getElementById('ceApiBase').value.trim(),
       fallbackModelsUrl: document.getElementById('ceFallbackModelsUrl').value.trim(),
+      manualModels: document.getElementById('ceManualModels').value.trim(),
+      modelMode: document.getElementById('ceModelMode').value || 'auto',
+      cfAccountId: document.getElementById('ceCfAccountId').value.trim(),
       apiKey: document.getElementById('ceApiKey').value,
       systemPrompt: document.getElementById('ceSystem').value,
       temperature: parseFloat(document.getElementById('ceTemperature').value) || 0.7,
