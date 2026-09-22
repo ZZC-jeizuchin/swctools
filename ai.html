@@ -193,6 +193,7 @@ html, body {
   font-size:13px;
   color:var(--text);
   text-align:center;
+  word-break:break-word;
 }
 
 .search-refs {
@@ -579,7 +580,6 @@ html, body {
   </main>
 </div>
 
-<!-- 模型配置切换 Popup -->
 <div class="popup" id="configPopup" style="width:300px;">
   <div class="popup-head">
     <span style="flex:1;font-size:12px;color:var(--muted);font-weight:600;">模型配置</span>
@@ -588,7 +588,6 @@ html, body {
   <div class="popup-list" id="configList"></div>
 </div>
 
-<!-- 模型选择 Popup -->
 <div class="popup" id="modelPopup" style="width:320px;">
   <div class="popup-head">
     <input id="modelSearch" placeholder="搜索模型...">
@@ -604,7 +603,6 @@ html, body {
   </div>
 </div>
 
-<!-- 搜索 Popup -->
 <div class="popup" id="searchPopup" style="width:320px;">
   <div class="search-toggle-row">
     <input type="checkbox" id="searchEnabledCheck">
@@ -617,7 +615,6 @@ html, body {
   </div>
 </div>
 
-<!-- 推理强度 Popup -->
 <div class="popup" id="reasonPopup" style="width:180px;">
   <div class="popup-list" style="max-height:none;">
     <div class="popup-item" data-v="">默认</div>
@@ -630,7 +627,6 @@ html, body {
   </div>
 </div>
 
-<!-- 对话云同步 Popup -->
 <div class="popup" id="cloudPopup" style="width:360px;">
   <div class="popup-head">
     <span style="flex:1;font-size:12px;color:var(--muted);font-weight:600;">对话云同步</span>
@@ -644,7 +640,6 @@ html, body {
   <div class="popup-list" id="cloudList"></div>
 </div>
 
-<!-- 会话菜单 -->
 <div class="conv-menu" id="convMenu">
   <button data-act="rename">重命名</button>
   <button data-act="download">下载</button>
@@ -652,7 +647,6 @@ html, body {
   <button data-act="delete" class="danger">删除</button>
 </div>
 
-<!-- 模型配置管理 Modal -->
 <div class="modal config-manager" id="modelManagerModal">
   <div class="modal-card">
     <h3>模型配置管理</h3>
@@ -669,7 +663,6 @@ html, body {
   </div>
 </div>
 
-<!-- 模型配置编辑 Modal -->
 <div class="modal" id="modelEditModal">
   <div class="modal-card">
     <h3 id="meTitle">新建模型配置</h3>
@@ -719,7 +712,6 @@ html, body {
   </div>
 </div>
 
-<!-- 搜索配置管理 Modal -->
 <div class="modal config-manager" id="searchManagerModal">
   <div class="modal-card">
     <h3>搜索配置管理</h3>
@@ -736,7 +728,6 @@ html, body {
   </div>
 </div>
 
-<!-- 搜索配置编辑 Modal -->
 <div class="modal" id="searchEditModal">
   <div class="modal-card">
     <h3 id="seTitle">新建搜索配置</h3>
@@ -756,6 +747,18 @@ html, body {
     <input id="seTavilyKey" type="password" placeholder="tvly-...">
     <label>Serper API Key</label>
     <input id="seSerperKey" type="password" placeholder="your-serper-key">
+    <label>搜索模式</label>
+    <select id="seMode">
+      <option value="simple">简单模式（每次提问自动搜一次）</option>
+      <option value="agent">Agent 模式（AI 自主决策是否搜索、搜索关键词、搜索次数）</option>
+    </select>
+    <div class="hint">Agent 模式需要模型支持 function calling；不支持时会自动降级为简单模式</div>
+    <label>最多搜索轮数（Agent 模式）</label>
+    <input id="seMaxRounds" type="number" min="1" max="10" step="1" placeholder="3">
+    <div class="hint">AI 单次回答最多连续搜索几轮，达到上限会强制总结</div>
+    <label>搜索行为提示（Agent 模式，可选）</label>
+    <textarea id="seSystemHint" placeholder="例如：只在问题涉及最近一周事件时才搜索；优先搜索中文资料。"></textarea>
+    <div class="hint">会附加到系统提示词中，引导 AI 的搜索倾向</div>
     <div class="checkbox-row">
       <input type="checkbox" id="seEnabled">
       <label for="seEnabled" style="margin:0;cursor:pointer;">默认启用联网搜索</label>
@@ -881,7 +884,9 @@ html, body {
     document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
   }
 
-  // ═══════════════ 模型配置（独立） ═══════════════
+  // ═══════════════════════════════════════════════════
+  // 模型配置
+  // ═══════════════════════════════════════════════════
   const CFG_PREFIX = 'swc_ai_cfg_';
   const CFG_IDX_KEY = 'swc_ai_cfg_index';
   const CUR_KEY = 'swc_ai_current';
@@ -995,7 +1000,9 @@ html, body {
   function curModelConfig() { return modelConfigs.find(c => c.id === currentModelConfigId) || modelConfigs[0]; }
   function modelConfigById(id) { return modelConfigs.find(c => c.id === id); }
 
-  // ═══════════════ 搜索配置（独立） ═══════════════
+  // ═══════════════════════════════════════════════════
+  // 搜索配置（独立）
+  // ═══════════════════════════════════════════════════
   const SEARCH_PREFIX = 'swc_ai_search_';
   const SEARCH_IDX_KEY = 'swc_ai_search_index';
   const SEARCH_CUR_KEY = 'swc_ai_search_current';
@@ -1010,6 +1017,9 @@ html, body {
       searchProvider: 'tavily',
       tavilyApiKey: '',
       serperApiKey: '',
+      searchMode: 'agent',
+      maxSearchRounds: 3,
+      systemHint: '',
       enabled: false,
       savedAt: Date.now()
     };
@@ -1042,6 +1052,7 @@ html, body {
     index.unshift({
       id: c.id, name: c.name || '未命名', savedAt: c.savedAt,
       provider: c.searchProvider || 'tavily',
+      mode: c.searchMode || 'agent',
       enabled: c.enabled === true
     });
     saveSearchConfigIndex(index);
@@ -1068,7 +1079,44 @@ html, body {
   }
   function curSearchConfig() { return searchConfigs.find(c => c.id === currentSearchConfigId) || searchConfigs[0]; }
 
-  // ═══════════════ 会话存储 ═══════════════
+  // ═══════════════════════════════════════════════════
+  // 工具支持缓存
+  // ═══════════════════════════════════════════════════
+  const TOOL_SUPPORT_KEY = 'swc_ai_tool_support';
+  function loadToolSupportCache() {
+    try { const r = localStorage.getItem(TOOL_SUPPORT_KEY); return r ? JSON.parse(r) : {}; }
+    catch { return {}; }
+  }
+  function saveToolSupportCache(c) {
+    try { localStorage.setItem(TOOL_SUPPORT_KEY, JSON.stringify(c)); } catch {}
+  }
+  function isModelSupportTools(model) {
+    const cache = loadToolSupportCache();
+    return cache[model] !== false;
+  }
+  function markModelNoToolSupport(model) {
+    const cache = loadToolSupportCache();
+    cache[model] = false;
+    saveToolSupportCache(cache);
+  }
+  function isToolsUnsupportedError(status, responseText) {
+    if (status !== 400 && status !== 404 && status !== 422 && status !== 500) return false;
+    if (!responseText) return false;
+    const t = String(responseText).toLowerCase();
+    return (
+      t.includes('tool') ||
+      t.includes('function') ||
+      t.includes('not support') ||
+      t.includes('unsupported') ||
+      t.includes('unknown parameter') ||
+      t.includes('invalid parameter') ||
+      t.includes('unrecognized')
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 会话存储
+  // ═══════════════════════════════════════════════════
   const IDX_KEY = 'swc_ai_index';
   const P = 'swc_ai_conv:';
 
@@ -1740,6 +1788,9 @@ html, body {
     if (c.tavilyApiKey === undefined) c.tavilyApiKey = '';
     if (c.serperApiKey === undefined) c.serperApiKey = '';
     if (c.enabled === undefined) c.enabled = false;
+    if (!c.searchMode) c.searchMode = 'agent';
+    if (!c.maxSearchRounds) c.maxSearchRounds = 3;
+    if (c.systemHint === undefined) c.systemHint = '';
     localStorage.setItem(SEARCH_PREFIX + id, JSON.stringify(c));
     return true;
   }
@@ -1803,6 +1854,7 @@ html, body {
           newIndex.push({
             id: c.id, name: c.name || '未命名', savedAt: c.savedAt || 0,
             provider: c.searchProvider || 'tavily',
+            mode: c.searchMode || 'agent',
             enabled: c.enabled === true
           });
         } catch {}
@@ -1816,6 +1868,7 @@ html, body {
           newIndex.push({
             id: c.id, name: c.name || '未命名', savedAt: c.savedAt || 0,
             provider: c.searchProvider || 'tavily',
+            mode: c.searchMode || 'agent',
             enabled: c.enabled === true
           });
         } catch {}
@@ -1880,12 +1933,16 @@ html, body {
         if (c.tavilyApiKey === undefined) c.tavilyApiKey = '';
         if (c.serperApiKey === undefined) c.serperApiKey = '';
         if (c.enabled === undefined) c.enabled = false;
+        if (!c.searchMode) c.searchMode = 'agent';
+        if (!c.maxSearchRounds) c.maxSearchRounds = 3;
+        if (c.systemHint === undefined) c.systemHint = '';
         localStorage.setItem(SEARCH_PREFIX + id, JSON.stringify(c));
         let index = loadSearchConfigIndex();
         index = index.filter(x => x.id !== id);
         index.unshift({
           id: c.id, name: c.name || '未命名', savedAt: c.savedAt,
           provider: c.searchProvider || 'tavily',
+          mode: c.searchMode || 'agent',
           enabled: c.enabled === true
         });
         saveSearchConfigIndex(index);
@@ -1966,7 +2023,9 @@ html, body {
     updateSearchEnabledCheck();
   }
 
-  // ═══════════════ DOM ═══════════════
+  // ═══════════════════════════════════════════════════
+  // DOM
+  // ═══════════════════════════════════════════════════
   const chatEl = document.getElementById('chat');
   const welcomeEl = document.getElementById('welcome');
   const inputEl = document.getElementById('input');
@@ -2065,6 +2124,27 @@ html, body {
     await send();
   }
 
+  function buildRefsPanel(searchResults) {
+    const refPanel = document.createElement('details');
+    refPanel.className = 'search-refs';
+    const summary = document.createElement('summary');
+    summary.textContent = '📎 参考来源 (' + searchResults.length + ')';
+    refPanel.appendChild(summary);
+    const refList = document.createElement('div');
+    refList.className = 'ref-list';
+    searchResults.forEach((r, i) => {
+      const item = document.createElement('a');
+      item.className = 'ref-item';
+      item.href = r.url;
+      item.target = '_blank';
+      item.rel = 'noopener';
+      item.textContent = '[' + (i + 1) + '] ' + (r.title || r.url);
+      refList.appendChild(item);
+    });
+    refPanel.appendChild(refList);
+    return refPanel;
+  }
+
   function makeTurnEl(turn, turnIdx, isGenerating) {
     const frag = document.createDocumentFragment();
     const marked = !!turn.marked;
@@ -2113,24 +2193,7 @@ html, body {
     bubble.innerHTML = turn.assistant.content ? md(turn.assistant.content) : '';
 
     if (turn.searchResults && turn.searchResults.length > 0) {
-      const refPanel = document.createElement('details');
-      refPanel.className = 'search-refs';
-      const summary = document.createElement('summary');
-      summary.textContent = '📎 参考来源 (' + turn.searchResults.length + ')';
-      refPanel.appendChild(summary);
-      const refList = document.createElement('div');
-      refList.className = 'ref-list';
-      turn.searchResults.forEach((r, i) => {
-        const item = document.createElement('a');
-        item.className = 'ref-item';
-        item.href = r.url;
-        item.target = '_blank';
-        item.rel = 'noopener';
-        item.textContent = '[' + (i + 1) + '] ' + (r.title || r.url);
-        refList.appendChild(item);
-      });
-      refPanel.appendChild(refList);
-      wrap.appendChild(refPanel);
+      wrap.appendChild(buildRefsPanel(turn.searchResults));
     }
 
     a.querySelector('[data-act="copy"]').addEventListener('click', (e) => { e.stopPropagation(); copyText(turn.assistant.content || ''); });
@@ -2219,6 +2282,7 @@ html, body {
     }
     const provider = c.searchProvider === 'serper' ? 'Serper' : 'Tavily';
     const enabled = c.enabled === true;
+    const isAgent = (c.searchMode || 'agent') === 'agent';
     if (enabled) {
       btnSearch.classList.add('search-on');
       btnSearch.classList.remove('empty');
@@ -2226,7 +2290,8 @@ html, body {
       btnSearch.classList.remove('search-on');
       btnSearch.classList.remove('empty');
     }
-    searchLabel.textContent = (enabled ? '🌐 ' : '🔌 ') + provider;
+    const prefix = enabled ? (isAgent ? '🤖 ' : '🌐 ') : '🔌 ';
+    searchLabel.textContent = prefix + provider;
   }
 
   function updateSearchEnabledCheck() {
@@ -2392,7 +2457,6 @@ html, body {
   }
   popupMask.addEventListener('click', closeAllPopups);
 
-  // ─── 配置 Popup ───
   function renderConfigList() {
     configList.innerHTML = '';
     modelConfigs.forEach(c => {
@@ -2433,7 +2497,6 @@ html, body {
     openModelManager();
   });
 
-  // ─── 模型 Popup ───
   function renderModelList() {
     const q = (modelSearchEl.value || '').toLowerCase().trim();
     const list = q ? modelsCache.filter(m => m.toLowerCase().includes(q)) : modelsCache;
@@ -2493,7 +2556,6 @@ html, body {
   });
   modelPopup.addEventListener('click', e => e.stopPropagation());
 
-  // ─── 搜索 Popup ───
   function renderSearchConfigList() {
     searchConfigList.innerHTML = '';
     if (searchConfigs.length === 0) {
@@ -2504,9 +2566,10 @@ html, body {
       const it = document.createElement('div');
       it.className = 'popup-item' + (c.id === currentSearchConfigId ? ' active' : '');
       const provider = c.searchProvider === 'serper' ? 'Serper' : 'Tavily';
+      const mode = (c.searchMode || 'agent') === 'agent' ? 'Agent' : 'Simple';
       const keyFilled = c.searchProvider === 'serper' ? !!c.serperApiKey : !!c.tavilyApiKey;
       it.innerHTML = '<span class="n">' + esc(c.name) + '</span>' +
-        '<span class="sub">' + provider + (keyFilled ? '' : ' · 未填 Key') + '</span>' +
+        '<span class="sub">' + provider + ' · ' + mode + (keyFilled ? '' : ' · 未填 Key') + '</span>' +
         (c.id === currentSearchConfigId ? '<span class="chk">✓</span>' : '');
       it.addEventListener('click', () => {
         currentSearchConfigId = c.id;
@@ -2544,7 +2607,6 @@ html, body {
     openSearchEdit(null);
   });
 
-  // ─── 推理 Popup ───
   btnReason.addEventListener('click', (e) => {
     e.stopPropagation();
     if (reasonPopup.classList.contains('show')) { closeAllPopups(); return; }
@@ -2574,7 +2636,9 @@ html, body {
     applyTheme(t);
   });
 
-  // ─── 获取模型 ───
+  // ═══════════════════════════════════════════════════
+  // 获取模型
+  // ═══════════════════════════════════════════════════
   let fetchingModels = false;
   async function fetchModels(silent) {
     if (fetchingModels) return;
@@ -2773,11 +2837,14 @@ html, body {
     }
   }
 
-  // ─── 联网搜索调用 ───
+  // ═══════════════════════════════════════════════════
+  // 搜索工具（后端 /api/aisearch）
+  // ═══════════════════════════════════════════════════
   async function performSearch(query, cfg) {
     const provider = cfg.searchProvider || 'tavily';
     const searchKey = provider === 'tavily' ? cfg.tavilyApiKey : cfg.serperApiKey;
     if (!searchKey) return { error: '搜索 API Key 未填写' };
+    if (!cfg.proxyPassword) return { error: '搜索配置缺少代理密码' };
     try {
       const res = await fetch('/api/aisearch', {
         method: 'POST',
@@ -2797,7 +2864,66 @@ html, body {
     }
   }
 
-  // ─── 发送 ───
+  function buildToolsDefinition(sc) {
+    const tools = [];
+    if (sc && sc.searchMode === 'agent') {
+      tools.push({
+        type: 'function',
+        function: {
+          name: 'web_search',
+          description: '搜索互联网获取实时信息。当用户问及时事、最新数据、你不确定的事实，或需要核实信息时使用。不要用它来回答常识问题、数学计算或逻辑推理。',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: '搜索关键词，简洁精准。例如"DeepSeek V4 发布 2026"而不是完整问句。可以包含时间和关键实体。'
+              }
+            },
+            required: ['query']
+          }
+        }
+      });
+    }
+    return tools;
+  }
+
+  function buildToolResultText(results) {
+    let text = '搜索结果：\n\n';
+    results.forEach((r, i) => {
+      text += '[' + (i + 1) + '] ' + (r.title || '') + '\n';
+      text += (r.snippet || '') + '\n';
+      text += '来源：' + (r.url || '') + '\n\n';
+    });
+    return text;
+  }
+
+  function buildSearchContextFromResults(results) {
+    let ctx = '以下是相关网页搜索结果，请基于这些信息回答用户问题。如果搜索结果不相关或不足，可以忽略它们并基于你自己的知识回答。\n\n';
+    results.forEach((r, i) => {
+      ctx += '[' + (i + 1) + '] ' + (r.title || '') + '\n';
+      ctx += (r.snippet || '') + '\n';
+      ctx += '来源：' + (r.url || '') + '\n\n';
+    });
+    ctx += '---\n\n';
+    return ctx;
+  }
+
+  function dedupeResults(arr) {
+    const seen = new Set();
+    const out = [];
+    for (const r of arr) {
+      if (!r || !r.url) continue;
+      if (seen.has(r.url)) continue;
+      seen.add(r.url);
+      out.push(r);
+    }
+    return out;
+  }
+
+  // ═══════════════════════════════════════════════════
+  // 发送
+  // ═══════════════════════════════════════════════════
   async function send() {
     if (curId && runningConvs.has(curId)) {
       const run = runningConvs.get(curId);
@@ -2838,7 +2964,13 @@ html, body {
     }
     const convId = curId;
     const ti = curTurns.length;
-    const turn = { user: { content: text }, assistant: { content: '', reasoning_content: '' }, ts: Date.now(), marked: false, searchResults: null };
+    const turn = {
+      user: { content: text },
+      assistant: { content: '', reasoning_content: '' },
+      ts: Date.now(),
+      marked: false,
+      searchResults: null
+    };
     curTurns.push(turn);
 
     if (curMeta.turnCount === 0) {
@@ -2855,94 +2987,72 @@ html, body {
     inputEl.style.height = 'auto';
     if (welcomeEl.parentNode) welcomeEl.remove();
 
-    const u = document.createElement('div');
-    u.className = 'msg user';
-    u.innerHTML = '<div class="ava">你</div><div class="wrap"><div class="bubble"></div><div class="msg-actions"><button data-act="copy">复制</button><button data-act="delete">删除</button><button data-act="mark">标记</button></div></div>';
-    u.querySelector('.bubble').textContent = text;
-    u.querySelector('[data-act="copy"]').addEventListener('click', (e) => { e.stopPropagation(); copyText(text); });
-    u.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); deleteTurn(ti); });
-    u.querySelector('[data-act="mark"]').addEventListener('click', (e) => { e.stopPropagation(); toggleMark(ti); });
-    chatEl.appendChild(u);
+    // 渲染用户消息
+    const uEl = document.createElement('div');
+    uEl.className = 'msg user';
+    uEl.innerHTML = '<div class="ava">你</div><div class="wrap"><div class="bubble"></div><div class="msg-actions"><button data-act="copy">复制</button><button data-act="delete">删除</button><button data-act="mark">标记</button></div></div>';
+    uEl.querySelector('.bubble').textContent = text;
+    uEl.querySelector('[data-act="copy"]').addEventListener('click', (e) => { e.stopPropagation(); copyText(text); });
+    uEl.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); deleteTurn(ti); });
+    uEl.querySelector('[data-act="mark"]').addEventListener('click', (e) => { e.stopPropagation(); toggleMark(ti); });
+    chatEl.appendChild(uEl);
 
-    const a = document.createElement('div');
-    a.className = 'msg ai';
-    a.innerHTML = '<div class="ava">AI</div><div class="wrap"><div class="bubble"></div><div class="msg-actions"><button data-act="copy">复制</button><button data-act="resend">重发</button><button data-act="delete">删除</button><button data-act="mark">标记</button></div></div>';
-    const wrap = a.querySelector('.wrap');
-    const bubble = a.querySelector('.bubble');
-    a.querySelector('[data-act="copy"]').addEventListener('click', (e) => { e.stopPropagation(); copyText(turn.assistant.content || ''); });
-    a.querySelector('[data-act="resend"]').addEventListener('click', (e) => { e.stopPropagation(); resendTurn(ti); });
-    a.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); deleteTurn(ti); });
-    a.querySelector('[data-act="mark"]').addEventListener('click', (e) => { e.stopPropagation(); toggleMark(ti); });
-    chatEl.appendChild(a);
+    // 渲染 AI 消息骨架
+    const aEl = document.createElement('div');
+    aEl.className = 'msg ai';
+    aEl.innerHTML = '<div class="ava">AI</div><div class="wrap"><div class="bubble"></div><div class="msg-actions"><button data-act="copy">复制</button><button data-act="resend">重发</button><button data-act="delete">删除</button><button data-act="mark">标记</button></div></div>';
+    const aiWrap = aEl.querySelector('.wrap');
+    const aiBubble = aEl.querySelector('.bubble');
+    aEl.querySelector('[data-act="copy"]').addEventListener('click', (e) => { e.stopPropagation(); copyText(turn.assistant.content || ''); });
+    aEl.querySelector('[data-act="resend"]').addEventListener('click', (e) => { e.stopPropagation(); resendTurn(ti); });
+    aEl.querySelector('[data-act="delete"]').addEventListener('click', (e) => { e.stopPropagation(); deleteTurn(ti); });
+    aEl.querySelector('[data-act="mark"]').addEventListener('click', (e) => { e.stopPropagation(); toggleMark(ti); });
+    chatEl.appendChild(aEl);
 
     convTitleEl.textContent = curMeta.title;
     renderConvList();
     isAtBottom = true;
     chatEl.scrollTop = chatEl.scrollHeight;
 
-    // 联网搜索
-    let searchContext = '';
-    const sc = curSearchConfig();
-    if (sc && sc.enabled === true) {
-      const provider = sc.searchProvider || 'tavily';
-      const searchKey = provider === 'tavily' ? sc.tavilyApiKey : sc.serperApiKey;
-      if (searchKey && sc.proxyPassword) {
-        const statusEl = document.createElement('div');
-        statusEl.className = 'search-status';
-        statusEl.textContent = '🔍 正在搜索「' + text.slice(0, 30) + (text.length > 30 ? '…' : '') + '」...';
-        chatEl.insertBefore(statusEl, a);
-        scrollToBottom();
-
-        const searchResult = await performSearch(text, sc);
-
-        if (searchResult.error) {
-          statusEl.textContent = '⚠️ 搜索失败：' + searchResult.error + '（继续对话）';
-          statusEl.style.borderColor = 'var(--danger)';
-          setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 3000);
-        } else if (searchResult.results && searchResult.results.length > 0) {
-          turn.searchResults = searchResult.results;
-          S.setTurn(convId, ti, turn);
-          searchContext = '以下是相关网页搜索结果，请基于这些信息回答用户问题。如果搜索结果不相关或不足，可以忽略它们并基于你自己的知识回答。\n\n';
-          searchResult.results.forEach((r, i) => {
-            searchContext += '[' + (i + 1) + '] ' + (r.title || '') + '\n';
-            searchContext += (r.snippet || '') + '\n';
-            searchContext += '来源：' + (r.url || '') + '\n\n';
-          });
-          searchContext += '---\n\n';
-          statusEl.textContent = '✅ 搜索完成，共 ' + searchResult.results.length + ' 条结果';
-          setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 2000);
-        } else {
-          statusEl.textContent = '⚠️ 未找到相关结果（继续对话）';
-          setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 2500);
-        }
-      } else {
-        const statusEl = document.createElement('div');
-        statusEl.className = 'search-status';
-        statusEl.textContent = searchKey ? '⚠️ 搜索配置缺少代理密码' : '⚠️ 搜索已启用但未配置 API Key，跳过搜索';
-        chatEl.insertBefore(statusEl, a);
-        setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 3000);
-      }
-    }
-
+    // 构建初始上下文
     const ctx = CTX.build(curTurns.slice(0, -1), {
       systemPrompt: c.systemPrompt,
       summary: curMeta.summary || '',
       ctxWindow: c.ctxWindow || 64000,
       summaryThreshold: c.summaryThreshold || 75
     });
-    const finalUserContent = searchContext ? (searchContext + '用户问题：' + text) : text;
-    ctx.messages.push({ role: 'user', content: finalUserContent });
 
-    const body = { model, messages: ctx.messages, stream: true };
-    if (typeof c.temperature === 'number' && !isNaN(c.temperature)) {
-      body.temperature = c.temperature;
+    // 搜索配置
+    const sc = curSearchConfig();
+    const searchEnabled = sc && sc.enabled === true;
+    const searchMode = sc ? (sc.searchMode || 'agent') : 'off';
+    const hasSearchKey = sc ? (sc.searchProvider === 'serper' ? !!sc.serperApiKey : !!sc.tavilyApiKey) : false;
+
+    // 决定实际模式
+    let effectiveMode = 'off';
+    if (searchEnabled && hasSearchKey) {
+      if (searchMode === 'agent') {
+        if (isModelSupportTools(model)) {
+          effectiveMode = 'agent';
+        } else {
+          effectiveMode = 'simple';
+        }
+      } else if (searchMode === 'simple') {
+        effectiveMode = 'simple';
+      }
     }
-    if (curMeta.reasoning) body.reasoning_effort = curMeta.reasoning;
+
+    // 如果 agent 模式且有 systemHint，注入
+    if (effectiveMode === 'agent' && sc.systemHint) {
+      ctx.messages.push({ role: 'system', content: sc.systemHint });
+    }
+    // 当前用户消息
+    ctx.messages.push({ role: 'user', content: text });
 
     const ac = new AbortController();
     const run = {
       ac, turnIdx: ti, turn,
-      domRef: { wrap, bubble, reasonEl: null, reasonContentEl: null },
+      domRef: { wrap: aiWrap, bubble: aiBubble, reasonEl: null, reasonContentEl: null },
       autoCollapsed: false, saveTimer: null
     };
     runningConvs.set(convId, run);
@@ -2955,6 +3065,7 @@ html, body {
       S.setTurn(convId, ti, turn);
     }, 2000);
 
+    // 更新流式 UI（闭包）
     function updateStreamingUI() {
       const r = run.domRef;
       if (!r || !r.wrap || !document.contains(r.wrap)) return;
@@ -2980,7 +3091,28 @@ html, body {
       autoScroll();
     }
 
-    try {
+    // 显示状态提示（临时）
+    function showStatus(text, autoRemoveMs) {
+      const el = document.createElement('div');
+      el.className = 'search-status';
+      el.textContent = text;
+      chatEl.insertBefore(el, aEl);
+      scrollToBottom();
+      if (autoRemoveMs) {
+        setTimeout(() => { if (el.parentNode) el.remove(); }, autoRemoveMs);
+      }
+      return el;
+    }
+
+    // 流式请求一次，返回 { content, reasoningContent, toolCalls }
+    async function streamFetchOnce(messages, tools) {
+      const body = { model, messages, stream: true };
+      if (typeof c.temperature === 'number' && !isNaN(c.temperature)) {
+        body.temperature = c.temperature;
+      }
+      if (turn.reasoning) body.reasoning_effort = turn.reasoning;
+      if (tools && tools.length > 0) body.tools = tools;
+
       const res = await fetch(c.proxyUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2998,19 +3130,20 @@ html, body {
       });
 
       if (!res.ok) {
-        const t2 = await res.text();
-        showDiag('对话失败 HTTP ' + res.status, [
-          { k: '配置', v: c.name },
-          { k: '目标', v: c.apiBase + '/chat/completions' },
-          { k: '状态', v: res.status + ' ' + res.statusText },
-          { k: '响应体', v: t2.slice(0, 3000) }
-        ]);
-        throw new Error('HTTP ' + res.status);
+        const errText = await res.text();
+        const err = new Error('HTTP ' + res.status);
+        err.status = res.status;
+        err.responseText = errText;
+        throw err;
       }
 
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let buf = '';
+      let content = '';
+      let reasoningContent = '';
+      const toolCallsAccum = {};
+      let sawToolCalls = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -3027,35 +3160,278 @@ html, body {
             const j = JSON.parse(p);
             const d = j.choices?.[0]?.delta || j.choices?.[0]?.message || {};
             if (typeof d.reasoning_content === 'string' && d.reasoning_content) {
-              turn.assistant.reasoning_content += d.reasoning_content;
-              updateStreamingUI();
+              reasoningContent += d.reasoning_content;
+              if (!sawToolCalls) {
+                turn.assistant.reasoning_content = reasoningContent;
+                updateStreamingUI();
+              }
             }
             if (typeof d.thinking === 'string' && d.thinking) {
-              turn.assistant.reasoning_content = (turn.assistant.reasoning_content || '') + d.thinking;
-              updateStreamingUI();
+              reasoningContent += d.thinking;
+              if (!sawToolCalls) {
+                turn.assistant.reasoning_content = reasoningContent;
+                updateStreamingUI();
+              }
             }
             if (typeof d.content === 'string' && d.content) {
-              turn.assistant.content += d.content;
-              updateStreamingUI();
+              content += d.content;
+              if (!sawToolCalls) {
+                turn.assistant.content = content;
+                updateStreamingUI();
+              }
+            }
+            if (Array.isArray(d.tool_calls) && d.tool_calls.length > 0) {
+              if (!sawToolCalls) {
+                sawToolCalls = true;
+                // 清空已渲染的临时内容（这轮只是工具调用）
+                content = '';
+                reasoningContent = '';
+                turn.assistant.content = '';
+                turn.assistant.reasoning_content = '';
+                updateStreamingUI();
+              }
+              for (const tc of d.tool_calls) {
+                const idx = (typeof tc.index === 'number') ? tc.index : 0;
+                if (!toolCallsAccum[idx]) {
+                  toolCallsAccum[idx] = {
+                    id: '',
+                    type: 'function',
+                    function: { name: '', arguments: '' }
+                  };
+                }
+                const acc = toolCallsAccum[idx];
+                if (tc.id) acc.id = tc.id;
+                if (tc.type) acc.type = tc.type;
+                if (tc.function) {
+                  if (tc.function.name) acc.function.name = tc.function.name;
+                  if (typeof tc.function.arguments === 'string') acc.function.arguments += tc.function.arguments;
+                }
+              }
             }
           } catch {}
         }
       }
 
+      const toolCalls = Object.keys(toolCallsAccum)
+        .sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
+        .map(k => toolCallsAccum[k]);
+
+      return { content, reasoningContent, toolCalls };
+    }
+
+    // ─── Agent 模式流程 ───
+    async function runAgentFlow(baseMessages) {
+      const tools = buildToolsDefinition(sc);
+      let currentMessages = baseMessages.slice();
+      let maxRounds = parseInt(sc.maxSearchRounds) || 3;
+      let round = 0;
+      let collectedResults = [];
+      let finalContent = '';
+      let finalReasoning = '';
+
+      while (true) {
+        const statusText = round === 0 ? '🤔 AI 正在思考...' : '🤔 AI 正在整理...';
+        const statusEl = showStatus(statusText);
+
+        // 是否本轮带工具
+        const canUseTools = round < maxRounds;
+        const currentTools = canUseTools ? tools : [];
+
+        let result;
+        try {
+          result = await streamFetchOnce(currentMessages, currentTools);
+        } catch (e) {
+          statusEl.remove();
+          // 检测是否 tools 不支持
+          if (canUseTools && currentTools.length > 0 && e.status && isToolsUnsupportedError(e.status, e.responseText)) {
+            markModelNoToolSupport(model);
+            showToast('模型不支持 Agent 模式，已降级为简单搜索');
+            return await runSimpleFlow(baseMessages);
+          }
+          throw e;
+        }
+
+        statusEl.remove();
+
+        // 累积最终回答
+        if (result.content) {
+          finalContent = result.content;
+          turn.assistant.content = finalContent;
+          updateStreamingUI();
+        }
+        if (result.reasoningContent) {
+          finalReasoning = result.reasoningContent;
+          turn.assistant.reasoning_content = finalReasoning;
+          updateStreamingUI();
+        }
+
+        // 无工具调用 → 结束
+        if (!result.toolCalls || result.toolCalls.length === 0) {
+          break;
+        }
+
+        // 有工具调用：追加 assistant 消息
+        currentMessages.push({
+          role: 'assistant',
+          content: result.content || null,
+          tool_calls: result.toolCalls
+        });
+
+        // 清空本轮的 assistant 内容（这轮是工具调用，不是回答）
+        turn.assistant.content = '';
+        turn.assistant.reasoning_content = '';
+        finalContent = '';
+        finalReasoning = '';
+        aiBubble.innerHTML = '';
+
+        // 执行每个工具
+        for (const tc of result.toolCalls) {
+          const fnName = tc.function && tc.function.name;
+          let args = {};
+          try {
+            args = JSON.parse(tc.function?.arguments || '{}');
+          } catch {
+            args = {};
+          }
+
+          if (fnName === 'web_search') {
+            const query = (args && typeof args.query === 'string' && args.query.trim()) ? args.query.trim() : text;
+            const searchStatusEl = showStatus('🔍 搜索：' + query);
+
+            const searchResult = await performSearch(query, sc);
+            searchStatusEl.remove();
+
+            let toolContent;
+            if (searchResult.error) {
+              toolContent = '搜索失败：' + searchResult.error;
+              showStatus('⚠️ 搜索失败：' + searchResult.error, 2500);
+            } else if (searchResult.results && searchResult.results.length > 0) {
+              toolContent = buildToolResultText(searchResult.results);
+              collectedResults.push(...searchResult.results);
+              showStatus('✅ 找到 ' + searchResult.results.length + ' 条结果', 1500);
+            } else {
+              toolContent = '未找到相关结果';
+              showStatus('⚠️ 未找到结果', 1500);
+            }
+
+            currentMessages.push({
+              role: 'tool',
+              tool_call_id: tc.id || '',
+              content: toolContent
+            });
+          } else {
+            currentMessages.push({
+              role: 'tool',
+              tool_call_id: tc.id || '',
+              content: '未知工具：' + (fnName || '(空)')
+            });
+          }
+        }
+
+        round++;
+
+        // 达到上限时，下一轮强制不带工具
+        if (round >= maxRounds) {
+          // 循环会继续一次，但因为 canUseTools = round < maxRounds 已为 false，会强制总结
+        }
+      }
+
+      // 处理最终回答
+      if (!finalContent) {
+        // AI 没给出最终回答（可能都是工具调用）
+        finalContent = '（AI 未给出文字回答）';
+        turn.assistant.content = finalContent;
+        aiBubble.innerHTML = md(finalContent);
+      }
+
+      // 保存引用
+      if (collectedResults.length > 0) {
+        turn.searchResults = dedupeResults(collectedResults);
+      }
+    }
+
+    // ─── 简单模式流程 ───
+    async function runSimpleFlow(baseMessages) {
+      // 先搜索
+      let searchContext = '';
+      if (sc && sc.enabled === true) {
+        const provider = sc.searchProvider || 'tavily';
+        const searchKey = provider === 'tavily' ? sc.tavilyApiKey : sc.serperApiKey;
+        if (searchKey && sc.proxyPassword) {
+          const statusEl = showStatus('🔍 正在搜索「' + text.slice(0, 30) + (text.length > 30 ? '…' : '') + '」...');
+          const searchResult = await performSearch(text, sc);
+          statusEl.remove();
+
+          if (searchResult.error) {
+            showStatus('⚠️ 搜索失败：' + searchResult.error + '（继续对话）', 3000);
+          } else if (searchResult.results && searchResult.results.length > 0) {
+            turn.searchResults = searchResult.results;
+            S.setTurn(convId, ti, turn);
+            searchContext = buildSearchContextFromResults(searchResult.results);
+            showStatus('✅ 搜索完成，共 ' + searchResult.results.length + ' 条结果', 2000);
+          } else {
+            showStatus('⚠️ 未找到相关结果（继续对话）', 2500);
+          }
+        } else {
+          showStatus(searchKey ? '⚠️ 搜索配置缺少代理密码' : '⚠️ 搜索已启用但未配置 API Key，跳过搜索', 3000);
+        }
+      }
+
+      // 构建最终消息
+      let finalMessages = baseMessages;
+      if (searchContext) {
+        finalMessages = baseMessages.slice(0, -1).concat([{
+          role: 'user',
+          content: searchContext + '用户问题：' + text
+        }]);
+      }
+
+      const result = await streamFetchOnce(finalMessages, []);
+      turn.assistant.content = result.content;
+      turn.assistant.reasoning_content = result.reasoningContent;
+      updateStreamingUI();
+    }
+
+    // ─── 无搜索流程 ───
+    async function runPlainFlow(baseMessages) {
+      const result = await streamFetchOnce(baseMessages, []);
+      turn.assistant.content = result.content;
+      turn.assistant.reasoning_content = result.reasoningContent;
+      updateStreamingUI();
+    }
+
+    try {
+      if (effectiveMode === 'agent') {
+        await runAgentFlow(ctx.messages);
+      } else if (effectiveMode === 'simple') {
+        await runSimpleFlow(ctx.messages);
+      } else {
+        await runPlainFlow(ctx.messages);
+      }
+
       if (!turn.assistant.content && !turn.assistant.reasoning_content) {
         turn.assistant.content = '（无内容返回）';
-        updateStreamingUI();
+        aiBubble.innerHTML = md(turn.assistant.content);
       }
     } catch (err) {
       if (err.name === 'AbortError') {
         if (!turn.assistant.content && !turn.assistant.reasoning_content) {
           turn.assistant.content = '（已停止）';
-          updateStreamingUI();
+          aiBubble.innerHTML = md(turn.assistant.content);
         }
       } else {
+        // 显示详细诊断
         if (!turn.assistant.content) {
           turn.assistant.content = '⚠ ' + err.message;
-          updateStreamingUI();
+          aiBubble.innerHTML = md(turn.assistant.content);
+        }
+        if (err.responseText) {
+          showDiag('对话失败：' + (err.message || ''), [
+            { k: '配置', v: c.name },
+            { k: '目标', v: c.apiBase + '/chat/completions' },
+            { k: '状态', v: err.status || '未知' },
+            { k: '响应体', v: String(err.responseText).slice(0, 3000) }
+          ]);
         }
       }
     } finally {
@@ -3067,13 +3443,18 @@ html, body {
       setSyncState(convId, 'local-newer');
       updateSendButton();
       renderConvList();
-      if (curId === convId && turn.searchResults && turn.searchResults.length > 0) {
-        renderChat();
+
+      // 若本轮有搜索引用且当前处于本对话，追加引用面板
+      if (curId === convId && turn.searchResults && turn.searchResults.length > 0 && !aiWrap.querySelector('.search-refs')) {
+        aiWrap.appendChild(buildRefsPanel(turn.searchResults));
+        autoScroll();
       }
     }
   }
 
-  // ─── 模型配置管理 ───
+  // ═══════════════════════════════════════════════════
+  // 模型配置管理
+  // ═══════════════════════════════════════════════════
   function openModelManager() {
     renderModelManagerList();
     document.getElementById('modelManagerModal').classList.add('show');
@@ -3212,7 +3593,9 @@ html, body {
     renderModelManagerList();
   });
 
-  // ─── 搜索配置管理 ───
+  // ═══════════════════════════════════════════════════
+  // 搜索配置管理
+  // ═══════════════════════════════════════════════════
   function openSearchManager() {
     renderSearchManagerList();
     document.getElementById('searchManagerModal').classList.add('show');
@@ -3231,6 +3614,7 @@ html, body {
       const state = getSyncState(item.id);
       const isCurrent = item.id === currentSearchConfigId;
       const provider = item.provider === 'serper' ? 'Serper' : 'Tavily';
+      const mode = (item.mode || 'agent') === 'agent' ? 'Agent' : 'Simple';
       const it = document.createElement('div');
       it.className = 'conf-item' + (isCurrent ? ' active' : '');
       it.innerHTML =
@@ -3239,7 +3623,7 @@ html, body {
         '<button data-act="edit">编辑</button>' +
         '<button data-act="sync">同步</button>' +
         '<button data-act="switch">' + (isCurrent ? '当前' : '切换') + '</button>' +
-        '<span class="m">' + provider + (item.enabled ? ' · 已启用' : '') + '</span>';
+        '<span class="m">' + provider + ' · ' + mode + (item.enabled ? ' · 已启用' : '') + '</span>';
       it.querySelector('[data-act="edit"]').addEventListener('click', (e) => {
         e.stopPropagation();
         const c = searchConfigs.find(x => x.id === item.id);
@@ -3287,6 +3671,9 @@ html, body {
     document.getElementById('seProvider').value = c.searchProvider || 'tavily';
     document.getElementById('seTavilyKey').value = c.tavilyApiKey || '';
     document.getElementById('seSerperKey').value = c.serperApiKey || '';
+    document.getElementById('seMode').value = c.searchMode || 'agent';
+    document.getElementById('seMaxRounds').value = c.maxSearchRounds || 3;
+    document.getElementById('seSystemHint').value = c.systemHint || '';
     document.getElementById('seEnabled').checked = c.enabled === true;
     document.getElementById('seDelete').style.display = cfg ? 'inline-block' : 'none';
     document.getElementById('searchEditModal').classList.add('show');
@@ -3304,6 +3691,8 @@ html, body {
   });
   document.getElementById('seSave').addEventListener('click', () => {
     const name = document.getElementById('seName').value.trim() || '未命名配置';
+    const maxRoundsRaw = parseInt(document.getElementById('seMaxRounds').value);
+    const maxSearchRounds = (!isNaN(maxRoundsRaw) && maxRoundsRaw > 0) ? Math.min(maxRoundsRaw, 10) : 3;
     const newCfg = {
       id: editingSearchConfigId || uuid(),
       name,
@@ -3312,6 +3701,9 @@ html, body {
       searchProvider: document.getElementById('seProvider').value || 'tavily',
       tavilyApiKey: document.getElementById('seTavilyKey').value.trim(),
       serperApiKey: document.getElementById('seSerperKey').value.trim(),
+      searchMode: document.getElementById('seMode').value || 'agent',
+      maxSearchRounds: maxSearchRounds,
+      systemHint: document.getElementById('seSystemHint').value.trim(),
       enabled: document.getElementById('seEnabled').checked,
       savedAt: Date.now()
     };
@@ -3331,7 +3723,9 @@ html, body {
     renderSearchManagerList();
   });
 
-  // ─── 云同步面板 ───
+  // ═══════════════════════════════════════════════════
+  // 云同步面板
+  // ═══════════════════════════════════════════════════
   async function renderCloudList() {
     cloudList.innerHTML = '<div class="popup-empty">加载中…</div>';
     const data = await cloudApi({});
@@ -3413,7 +3807,6 @@ html, body {
   document.getElementById('btnSyncAll').addEventListener('click', async () => { await syncAll(false); renderCloudList(); });
   document.getElementById('btnCheckState').addEventListener('click', async () => { await checkState(); renderCloudList(); });
 
-  // ─── 侧边栏 ───
   function openSidebar() { sidebarEl.classList.add('open'); sidebarMask.classList.add('show'); }
   function closeSidebar() { sidebarEl.classList.remove('open'); sidebarMask.classList.remove('show'); }
   btnMenu.addEventListener('click', openSidebar);
@@ -3438,7 +3831,6 @@ html, body {
     inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
   });
 
-  // ─── 启动 ───
   (function init() {
     const ids = S.idx();
     if (ids.length > 0) loadConv(ids[0]);
