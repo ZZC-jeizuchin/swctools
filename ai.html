@@ -183,7 +183,6 @@ html, body {
   word-break:break-word; font-size:13px; border-top:1px solid var(--border);
 }
 
-/* 联网搜索：状态提示 */
 .search-status {
   max-width:820px;
   margin:0 auto 16px;
@@ -196,7 +195,6 @@ html, body {
   text-align:center;
 }
 
-/* 联网搜索：引用来源 */
 .search-refs {
   margin-top:8px;
   font-size:12px;
@@ -299,10 +297,11 @@ html, body {
 .popup-item.active { background:var(--active); }
 .popup-item .n { flex:1; }
 .popup-item .chk { color:var(--ok); }
+.popup-item .sub { font-size:11px; color:var(--muted); }
 .popup-empty { padding:24px; text-align:center; font-size:12px; color:var(--muted); }
-.popup-foot { border-top:1px solid var(--border); padding:8px; }
+.popup-foot { border-top:1px solid var(--border); padding:8px; display:flex; gap:6px; }
 .popup-foot button {
-  width:100%; padding:7px; background:transparent; border:1px dashed var(--border);
+  flex:1; padding:7px; background:transparent; border:1px dashed var(--border);
   color:var(--muted); font-size:12px; cursor:pointer; font-family:inherit; border-radius:6px;
 }
 .popup-foot button:hover { color:var(--acc); border-color:var(--acc); }
@@ -318,6 +317,24 @@ html, body {
 .popup-manual button {
   padding:6px 14px; background:var(--acc); color:#fff; border:none;
   cursor:pointer; font-size:12px; font-family:inherit; border-radius:6px;
+}
+
+.search-toggle-row {
+  padding:10px 12px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:13px;
+}
+.search-toggle-row input[type=checkbox] {
+  width:auto;
+  margin:0;
+  cursor:pointer;
+}
+.search-toggle-row label {
+  cursor:pointer;
+  user-select:none;
 }
 
 .conv-menu {
@@ -513,7 +530,7 @@ html, body {
     <div class="sb-head">
       <h2>对话</h2>
       <button id="btnNewConv" title="新对话">+</button>
-      <button id="btnCloud" title="云同步">☁</button>
+      <button id="btnCloud" title="对话云同步">☁</button>
       <button id="btnDlAll" title="全部下载">↓</button>
       <button id="btnTheme" title="主题">◐</button>
     </div>
@@ -528,27 +545,24 @@ html, body {
       <button class="menu-btn" id="btnMenu">☰</button>
       <a class="back-btn" href="index.html" title="返回主站">← 主站</a>
       <h1 id="convTitle">SwC AI</h1>
-      <button class="chip empty" id="btnConfig">
-        <span class="l" id="configLabel">配置</span>
+      <button class="chip empty" id="btnModel" title="模型配置与模型选择">
+        <span class="l" id="modelLabel">模型</span>
         <span class="a">▾</span>
       </button>
-      <button class="chip empty" id="btnModel">
-        <span class="l" id="modelLabel">模型</span>
+      <button class="chip empty" id="btnSearch" title="搜索配置与联网开关">
+        <span class="l" id="searchLabel">搜索</span>
         <span class="a">▾</span>
       </button>
       <button class="chip" id="btnReason" title="推理强度">
         <span id="reasonLabel">默认</span>
         <span class="a">▾</span>
       </button>
-      <button class="chip" id="btnSearchToggle" title="联网搜索开关">
-        <span id="searchLabel">🔌 联网</span>
-      </button>
     </div>
 
     <div class="chat" id="chat">
       <div class="welcome" id="welcome">
         <h2>SwC AI</h2>
-        <p>点击顶栏「配置」管理 API 配置，然后开始对话</p>
+        <p>点击顶栏「模型」配置 AI 模型，「搜索」配置联网搜索</p>
       </div>
     </div>
 
@@ -561,14 +575,7 @@ html, body {
   </main>
 </div>
 
-<div class="popup" id="configPopup" style="width:300px;">
-  <div class="popup-head">
-    <span style="flex:1;font-size:12px;color:var(--muted);font-weight:600;">配置</span>
-    <button id="btnManageConfigs" title="管理配置">⚙</button>
-  </div>
-  <div class="popup-list" id="configList"></div>
-</div>
-
+<!-- 模型面板 -->
 <div class="popup" id="modelPopup" style="width:320px;">
   <div class="popup-head">
     <input id="modelSearch" placeholder="搜索模型...">
@@ -576,7 +583,8 @@ html, body {
   </div>
   <div class="popup-list" id="modelListPanel"></div>
   <div class="popup-foot">
-    <button id="btnShowManual">+ 手动输入模型名</button>
+    <button id="btnManageModelConfigs">模型配置</button>
+    <button id="btnShowManual">手动输入</button>
   </div>
   <div class="popup-manual" id="manualWrap">
     <input id="manualInput" placeholder="模型名称">
@@ -584,6 +592,20 @@ html, body {
   </div>
 </div>
 
+<!-- 搜索面板 -->
+<div class="popup" id="searchPopup" style="width:320px;">
+  <div class="search-toggle-row">
+    <input type="checkbox" id="searchEnabledCheck">
+    <label for="searchEnabledCheck">启用联网搜索</label>
+  </div>
+  <div class="popup-list" id="searchConfigList"></div>
+  <div class="popup-foot">
+    <button id="btnManageSearchConfigs">搜索配置</button>
+    <button id="btnNewSearchConfig">新建</button>
+  </div>
+</div>
+
+<!-- 推理强度面板 -->
 <div class="popup" id="reasonPopup" style="width:180px;">
   <div class="popup-list" style="max-height:none;">
     <div class="popup-item" data-v="">默认</div>
@@ -596,9 +618,10 @@ html, body {
   </div>
 </div>
 
+<!-- 对话云同步面板 -->
 <div class="popup" id="cloudPopup" style="width:360px;">
   <div class="popup-head">
-    <span style="flex:1;font-size:12px;color:var(--muted);font-weight:600;">云端对话</span>
+    <span style="flex:1;font-size:12px;color:var(--muted);font-weight:600;">对话云同步</span>
     <button id="btnCloudRefresh" title="刷新">↻</button>
   </div>
   <div class="cloud-actions">
@@ -609,6 +632,7 @@ html, body {
   <div class="popup-list" id="cloudList"></div>
 </div>
 
+<!-- 会话菜单 -->
 <div class="conv-menu" id="convMenu">
   <button data-act="rename">重命名</button>
   <button data-act="download">下载</button>
@@ -616,86 +640,118 @@ html, body {
   <button data-act="delete" class="danger">删除</button>
 </div>
 
-<div class="modal config-manager" id="configManagerModal">
+<!-- 模型配置管理 -->
+<div class="modal config-manager" id="modelManagerModal">
   <div class="modal-card">
-    <h3>配置管理</h3>
+    <h3>模型配置管理</h3>
     <div class="cloud-actions">
-      <button class="primary" id="cmSyncAll">全部同步</button>
-      <button id="cmCheckState">检查状态</button>
+      <button class="primary" id="mmSyncAll">全部同步</button>
+      <button id="mmCheckState">检查状态</button>
     </div>
-    <div class="cloud-progress" id="cfgProgress"></div>
-    <div class="conf-list" id="configManagerList"></div>
+    <div class="cloud-progress" id="mmProgress"></div>
+    <div class="conf-list" id="modelManagerList"></div>
     <div class="conf-actions">
-      <button id="cmAdd">新建配置</button>
-      <button class="primary" id="cmClose">完成</button>
+      <button id="mmAdd">新建配置</button>
+      <button class="primary" id="mmClose">完成</button>
     </div>
   </div>
 </div>
 
-<div class="modal" id="configEditModal">
+<!-- 模型配置编辑 -->
+<div class="modal" id="modelEditModal">
   <div class="modal-card">
-    <h3 id="configEditTitle">新建配置</h3>
+    <h3 id="meTitle">新建模型配置</h3>
     <label>配置名称</label>
-    <input id="ceName" placeholder="例如：DeepSeek 主力">
+    <input id="meName" placeholder="例如：DeepSeek 主力">
     <label>代理地址</label>
-    <input id="ceProxyUrl" placeholder="/api/aiapi">
+    <input id="meProxyUrl" placeholder="/api/aiapi">
     <div class="hint">同源 Pages Functions 路径，一般不改</div>
     <label>代理密码</label>
-    <input id="ceProxyPassword" type="password" placeholder="代理密码">
+    <input id="meProxyPassword" type="password" placeholder="代理密码">
     <label>API 地址</label>
-    <input id="ceApiBase" placeholder="https://api.deepseek.com">
+    <input id="meApiBase" placeholder="https://api.deepseek.com">
     <div class="hint">不带 /chat/completions，程序会自动拼接</div>
     <label>备用模型列表地址（可选）</label>
-    <input id="ceFallbackModelsUrl" placeholder="https://backup.example.com/v1/models">
+    <input id="meFallbackModelsUrl" placeholder="https://backup.example.com/v1/models">
     <div class="hint">完整的模型列表 URL，主 API 的 /models 失败时使用；留空则跳过</div>
     <label>手动模型列表（可选）</label>
-    <textarea id="ceManualModels" placeholder="一行一个模型名，例如：&#10;deepseek-chat&#10;deepseek-reasoner"></textarea>
+    <textarea id="meManualModels" placeholder="一行一个模型名"></textarea>
     <div class="hint">如果填写了，将跳过所有 URL 获取，直接从列表选择</div>
     <label>模型获取模式</label>
-    <select id="ceModelMode">
+    <select id="meModelMode">
       <option value="auto">自动（主 API /models → 备用列表）</option>
       <option value="manual">仅手动列表</option>
       <option value="cloudflare">Cloudflare Workers AI</option>
     </select>
     <label>Cloudflare Account ID（仅 Cloudflare 模式）</label>
-    <input id="ceCfAccountId" placeholder="例如：023e105f4ecef8ad9ca31a8372d0c353">
-    <div class="hint">在 Cloudflare 控制台 Workers & Pages → 账户详情中查看</div>
+    <input id="meCfAccountId" placeholder="例如：023e105f4ecef8ad9ca31a8372d0c353">
     <label>API Key</label>
-    <input id="ceApiKey" type="password" placeholder="sk-...">
+    <input id="meApiKey" type="password" placeholder="sk-...">
     <label>系统提示词</label>
-    <textarea id="ceSystem" placeholder="你是一个乐于助人的AI助手。"></textarea>
+    <textarea id="meSystem" placeholder="你是一个乐于助人的AI助手。"></textarea>
     <label>温度 (0 ~ 2，留空则不发送)</label>
-    <input id="ceTemperature" type="number" min="0" max="2" step="0.1" placeholder="留空使用模型默认值">
+    <input id="meTemperature" type="number" min="0" max="2" step="0.1" placeholder="留空使用模型默认值">
     <div class="checkbox-row">
-      <input type="checkbox" id="ceAutoCollapse">
-      <label for="ceAutoCollapse" style="margin:0;cursor:pointer;">推理内容自动折叠</label>
+      <input type="checkbox" id="meAutoCollapse">
+      <label for="meAutoCollapse" style="margin:0;cursor:pointer;">推理内容自动折叠</label>
     </div>
+    <label>上下文窗口 (tokens)</label>
+    <input id="meCtxWindow" type="number" min="1000" step="1000" placeholder="64000">
+    <label>摘要阈值 (%)</label>
+    <input id="meSummaryThreshold" type="number" min="50" max="95" step="5" placeholder="75">
+    <div class="modal-actions">
+      <button id="meDelete" class="danger" style="display:none;">删除此配置</button>
+      <button id="meCancel">取消</button>
+      <button class="primary" id="meSave">保存</button>
+    </div>
+  </div>
+</div>
 
-    <h3 style="margin-top:24px;">联网搜索</h3>
-    <div class="checkbox-row">
-      <input type="checkbox" id="ceSearchEnabled">
-      <label for="ceSearchEnabled" style="margin:0;cursor:pointer;">默认启用联网搜索</label>
+<!-- 搜索配置管理 -->
+<div class="modal config-manager" id="searchManagerModal">
+  <div class="modal-card">
+    <h3>搜索配置管理</h3>
+    <div class="cloud-actions">
+      <button class="primary" id="smSyncAll">全部同步</button>
+      <button id="smCheckState">检查状态</button>
     </div>
+    <div class="cloud-progress" id="smProgress"></div>
+    <div class="conf-list" id="searchManagerList"></div>
+    <div class="conf-actions">
+      <button id="smAdd">新建配置</button>
+      <button class="primary" id="smClose">完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 搜索配置编辑 -->
+<div class="modal" id="searchEditModal">
+  <div class="modal-card">
+    <h3 id="seTitle">新建搜索配置</h3>
+    <label>配置名称</label>
+    <input id="seName" placeholder="例如：Tavily 主力">
+    <label>代理地址</label>
+    <input id="seProxyUrl" placeholder="/api/aiapi">
+    <div class="hint">同源 Pages Functions 路径，一般不改</div>
+    <label>代理密码</label>
+    <input id="seProxyPassword" type="password" placeholder="代理密码">
     <label>搜索提供商</label>
-    <select id="ceSearchProvider">
-      <option value="tavily">Tavily (AI 优化)</option>
-      <option value="serper">Serper (Google 结果)</option>
+    <select id="seProvider">
+      <option value="tavily">Tavily（AI 优化，每月 1000 免费积分）</option>
+      <option value="serper">Serper（Google 结果，2500 次免费搜索）</option>
     </select>
     <label>Tavily API Key</label>
-    <input id="ceTavilyApiKey" type="password" placeholder="tvly-...">
-    <div class="hint">从 tavily.com 获取，每月 1000 免费积分</div>
+    <input id="seTavilyKey" type="password" placeholder="tvly-...">
     <label>Serper API Key</label>
-    <input id="ceSerperApiKey" type="password" placeholder="your-serper-key">
-    <div class="hint">从 serper.dev 获取，2500 次免费搜索</div>
-
-    <label>上下文窗口 (tokens)</label>
-    <input id="ceCtxWindow" type="number" min="1000" step="1000" placeholder="64000">
-    <label>摘要阈值 (%)</label>
-    <input id="ceSummaryThreshold" type="number" min="50" max="95" step="5" placeholder="75">
+    <input id="seSerperKey" type="password" placeholder="your-serper-key">
+    <div class="checkbox-row">
+      <input type="checkbox" id="seEnabled">
+      <label for="seEnabled" style="margin:0;cursor:pointer;">默认启用联网搜索</label>
+    </div>
     <div class="modal-actions">
-      <button id="ceDelete" class="danger" style="display:none;">删除此配置</button>
-      <button id="ceCancel">取消</button>
-      <button class="primary" id="ceSave">保存</button>
+      <button id="seDelete" class="danger" style="display:none;">删除此配置</button>
+      <button id="seCancel">取消</button>
+      <button class="primary" id="seSave">保存</button>
     </div>
   </div>
 </div>
@@ -751,7 +807,7 @@ html, body {
     toastTimer = setTimeout(() => el.classList.remove('show'), 1500);
   }
 
-  // ─── KaTeX + Markdown 渲染 ───
+  // ─── KaTeX + Markdown ───
   function md(t) {
     if (!t) return '';
     const mathBlocks = [];
@@ -761,17 +817,14 @@ html, body {
       mathBlocks.push({ display: true, body });
       return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
     });
-
     text = text.replace(/\\\[([\s\S]+?)\\\]/g, (m, body) => {
       mathBlocks.push({ display: true, body });
       return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
     });
-
     text = text.replace(/(?<!\$)\$([^\$\n]+?)\$(?!\$)/g, (m, body) => {
       mathBlocks.push({ display: false, body });
       return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
     });
-
     text = text.replace(/\\\(([\s\S]+?)\\\)/g, (m, body) => {
       mathBlocks.push({ display: false, body });
       return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
@@ -801,7 +854,6 @@ html, body {
         return esc(item.display ? '$$' + item.body + '$$' : '$' + item.body + '$');
       });
     }
-
     return html;
   }
 
@@ -821,16 +873,16 @@ html, body {
   }
 
   // ═══════════════════════════════════════════════════════
-  // 配置
+  // 模型配置（独立）
   // ═══════════════════════════════════════════════════════
   const CFG_PREFIX = 'swc_ai_cfg_';
   const CFG_IDX_KEY = 'swc_ai_cfg_index';
   const CUR_KEY = 'swc_ai_current';
 
-  function defaultConfig(name) {
+  function defaultModelConfig(name) {
     return {
       id: uuid(),
-      name: name || '配置 1',
+      name: name || '模型配置 1',
       proxyUrl: '/api/aiapi',
       proxyPassword: '',
       apiBase: '',
@@ -845,25 +897,19 @@ html, body {
       ctxWindow: 64000,
       summaryThreshold: 75,
       model: '',
-      searchEnabled: false,
-      searchProvider: 'tavily',
-      tavilyApiKey: '',
-      serperApiKey: '',
       savedAt: Date.now()
     };
   }
 
-  function loadConfigIndex() {
-    try {
-      const raw = localStorage.getItem(CFG_IDX_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch { return []; }
+  function loadModelConfigIndex() {
+    try { const r = localStorage.getItem(CFG_IDX_KEY); return r ? JSON.parse(r) : []; }
+    catch { return []; }
   }
-  function saveConfigIndex(index) {
+  function saveModelConfigIndex(index) {
     try { localStorage.setItem(CFG_IDX_KEY, JSON.stringify(index)); } catch {}
   }
-  function loadConfigs() {
-    const index = loadConfigIndex();
+  function loadModelConfigs() {
+    const index = loadModelConfigIndex();
     const arr = [];
     for (const item of index) {
       try {
@@ -874,25 +920,25 @@ html, body {
     }
     return arr;
   }
-  function saveConfig(c) {
+  function saveModelConfig(c) {
     c.savedAt = Date.now();
     try { localStorage.setItem(CFG_PREFIX + c.id, JSON.stringify(c)); } catch {}
-    let index = loadConfigIndex();
+    let index = loadModelConfigIndex();
     index = index.filter(x => x.id !== c.id);
     index.unshift({
       id: c.id, name: c.name || '未命名', savedAt: c.savedAt,
       apiBase: c.apiBase || '', model: c.model || ''
     });
-    saveConfigIndex(index);
+    saveModelConfigIndex(index);
   }
-  function deleteConfigLocal(id) {
+  function deleteModelConfigLocal(id) {
     localStorage.removeItem(CFG_PREFIX + id);
-    let index = loadConfigIndex();
+    let index = loadModelConfigIndex();
     index = index.filter(x => x.id !== id);
-    saveConfigIndex(index);
+    saveModelConfigIndex(index);
   }
 
-  function migrateOldConfigCookies() {
+  function migrateOldModelConfigs() {
     try {
       const oldIds = getCookie('swc_ai_cfg_ids');
       if (!oldIds) return;
@@ -900,7 +946,7 @@ html, body {
       try { ids = JSON.parse(oldIds); } catch { ids = []; }
       if (ids.length === 0) { delCookie('swc_ai_cfg_ids'); return; }
 
-      const idx = loadConfigIndex();
+      const idx = loadModelConfigIndex();
       const existing = new Set(idx.map(x => x.id));
       for (const id of ids) {
         if (existing.has(id)) { delCookie(CFG_PREFIX + id); continue; }
@@ -913,10 +959,6 @@ html, body {
           if (!c.manualModels) c.manualModels = '';
           if (!c.modelMode) c.modelMode = 'auto';
           if (!c.cfAccountId) c.cfAccountId = '';
-          if (c.searchEnabled === undefined) c.searchEnabled = false;
-          if (!c.searchProvider) c.searchProvider = 'tavily';
-          if (c.tavilyApiKey === undefined) c.tavilyApiKey = '';
-          if (c.serperApiKey === undefined) c.serperApiKey = '';
           localStorage.setItem(CFG_PREFIX + c.id, JSON.stringify(c));
           idx.push({
             id: c.id, name: c.name || '未命名', savedAt: c.savedAt,
@@ -925,27 +967,103 @@ html, body {
         } catch {}
         delCookie(CFG_PREFIX + id);
       }
-      saveConfigIndex(idx);
+      saveModelConfigIndex(idx);
       delCookie('swc_ai_cfg_ids');
     } catch {}
   }
-  migrateOldConfigCookies();
+  migrateOldModelConfigs();
 
-  let configs = loadConfigs();
-  let currentConfigId = getCookie(CUR_KEY) || '';
-  if (configs.length === 0) {
-    const c = defaultConfig('配置 1');
-    configs = [c];
-    currentConfigId = c.id;
-    saveConfig(c);
+  let modelConfigs = loadModelConfigs();
+  let currentModelConfigId = getCookie(CUR_KEY) || '';
+  if (modelConfigs.length === 0) {
+    const c = defaultModelConfig('模型配置 1');
+    modelConfigs = [c];
+    currentModelConfigId = c.id;
+    saveModelConfig(c);
     setCookie(CUR_KEY, c.id);
   }
-  if (!configs.find(c => c.id === currentConfigId)) {
-    currentConfigId = configs[0].id;
-    setCookie(CUR_KEY, currentConfigId);
+  if (!modelConfigs.find(c => c.id === currentModelConfigId)) {
+    currentModelConfigId = modelConfigs[0].id;
+    setCookie(CUR_KEY, currentModelConfigId);
   }
-  function curConfig() { return configs.find(c => c.id === currentConfigId) || configs[0]; }
-  function configById(id) { return configs.find(c => c.id === id); }
+  function curModelConfig() { return modelConfigs.find(c => c.id === currentModelConfigId) || modelConfigs[0]; }
+  function modelConfigById(id) { return modelConfigs.find(c => c.id === id); }
+
+  // ═══════════════════════════════════════════════════════
+  // 搜索配置（独立）
+  // ═══════════════════════════════════════════════════════
+  const SEARCH_PREFIX = 'swc_ai_search_';
+  const SEARCH_IDX_KEY = 'swc_ai_search_index';
+  const SEARCH_CUR_KEY = 'swc_ai_search_current';
+
+  function defaultSearchConfig(name) {
+    const mc = curModelConfig();
+    return {
+      id: uuid(),
+      name: name || '搜索配置 1',
+      proxyUrl: (mc && mc.proxyUrl) || '/api/aiapi',
+      proxyPassword: (mc && mc.proxyPassword) || '',
+      searchProvider: 'tavily',
+      tavilyApiKey: '',
+      serperApiKey: '',
+      enabled: false,
+      savedAt: Date.now()
+    };
+  }
+
+  function loadSearchConfigIndex() {
+    try { const r = localStorage.getItem(SEARCH_IDX_KEY); return r ? JSON.parse(r) : []; }
+    catch { return []; }
+  }
+  function saveSearchConfigIndex(index) {
+    try { localStorage.setItem(SEARCH_IDX_KEY, JSON.stringify(index)); } catch {}
+  }
+  function loadSearchConfigs() {
+    const index = loadSearchConfigIndex();
+    const arr = [];
+    for (const item of index) {
+      try {
+        const raw = localStorage.getItem(SEARCH_PREFIX + item.id);
+        if (!raw) continue;
+        arr.push(JSON.parse(raw));
+      } catch {}
+    }
+    return arr;
+  }
+  function saveSearchConfig(c) {
+    c.savedAt = Date.now();
+    try { localStorage.setItem(SEARCH_PREFIX + c.id, JSON.stringify(c)); } catch {}
+    let index = loadSearchConfigIndex();
+    index = index.filter(x => x.id !== c.id);
+    index.unshift({
+      id: c.id, name: c.name || '未命名', savedAt: c.savedAt,
+      provider: c.searchProvider || 'tavily',
+      enabled: c.enabled === true
+    });
+    saveSearchConfigIndex(index);
+  }
+  function deleteSearchConfigLocal(id) {
+    localStorage.removeItem(SEARCH_PREFIX + id);
+    let index = loadSearchConfigIndex();
+    index = index.filter(x => x.id !== id);
+    saveSearchConfigIndex(index);
+  }
+
+  let searchConfigs = loadSearchConfigs();
+  let currentSearchConfigId = getCookie(SEARCH_CUR_KEY) || '';
+  if (searchConfigs.length === 0) {
+    const c = defaultSearchConfig('搜索配置 1');
+    searchConfigs = [c];
+    currentSearchConfigId = c.id;
+    saveSearchConfig(c);
+    setCookie(SEARCH_CUR_KEY, c.id);
+  }
+  if (!searchConfigs.find(c => c.id === currentSearchConfigId)) {
+    currentSearchConfigId = searchConfigs[0].id;
+    setCookie(SEARCH_CUR_KEY, currentSearchConfigId);
+  }
+  function curSearchConfig() { return searchConfigs.find(c => c.id === currentSearchConfigId) || searchConfigs[0]; }
+  function searchConfigById(id) { return searchConfigs.find(c => c.id === id); }
 
   // ═══════════════════════════════════════════════════════
   // 会话存储层
@@ -1022,7 +1140,7 @@ html, body {
   const runningConvs = new Map();
 
   function newConv() {
-    const c = curConfig();
+    const c = curModelConfig();
     const id = uuid();
     const m = {
       schema: 2, id, title: '新对话',
@@ -1038,21 +1156,18 @@ html, body {
     const m = S.meta(id); if (!m) return false;
     curId = id; curMeta = m; curTurns = S.turns(id, m.turnCount || 0);
     if (m.configId) {
-      const cfg = configById(m.configId);
+      const cfg = modelConfigById(m.configId);
       if (cfg) {
-        if (currentConfigId !== cfg.id) {
-          currentConfigId = cfg.id;
+        if (currentModelConfigId !== cfg.id) {
+          currentModelConfigId = cfg.id;
           setCookie(CUR_KEY, cfg.id);
           modelsCache = loadModels();
         }
-        btnConfig.classList.remove('error');
         btnModel.classList.remove('error');
       } else {
-        btnConfig.classList.add('error');
         btnModel.classList.add('error');
       }
     } else {
-      btnConfig.classList.add('error');
       btnModel.classList.add('error');
     }
     return true;
@@ -1117,7 +1232,7 @@ html, body {
   };
 
   // ─── 模型缓存 ───
-  function modelsCacheKey() { return 'swc_ai_models_' + currentConfigId; }
+  function modelsCacheKey() { return 'swc_ai_models_' + currentModelConfigId; }
   function loadModels() {
     try { const r = localStorage.getItem(modelsCacheKey()); return r ? JSON.parse(r) : []; }
     catch { return []; }
@@ -1164,6 +1279,7 @@ html, body {
     else { el.textContent = ''; el.classList.remove('show'); }
   }
 
+  // ─── 会话同步 ───
   async function uploadConv(id) {
     const m = S.meta(id); if (!m) return false;
     const turns = S.turns(id, m.turnCount || 0);
@@ -1179,7 +1295,6 @@ html, body {
     S.replaceConv(id, meta, turns);
     return true;
   }
-
   async function syncAll(silent) {
     if (syncing) return { busy: true };
     if (!getToken()) {
@@ -1248,7 +1363,6 @@ html, body {
       syncing = false;
     }
   }
-
   async function syncOne(id, silent) {
     if (syncing) return { busy: true };
     if (!getToken()) return { error: 'unauthorized' };
@@ -1302,7 +1416,6 @@ html, body {
       syncing = false;
     }
   }
-
   async function forceUpload(id) {
     if (!getToken()) { showDiag('未登录', ['请先登录']); return false; }
     if (runningConvs.has(id)) { alert('此对话正在生成中'); return false; }
@@ -1320,7 +1433,6 @@ html, body {
     } else setSyncState(id, 'failed');
     return ok;
   }
-
   async function checkState() {
     if (!getToken()) { showDiag('未登录', ['请先登录']); return; }
     updateProgress('cloudProgress', '正在检查...');
@@ -1354,7 +1466,6 @@ html, body {
     renderConvList();
     if (cloudPopup.classList.contains('show')) renderCloudList();
   }
-
   async function strictDelete(id) {
     if (!getToken()) { alert('请先登录'); return; }
     if (runningConvs.has(id)) { alert('此对话正在生成中，请先停止再删除。'); return; }
@@ -1384,16 +1495,14 @@ html, body {
     if (cloudPopup.classList.contains('show')) renderCloudList();
   }
 
-  // ═══════════════════════════════════════════════════════
-  // 配置同步
-  // ═══════════════════════════════════════════════════════
-  async function uploadConfig(id) {
-    const c = configs.find(x => x.id === id);
+  // ─── 模型配置同步 ───
+  async function uploadModelConfig(id) {
+    const c = modelConfigs.find(x => x.id === id);
     if (!c) return false;
     const r = await cloudApi({ type: 'config', id, method: 'PUT', body: { config: c } });
     return !r.error;
   }
-  async function downloadConfig(id) {
+  async function downloadModelConfig(id) {
     const r = await cloudApi({ type: 'config', id });
     if (r.error || !r.config) return false;
     const c = r.config;
@@ -1403,15 +1512,10 @@ html, body {
     if (!c.modelMode) c.modelMode = 'auto';
     if (!c.cfAccountId) c.cfAccountId = '';
     if (c.temperature === undefined) c.temperature = null;
-    if (c.searchEnabled === undefined) c.searchEnabled = false;
-    if (!c.searchProvider) c.searchProvider = 'tavily';
-    if (c.tavilyApiKey === undefined) c.tavilyApiKey = '';
-    if (c.serperApiKey === undefined) c.serperApiKey = '';
     localStorage.setItem(CFG_PREFIX + id, JSON.stringify(c));
     return true;
   }
-
-  async function syncConfigAll(silent) {
+  async function syncModelConfigAll(silent) {
     if (syncing) return { busy: true };
     if (!getToken()) {
       if (!silent) showDiag('未登录', ['请先登录']);
@@ -1420,25 +1524,21 @@ html, body {
     syncing = true;
     let uploaded = 0, downloaded = 0, skipped = 0, failed = 0;
     try {
-      if (!silent) updateProgress('cfgProgress', '正在读取云端配置索引...');
-
+      if (!silent) updateProgress('mmProgress', '正在读取云端配置索引...');
       const r = await cloudApi({ type: 'config' });
       if (r.error) {
-        if (!silent) showDiag('配置同步失败：拉取索引', [
+        if (!silent) showDiag('同步失败：拉取索引', [
           { k: '错误', v: r.error },
           { k: '详情', v: r.body || r.detail || '' }
         ]);
         return { error: r.error };
       }
-
       const cloudIndex = Array.isArray(r.index) ? r.index : [];
       const cloudMap = new Map(cloudIndex.map(x => [x.id, x]));
-      const localIndex = loadConfigIndex();
+      const localIndex = loadModelConfigIndex();
       const localMap = new Map(localIndex.map(x => [x.id, x]));
-
       const toUpload = [];
       const toDownload = [];
-
       for (const [id, lm] of localMap) {
         const cm = cloudMap.get(id);
         if (!cm) { toUpload.push(id); continue; }
@@ -1451,25 +1551,21 @@ html, body {
       for (const [id] of cloudMap) {
         if (!localMap.has(id)) toDownload.push(id);
       }
-
       const total = toUpload.length + toDownload.length;
-
       for (let i = 0; i < toUpload.length; i++) {
         const id = toUpload[i];
-        if (!silent) updateProgress('cfgProgress', `上传配置 ${i+1}/${total}...`);
-        const ok = await uploadConfig(id);
+        if (!silent) updateProgress('mmProgress', `上传 ${i+1}/${total}...`);
+        const ok = await uploadModelConfig(id);
         if (ok) { uploaded++; setSyncState(id, 'synced'); }
         else { failed++; setSyncState(id, 'failed'); }
       }
-
       for (let i = 0; i < toDownload.length; i++) {
         const id = toDownload[i];
-        if (!silent) updateProgress('cfgProgress', `下载配置 ${i+1}/${total}...`);
-        const ok = await downloadConfig(id);
+        if (!silent) updateProgress('mmProgress', `下载 ${i+1}/${total}...`);
+        const ok = await downloadModelConfig(id);
         if (ok) { downloaded++; setSyncState(id, 'synced'); }
         else { failed++; setSyncState(id, 'failed'); }
       }
-
       const newIndex = [];
       for (const item of localIndex) {
         const raw = localStorage.getItem(CFG_PREFIX + item.id);
@@ -1494,70 +1590,59 @@ html, body {
           });
         } catch {}
       }
-      saveConfigIndex(newIndex);
-      configs = loadConfigs();
-      if (!configs.find(c => c.id === currentConfigId)) {
-        currentConfigId = configs[0]?.id || '';
-        if (currentConfigId) setCookie(CUR_KEY, currentConfigId);
+      saveModelConfigIndex(newIndex);
+      modelConfigs = loadModelConfigs();
+      if (!modelConfigs.find(c => c.id === currentModelConfigId)) {
+        currentModelConfigId = modelConfigs[0]?.id || '';
+        if (currentModelConfigId) setCookie(CUR_KEY, currentModelConfigId);
       }
-
       if (!silent) {
-        updateProgress('cfgProgress', '');
-        alert(`配置同步完成\n上传 ${uploaded}，下载 ${downloaded}，跳过 ${skipped}，失败 ${failed}`);
+        updateProgress('mmProgress', '');
+        alert(`模型配置同步完成\n上传 ${uploaded}，下载 ${downloaded}，跳过 ${skipped}，失败 ${failed}`);
       }
-
-      renderConfigManagerList();
-      updateConfigLabel();
+      renderModelManagerList();
       updateModelLabel();
-      updateSearchToggle();
       return { uploaded, downloaded, skipped, failed };
     } finally {
       syncing = false;
     }
   }
-
-  async function syncConfigOne(id, silent) {
+  async function syncModelConfigOne(id, silent) {
     if (syncing) return { busy: true };
     if (!getToken()) return { error: 'unauthorized' };
-
-    const lm = loadConfigIndex().find(x => x.id === id);
+    const lm = loadModelConfigIndex().find(x => x.id === id);
     if (!lm) return { error: 'not-found' };
-
     syncing = true;
     try {
-      if (!silent) updateProgress('cfgProgress', '查询配置状态...');
-
+      if (!silent) updateProgress('mmProgress', '查询配置状态...');
       const r = await cloudApi({ type: 'config', id });
       if (r.error === 'http-404') {
-        const ok = await uploadConfig(id);
+        const ok = await uploadModelConfig(id);
         if (ok) setSyncState(id, 'synced'); else setSyncState(id, 'failed');
-        if (!silent) updateProgress('cfgProgress', '');
+        if (!silent) updateProgress('mmProgress', '');
         return { ok };
       }
       if (r.error) {
-        if (!silent) showDiag('配置同步失败', [
+        if (!silent) showDiag('同步失败', [
           { k: '配置 id', v: id },
           { k: '错误', v: r.error },
           { k: '详情', v: r.body || r.detail || '' }
         ]);
-        if (!silent) updateProgress('cfgProgress', '');
+        if (!silent) updateProgress('mmProgress', '');
         return { error: r.error };
       }
-
       const cm = r.config;
       const lt = lm.savedAt || 0;
       const ct = (cm && cm.savedAt) || 0;
-
       if (lt === ct && cm) {
         setSyncState(id, 'synced');
-        if (!silent) updateProgress('cfgProgress', '');
+        if (!silent) updateProgress('mmProgress', '');
         return { ok: true, direction: 'none' };
       }
-
       if (lt > ct || !cm) {
-        const ok = await uploadConfig(id);
+        const ok = await uploadModelConfig(id);
         if (ok) setSyncState(id, 'synced'); else setSyncState(id, 'failed');
-        if (!silent) updateProgress('cfgProgress', '');
+        if (!silent) updateProgress('mmProgress', '');
         return { ok, direction: 'upload' };
       } else {
         const c = cm;
@@ -1567,39 +1652,31 @@ html, body {
         if (!c.modelMode) c.modelMode = 'auto';
         if (!c.cfAccountId) c.cfAccountId = '';
         if (c.temperature === undefined) c.temperature = null;
-        if (c.searchEnabled === undefined) c.searchEnabled = false;
-        if (!c.searchProvider) c.searchProvider = 'tavily';
-        if (c.tavilyApiKey === undefined) c.tavilyApiKey = '';
-        if (c.serperApiKey === undefined) c.serperApiKey = '';
         localStorage.setItem(CFG_PREFIX + id, JSON.stringify(c));
-        let index = loadConfigIndex();
+        let index = loadModelConfigIndex();
         index = index.filter(x => x.id !== id);
         index.unshift({
           id: c.id, name: c.name || '未命名', savedAt: c.savedAt,
           apiBase: c.apiBase || '', model: c.model || ''
         });
-        saveConfigIndex(index);
-        configs = loadConfigs();
+        saveModelConfigIndex(index);
+        modelConfigs = loadModelConfigs();
         setSyncState(id, 'synced');
-        renderConfigManagerList();
-        updateConfigLabel();
+        renderModelManagerList();
         updateModelLabel();
-        updateSearchToggle();
-        if (!silent) updateProgress('cfgProgress', '');
+        if (!silent) updateProgress('mmProgress', '');
         return { ok: true, direction: 'download' };
       }
     } finally {
       syncing = false;
     }
   }
-
-  async function checkConfigState() {
+  async function checkModelConfigState() {
     if (!getToken()) { showDiag('未登录', ['请先登录']); return; }
-    updateProgress('cfgProgress', '正在检查...');
-
+    updateProgress('mmProgress', '正在检查...');
     const r = await cloudApi({ type: 'config' });
     if (r.error) {
-      updateProgress('cfgProgress', '');
+      updateProgress('mmProgress', '');
       showDiag('检查失败', [
         { k: '错误', v: r.error },
         { k: '详情', v: r.body || r.detail || '' }
@@ -1608,8 +1685,7 @@ html, body {
     }
     const cloudIndex = Array.isArray(r.index) ? r.index : [];
     const cloudMap = new Map(cloudIndex.map(x => [x.id, x]));
-    const localIndex = loadConfigIndex();
-
+    const localIndex = loadModelConfigIndex();
     for (const li of localIndex) {
       const cm = cloudMap.get(li.id);
       if (!cm) setSyncState(li.id, 'local-only');
@@ -1624,22 +1700,18 @@ html, body {
     for (const [id] of cloudMap) {
       if (!localIndex.find(x => x.id === id)) setSyncState(id, 'cloud-only');
     }
-
-    updateProgress('cfgProgress', '');
-    renderConfigManagerList();
+    updateProgress('mmProgress', '');
+    renderModelManagerList();
   }
-
-  async function strictDeleteConfig(id) {
+  async function strictDeleteModelConfig(id) {
     if (!getToken()) { alert('请先登录'); return; }
-    if (configs.length <= 1) { alert('至少保留一套配置。'); return; }
-    if (!confirm('确定删除这套配置？将同时删除本地和云端。')) return;
-
+    if (modelConfigs.length <= 1) { alert('至少保留一套模型配置。'); return; }
+    if (!confirm('确定删除这套模型配置？将同时删除本地和云端。')) return;
     const r = await cloudApi({ type: 'config' });
     if (r.error) { alert('无法连接云端，删除取消'); return; }
     const cloudIndex = Array.isArray(r.index) ? r.index : [];
     const cm = cloudIndex.find(x => x.id === id);
-    const lm = loadConfigIndex().find(x => x.id === id);
-
+    const lm = loadModelConfigIndex().find(x => x.id === id);
     if (cm && lm) {
       const ct = cm.savedAt || 0;
       const lt = lm.savedAt || 0;
@@ -1648,7 +1720,6 @@ html, body {
         return;
       }
     }
-
     const dr = await cloudApi({ type: 'config', id, method: 'DELETE' });
     if (dr.error) {
       showDiag('云端删除失败', [
@@ -1658,18 +1729,264 @@ html, body {
       ]);
       return;
     }
-
-    deleteConfigLocal(id);
+    deleteModelConfigLocal(id);
     delSyncState(id);
-    configs = loadConfigs();
-    if (currentConfigId === id) {
-      currentConfigId = configs[0]?.id || '';
-      if (currentConfigId) setCookie(CUR_KEY, currentConfigId);
+    modelConfigs = loadModelConfigs();
+    if (currentModelConfigId === id) {
+      currentModelConfigId = modelConfigs[0]?.id || '';
+      if (currentModelConfigId) setCookie(CUR_KEY, currentModelConfigId);
     }
-    renderConfigManagerList();
-    updateConfigLabel();
+    renderModelManagerList();
     updateModelLabel();
-    updateSearchToggle();
+  }
+
+  // ─── 搜索配置同步 ───
+  async function uploadSearchConfig(id) {
+    const c = searchConfigs.find(x => x.id === id);
+    if (!c) return false;
+    const r = await cloudApi({ type: 'search', id, method: 'PUT', body: { config: c } });
+    return !r.error;
+  }
+  async function downloadSearchConfig(id) {
+    const r = await cloudApi({ type: 'search', id });
+    if (r.error || !r.config) return false;
+    const c = r.config;
+    if (!c.savedAt) c.savedAt = Date.now();
+    if (!c.searchProvider) c.searchProvider = 'tavily';
+    if (c.tavilyApiKey === undefined) c.tavilyApiKey = '';
+    if (c.serperApiKey === undefined) c.serperApiKey = '';
+    if (c.enabled === undefined) c.enabled = false;
+    localStorage.setItem(SEARCH_PREFIX + id, JSON.stringify(c));
+    return true;
+  }
+  async function syncSearchConfigAll(silent) {
+    if (syncing) return { busy: true };
+    if (!getToken()) {
+      if (!silent) showDiag('未登录', ['请先登录']);
+      return { error: 'unauthorized' };
+    }
+    syncing = true;
+    let uploaded = 0, downloaded = 0, skipped = 0, failed = 0;
+    try {
+      if (!silent) updateProgress('smProgress', '正在读取云端搜索配置索引...');
+      const r = await cloudApi({ type: 'search' });
+      if (r.error) {
+        if (!silent) showDiag('同步失败：拉取索引', [
+          { k: '错误', v: r.error },
+          { k: '详情', v: r.body || r.detail || '' }
+        ]);
+        return { error: r.error };
+      }
+      const cloudIndex = Array.isArray(r.index) ? r.index : [];
+      const cloudMap = new Map(cloudIndex.map(x => [x.id, x]));
+      const localIndex = loadSearchConfigIndex();
+      const localMap = new Map(localIndex.map(x => [x.id, x]));
+      const toUpload = [];
+      const toDownload = [];
+      for (const [id, lm] of localMap) {
+        const cm = cloudMap.get(id);
+        if (!cm) { toUpload.push(id); continue; }
+        const lt = lm.savedAt || 0;
+        const ct = cm.savedAt || 0;
+        if (lt > ct) toUpload.push(id);
+        else if (ct > lt) toDownload.push(id);
+        else { skipped++; setSyncState(id, 'synced'); }
+      }
+      for (const [id] of cloudMap) {
+        if (!localMap.has(id)) toDownload.push(id);
+      }
+      const total = toUpload.length + toDownload.length;
+      for (let i = 0; i < toUpload.length; i++) {
+        const id = toUpload[i];
+        if (!silent) updateProgress('smProgress', `上传 ${i+1}/${total}...`);
+        const ok = await uploadSearchConfig(id);
+        if (ok) { uploaded++; setSyncState(id, 'synced'); }
+        else { failed++; setSyncState(id, 'failed'); }
+      }
+      for (let i = 0; i < toDownload.length; i++) {
+        const id = toDownload[i];
+        if (!silent) updateProgress('smProgress', `下载 ${i+1}/${total}...`);
+        const ok = await downloadSearchConfig(id);
+        if (ok) { downloaded++; setSyncState(id, 'synced'); }
+        else { failed++; setSyncState(id, 'failed'); }
+      }
+      const newIndex = [];
+      for (const item of localIndex) {
+        const raw = localStorage.getItem(SEARCH_PREFIX + item.id);
+        if (!raw) continue;
+        try {
+          const c = JSON.parse(raw);
+          newIndex.push({
+            id: c.id, name: c.name || '未命名', savedAt: c.savedAt || 0,
+            provider: c.searchProvider || 'tavily',
+            enabled: c.enabled === true
+          });
+        } catch {}
+      }
+      for (const [id] of cloudMap) {
+        if (newIndex.find(x => x.id === id)) continue;
+        const raw = localStorage.getItem(SEARCH_PREFIX + id);
+        if (!raw) continue;
+        try {
+          const c = JSON.parse(raw);
+          newIndex.push({
+            id: c.id, name: c.name || '未命名', savedAt: c.savedAt || 0,
+            provider: c.searchProvider || 'tavily',
+            enabled: c.enabled === true
+          });
+        } catch {}
+      }
+      saveSearchConfigIndex(newIndex);
+      searchConfigs = loadSearchConfigs();
+      if (!searchConfigs.find(c => c.id === currentSearchConfigId)) {
+        currentSearchConfigId = searchConfigs[0]?.id || '';
+        if (currentSearchConfigId) setCookie(SEARCH_CUR_KEY, currentSearchConfigId);
+      }
+      if (!silent) {
+        updateProgress('smProgress', '');
+        alert(`搜索配置同步完成\n上传 ${uploaded}，下载 ${downloaded}，跳过 ${skipped}，失败 ${failed}`);
+      }
+      renderSearchManagerList();
+      updateSearchLabel();
+      updateSearchEnabledCheck();
+      return { uploaded, downloaded, skipped, failed };
+    } finally {
+      syncing = false;
+    }
+  }
+  async function syncSearchConfigOne(id, silent) {
+    if (syncing) return { busy: true };
+    if (!getToken()) return { error: 'unauthorized' };
+    const lm = loadSearchConfigIndex().find(x => x.id === id);
+    if (!lm) return { error: 'not-found' };
+    syncing = true;
+    try {
+      if (!silent) updateProgress('smProgress', '查询配置状态...');
+      const r = await cloudApi({ type: 'search', id });
+      if (r.error === 'http-404') {
+        const ok = await uploadSearchConfig(id);
+        if (ok) setSyncState(id, 'synced'); else setSyncState(id, 'failed');
+        if (!silent) updateProgress('smProgress', '');
+        return { ok };
+      }
+      if (r.error) {
+        if (!silent) showDiag('同步失败', [
+          { k: '配置 id', v: id },
+          { k: '错误', v: r.error },
+          { k: '详情', v: r.body || r.detail || '' }
+        ]);
+        if (!silent) updateProgress('smProgress', '');
+        return { error: r.error };
+      }
+      const cm = r.config;
+      const lt = lm.savedAt || 0;
+      const ct = (cm && cm.savedAt) || 0;
+      if (lt === ct && cm) {
+        setSyncState(id, 'synced');
+        if (!silent) updateProgress('smProgress', '');
+        return { ok: true, direction: 'none' };
+      }
+      if (lt > ct || !cm) {
+        const ok = await uploadSearchConfig(id);
+        if (ok) setSyncState(id, 'synced'); else setSyncState(id, 'failed');
+        if (!silent) updateProgress('smProgress', '');
+        return { ok, direction: 'upload' };
+      } else {
+        const c = cm;
+        if (!c.savedAt) c.savedAt = Date.now();
+        if (!c.searchProvider) c.searchProvider = 'tavily';
+        if (c.tavilyApiKey === undefined) c.tavilyApiKey = '';
+        if (c.serperApiKey === undefined) c.serperApiKey = '';
+        if (c.enabled === undefined) c.enabled = false;
+        localStorage.setItem(SEARCH_PREFIX + id, JSON.stringify(c));
+        let index = loadSearchConfigIndex();
+        index = index.filter(x => x.id !== id);
+        index.unshift({
+          id: c.id, name: c.name || '未命名', savedAt: c.savedAt,
+          provider: c.searchProvider || 'tavily',
+          enabled: c.enabled === true
+        });
+        saveSearchConfigIndex(index);
+        searchConfigs = loadSearchConfigs();
+        setSyncState(id, 'synced');
+        renderSearchManagerList();
+        updateSearchLabel();
+        updateSearchEnabledCheck();
+        if (!silent) updateProgress('smProgress', '');
+        return { ok: true, direction: 'download' };
+      }
+    } finally {
+      syncing = false;
+    }
+  }
+  async function checkSearchConfigState() {
+    if (!getToken()) { showDiag('未登录', ['请先登录']); return; }
+    updateProgress('smProgress', '正在检查...');
+    const r = await cloudApi({ type: 'search' });
+    if (r.error) {
+      updateProgress('smProgress', '');
+      showDiag('检查失败', [
+        { k: '错误', v: r.error },
+        { k: '详情', v: r.body || r.detail || '' }
+      ]);
+      return;
+    }
+    const cloudIndex = Array.isArray(r.index) ? r.index : [];
+    const cloudMap = new Map(cloudIndex.map(x => [x.id, x]));
+    const localIndex = loadSearchConfigIndex();
+    for (const li of localIndex) {
+      const cm = cloudMap.get(li.id);
+      if (!cm) setSyncState(li.id, 'local-only');
+      else {
+        const lt = li.savedAt || 0;
+        const ct = cm.savedAt || 0;
+        if (lt > ct) setSyncState(li.id, 'local-newer');
+        else if (ct > lt) setSyncState(li.id, 'cloud-newer');
+        else setSyncState(li.id, 'synced');
+      }
+    }
+    for (const [id] of cloudMap) {
+      if (!localIndex.find(x => x.id === id)) setSyncState(id, 'cloud-only');
+    }
+    updateProgress('smProgress', '');
+    renderSearchManagerList();
+  }
+  async function strictDeleteSearchConfig(id) {
+    if (!getToken()) { alert('请先登录'); return; }
+    if (searchConfigs.length <= 1) { alert('至少保留一套搜索配置。'); return; }
+    if (!confirm('确定删除这套搜索配置？将同时删除本地和云端。')) return;
+    const r = await cloudApi({ type: 'search' });
+    if (r.error) { alert('无法连接云端，删除取消'); return; }
+    const cloudIndex = Array.isArray(r.index) ? r.index : [];
+    const cm = cloudIndex.find(x => x.id === id);
+    const lm = loadSearchConfigIndex().find(x => x.id === id);
+    if (cm && lm) {
+      const ct = cm.savedAt || 0;
+      const lt = lm.savedAt || 0;
+      if (ct !== lt) {
+        alert('该配置在云端有未同步的修改，请先同步再删除。');
+        return;
+      }
+    }
+    const dr = await cloudApi({ type: 'search', id, method: 'DELETE' });
+    if (dr.error) {
+      showDiag('云端删除失败', [
+        { k: '配置 id', v: id },
+        { k: '错误', v: dr.error },
+        { k: '详情', v: dr.body || dr.detail || '' }
+      ]);
+      return;
+    }
+    deleteSearchConfigLocal(id);
+    delSyncState(id);
+    searchConfigs = loadSearchConfigs();
+    if (currentSearchConfigId === id) {
+      currentSearchConfigId = searchConfigs[0]?.id || '';
+      if (currentSearchConfigId) setCookie(SEARCH_CUR_KEY, currentSearchConfigId);
+    }
+    renderSearchManagerList();
+    updateSearchLabel();
+    updateSearchEnabledCheck();
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1681,16 +1998,14 @@ html, body {
   const btnSend = document.getElementById('btnSend');
   const convListEl = document.getElementById('convList');
   const convTitleEl = document.getElementById('convTitle');
-  const btnConfig = document.getElementById('btnConfig');
-  const configLabel = document.getElementById('configLabel');
   const btnModel = document.getElementById('btnModel');
   const modelLabel = document.getElementById('modelLabel');
+  const btnSearch = document.getElementById('btnSearch');
+  const searchLabel = document.getElementById('searchLabel');
   const btnReason = document.getElementById('btnReason');
   const reasonLabel = document.getElementById('reasonLabel');
-  const btnSearchToggle = document.getElementById('btnSearchToggle');
-  const searchLabel = document.getElementById('searchLabel');
-  const configPopup = document.getElementById('configPopup');
   const modelPopup = document.getElementById('modelPopup');
+  const searchPopup = document.getElementById('searchPopup');
   const reasonPopup = document.getElementById('reasonPopup');
   const cloudPopup = document.getElementById('cloudPopup');
   const cloudList = document.getElementById('cloudList');
@@ -1699,12 +2014,14 @@ html, body {
   const modelSearchEl = document.getElementById('modelSearch');
   const manualWrap = document.getElementById('manualWrap');
   const manualInput = document.getElementById('manualInput');
+  const searchConfigList = document.getElementById('searchConfigList');
+  const searchEnabledCheck = document.getElementById('searchEnabledCheck');
   const convMenu = document.getElementById('convMenu');
   const sidebarEl = document.getElementById('sidebar');
   const sidebarMask = document.getElementById('sidebarMask');
   const btnMenu = document.getElementById('btnMenu');
-  const configListEl = document.getElementById('configList');
-  const configManagerList = document.getElementById('configManagerList');
+  const modelManagerList = document.getElementById('modelManagerList');
+  const searchManagerList = document.getElementById('searchManagerList');
 
   // ─── 滚动 ───
   let isAtBottom = true, scrollPending = false;
@@ -1819,7 +2136,6 @@ html, body {
     }
     bubble.innerHTML = turn.assistant.content ? md(turn.assistant.content) : '';
 
-    // 引用来源
     if (turn.searchResults && turn.searchResults.length > 0) {
       const refPanel = document.createElement('details');
       refPanel.className = 'search-refs';
@@ -1899,16 +2215,46 @@ html, body {
     else { btnSend.textContent = '发送'; btnSend.classList.remove('stop'); }
   }
 
-  function updateSearchToggle() {
-    const c = curConfig();
-    const on = c && c.searchEnabled === true;
-    if (on) {
-      btnSearchToggle.classList.add('search-on');
-      searchLabel.textContent = '🌐 联网';
-    } else {
-      btnSearchToggle.classList.remove('search-on');
-      searchLabel.textContent = '🔌 联网';
+  function updateModelLabel() {
+    const m = (curMeta?.model) || curModelConfig()?.model || '';
+    if (curMeta && curMeta.configId && !modelConfigById(curMeta.configId)) {
+      modelLabel.textContent = '未绑定';
+      btnModel.classList.add('error');
+      return;
     }
+    btnModel.classList.remove('error');
+    if (m) { modelLabel.textContent = m; btnModel.classList.remove('empty'); }
+    else { modelLabel.textContent = '选择模型'; btnModel.classList.add('empty'); }
+  }
+
+  function updateSearchLabel() {
+    const c = curSearchConfig();
+    if (!c) {
+      searchLabel.textContent = '搜索';
+      btnSearch.classList.add('empty');
+      btnSearch.classList.remove('search-on');
+      return;
+    }
+    const provider = c.searchProvider === 'serper' ? 'Serper' : 'Tavily';
+    const enabled = c.enabled === true;
+    if (enabled) {
+      btnSearch.classList.add('search-on');
+      btnSearch.classList.remove('empty');
+    } else {
+      btnSearch.classList.remove('search-on');
+      btnSearch.classList.remove('empty');
+    }
+    searchLabel.textContent = (enabled ? '🌐 ' : '🔌 ') + provider;
+  }
+
+  function updateSearchEnabledCheck() {
+    const c = curSearchConfig();
+    searchEnabledCheck.checked = c && c.enabled === true;
+  }
+
+  function updateReasonLabel() {
+    const v = curMeta?.reasoning || '';
+    reasonLabel.textContent = v || '默认';
   }
 
   function renderChat() {
@@ -1926,39 +2272,11 @@ html, body {
       scrollToBottom();
     }
     if (curId && runningConvs.has(curId)) bindDomRefs(curId);
-    updateConfigLabel();
     updateModelLabel();
+    updateSearchLabel();
     updateReasonLabel();
-    updateSearchToggle();
     updateSendButton();
     renderConvList();
-  }
-
-  function updateConfigLabel() {
-    const c = curConfig();
-    if (curMeta && curMeta.configId && !configById(curMeta.configId)) {
-      configLabel.textContent = '未绑定';
-      btnConfig.classList.add('error');
-    } else {
-      configLabel.textContent = c ? c.name : '无配置';
-      btnConfig.classList.toggle('empty', !c);
-      btnConfig.classList.remove('error');
-    }
-  }
-  function updateModelLabel() {
-    const m = (curMeta?.model) || curConfig()?.model || '';
-    if (curMeta && curMeta.configId && !configById(curMeta.configId)) {
-      modelLabel.textContent = '未绑定';
-      btnModel.classList.add('error');
-      return;
-    }
-    btnModel.classList.remove('error');
-    if (m) { modelLabel.textContent = m; btnModel.classList.remove('empty'); }
-    else { modelLabel.textContent = '选择模型'; btnModel.classList.add('empty'); }
-  }
-  function updateReasonLabel() {
-    const v = curMeta?.reasoning || '';
-    reasonLabel.textContent = v || '默认';
   }
 
   function renderConvList() {
@@ -2093,113 +2411,11 @@ html, body {
   }
   popupMask.addEventListener('click', closeAllPopups);
 
-  // ─── 配置 Popup ───
-  function renderConfigList() {
-    configListEl.innerHTML = '';
-    configs.forEach(c => {
-      const it = document.createElement('div');
-      it.className = 'popup-item' + (c.id === currentConfigId ? ' active' : '');
-      it.innerHTML = '<span class="n">' + esc(c.name) + '</span>' +
-        (c.id === currentConfigId ? '<span class="chk">✓</span>' : '');
-      it.addEventListener('click', () => { switchConfig(c.id); closeAllPopups(); });
-      configListEl.appendChild(it);
-    });
-  }
-  function switchConfig(id) {
-    currentConfigId = id;
-    setCookie(CUR_KEY, id);
-    if (curId && curMeta) {
-      curMeta.configId = id;
-      const c = configById(id);
-      curMeta.configName = c ? c.name : '';
-      curMeta.savedAt = Date.now();
-      curMeta.schema = 2;
-      S.setMeta(curId, curMeta);
-      setSyncState(curId, 'local-newer');
-    }
-    modelsCache = loadModels();
-    updateConfigLabel();
-    updateModelLabel();
-    updateSearchToggle();
-    renderModelList();
-  }
-  btnConfig.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (configPopup.classList.contains('show')) { closeAllPopups(); return; }
-    renderConfigList();
-    showPopup(configPopup, btnConfig);
-  });
-  configPopup.addEventListener('click', e => e.stopPropagation());
-  document.getElementById('btnManageConfigs').addEventListener('click', () => {
-    closeAllPopups();
-    openConfigManager();
-  });
-
-  // ─── 配置管理面板 ───
-  function openConfigManager() {
-    renderConfigManagerList();
-    document.getElementById('configManagerModal').classList.add('show');
-  }
-  function closeConfigManager() {
-    document.getElementById('configManagerModal').classList.remove('show');
-  }
-  function renderConfigManagerList() {
-    configManagerList.innerHTML = '';
-    const index = loadConfigIndex();
-    if (index.length === 0) {
-      configManagerList.innerHTML = '<div class="popup-empty">无配置</div>';
-      return;
-    }
-    index.forEach(item => {
-      const state = getSyncState(item.id);
-      const isCurrent = item.id === currentConfigId;
-      const it = document.createElement('div');
-      it.className = 'conf-item' + (isCurrent ? ' active' : '');
-      it.innerHTML =
-        '<span class="sync-icon" data-state="' + state + '" title="' + state + '">' + stateIcon(state) + '</span>' +
-        '<span class="n">' + esc(item.name || '未命名') + '</span>' +
-        '<button data-act="edit">编辑</button>' +
-        '<button data-act="sync">同步</button>' +
-        '<button data-act="switch">' + (isCurrent ? '当前' : '切换') + '</button>' +
-        '<span class="m">' + esc(item.apiBase || '未设置地址') + '</span>';
-      it.querySelector('[data-act="edit"]').addEventListener('click', (e) => {
-        e.stopPropagation();
-        const c = configs.find(x => x.id === item.id);
-        closeConfigManager();
-        openConfigEdit(c);
-      });
-      it.querySelector('[data-act="sync"]').addEventListener('click', async (e) => {
-        e.stopPropagation();
-        await syncConfigOne(item.id, false);
-        renderConfigManagerList();
-      });
-      it.querySelector('[data-act="switch"]').addEventListener('click', (e) => {
-        e.stopPropagation();
-        switchConfig(item.id);
-        renderConfigManagerList();
-      });
-      configManagerList.appendChild(it);
-    });
-  }
-  document.getElementById('cmAdd').addEventListener('click', () => {
-    closeConfigManager();
-    openConfigEdit(null);
-  });
-  document.getElementById('cmClose').addEventListener('click', closeConfigManager);
-  document.getElementById('cmSyncAll').addEventListener('click', async () => {
-    await syncConfigAll(false);
-    renderConfigManagerList();
-  });
-  document.getElementById('cmCheckState').addEventListener('click', async () => {
-    await checkConfigState();
-    renderConfigManagerList();
-  });
-
-  // ─── 模型 Popup ───
+  // ─── 模型面板 ───
   function renderModelList() {
     const q = (modelSearchEl.value || '').toLowerCase().trim();
     const list = q ? modelsCache.filter(m => m.toLowerCase().includes(q)) : modelsCache;
-    const curModel = curMeta?.model || curConfig()?.model || '';
+    const curModel = curMeta?.model || curModelConfig()?.model || '';
     if (list.length === 0) {
       modelListPanel.innerHTML = '<div class="popup-empty">' +
         (modelsCache.length === 0 ? '无模型，点 ↻ 拉取' : '无匹配') + '</div>';
@@ -2218,9 +2434,9 @@ html, body {
   function selectModel(name) {
     if (!name) return;
     if (!curId) {
-      const c = curConfig();
+      const c = curModelConfig();
       c.model = name;
-      saveConfig(c);
+      saveModelConfig(c);
     } else {
       curMeta.model = name;
       curMeta.savedAt = Date.now();
@@ -2242,6 +2458,10 @@ html, body {
   document.getElementById('btnRefreshModels').addEventListener('click', (e) => {
     e.stopPropagation(); fetchModels(false);
   });
+  document.getElementById('btnManageModelConfigs').addEventListener('click', () => {
+    closeAllPopups();
+    openModelManager();
+  });
   document.getElementById('btnShowManual').addEventListener('click', () => {
     manualWrap.classList.add('show'); manualInput.focus();
   });
@@ -2254,6 +2474,58 @@ html, body {
     if (e.key === 'Enter') { e.preventDefault(); document.getElementById('btnManualConfirm').click(); }
   });
   modelPopup.addEventListener('click', e => e.stopPropagation());
+
+  // ─── 搜索面板 ───
+  function renderSearchConfigList() {
+    searchConfigList.innerHTML = '';
+    if (searchConfigs.length === 0) {
+      searchConfigList.innerHTML = '<div class="popup-empty">无搜索配置</div>';
+      return;
+    }
+    searchConfigs.forEach(c => {
+      const it = document.createElement('div');
+      it.className = 'popup-item' + (c.id === currentSearchConfigId ? ' active' : '');
+      const provider = c.searchProvider === 'serper' ? 'Serper' : 'Tavily';
+      const keyFilled = c.searchProvider === 'serper' ? !!c.serperApiKey : !!c.tavilyApiKey;
+      it.innerHTML = '<span class="n">' + esc(c.name) + '</span>' +
+        '<span class="sub">' + provider + (keyFilled ? '' : ' · 未填 Key') + '</span>' +
+        (c.id === currentSearchConfigId ? '<span class="chk">✓</span>' : '');
+      it.addEventListener('click', () => { switchSearchConfig(c.id); });
+      searchConfigList.appendChild(it);
+    });
+  }
+  function switchSearchConfig(id) {
+    currentSearchConfigId = id;
+    setCookie(SEARCH_CUR_KEY, id);
+    renderSearchConfigList();
+    updateSearchLabel();
+    updateSearchEnabledCheck();
+  }
+  btnSearch.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (searchPopup.classList.contains('show')) { closeAllPopups(); return; }
+    renderSearchConfigList();
+    updateSearchEnabledCheck();
+    showPopup(searchPopup, btnSearch);
+  });
+  searchPopup.addEventListener('click', e => e.stopPropagation());
+  searchEnabledCheck.addEventListener('change', () => {
+    const c = curSearchConfig();
+    if (!c) return;
+    c.enabled = searchEnabledCheck.checked;
+    saveSearchConfig(c);
+    setSyncState(c.id, 'local-newer');
+    updateSearchLabel();
+    showToast(c.enabled ? '已开启联网搜索' : '已关闭联网搜索');
+  });
+  document.getElementById('btnManageSearchConfigs').addEventListener('click', () => {
+    closeAllPopups();
+    openSearchManager();
+  });
+  document.getElementById('btnNewSearchConfig').addEventListener('click', () => {
+    closeAllPopups();
+    openSearchEdit(null);
+  });
 
   // ─── 推理强度 ───
   btnReason.addEventListener('click', (e) => {
@@ -2280,17 +2552,6 @@ html, body {
   });
   reasonPopup.addEventListener('click', e => e.stopPropagation());
 
-  // ─── 联网开关 ───
-  btnSearchToggle.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const c = curConfig();
-    c.searchEnabled = !c.searchEnabled;
-    saveConfig(c);
-    setSyncState(c.id, 'local-newer');
-    updateSearchToggle();
-    showToast(c.searchEnabled ? '已开启联网搜索' : '已关闭联网搜索');
-  });
-
   document.getElementById('btnTheme').addEventListener('click', () => {
     const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     applyTheme(t);
@@ -2298,10 +2559,9 @@ html, body {
 
   // ─── 获取模型 ───
   let fetchingModels = false;
-
   async function fetchModels(silent) {
     if (fetchingModels) return;
-    const c = curConfig();
+    const c = curModelConfig();
     if (!c.proxyUrl || !c.proxyPassword) {
       if (!silent) showDiag('代理配置不完整', [
         { k: '配置名', v: c.name },
@@ -2311,7 +2571,6 @@ html, body {
       return;
     }
 
-    // ─── 模式 1：手动列表 ───
     if (c.modelMode === 'manual' && c.manualModels) {
       const list = c.manualModels.split('\n').map(s => s.trim()).filter(Boolean);
       if (list.length > 0) {
@@ -2323,7 +2582,6 @@ html, body {
       }
     }
 
-    // ─── 模式 2：Cloudflare Workers AI ───
     if (c.modelMode === 'cloudflare') {
       if (!c.cfAccountId || !c.apiKey) {
         if (!silent) showDiag('Cloudflare 配置不完整', [
@@ -2395,7 +2653,6 @@ html, body {
       return;
     }
 
-    // ─── 模式 3：自动（主 API /models → 备用列表）───
     if (!c.apiKey) {
       if (!silent) showDiag('API Key 未填写', [
         { k: '配置名', v: c.name },
@@ -2415,7 +2672,6 @@ html, body {
       const u = (c.fallbackModelsUrl || '').trim();
       if (u) targets.push({ label: '备用模型列表', url: u });
     }
-
     if (targets.length === 0) {
       if (!silent) showDiag('未配置 API 地址', [
         { k: '配置名', v: c.name },
@@ -2453,7 +2709,6 @@ html, body {
           });
           continue;
         }
-
         let data;
         try { data = JSON.parse(bodyText); }
         catch {
@@ -2463,7 +2718,6 @@ html, body {
           });
           continue;
         }
-
         let arr = [];
         if (Array.isArray(data.data)) arr = data.data.map(m => m.id || m.name).filter(Boolean);
         else if (Array.isArray(data.models)) arr = data.models.map(m => m.id || m.name).filter(Boolean);
@@ -2476,7 +2730,6 @@ html, body {
           });
           continue;
         }
-
         list = arr;
         successTarget = t;
         break;
@@ -2508,21 +2761,16 @@ html, body {
     saveModels(list);
     renderModelList();
     if (!curMeta?.model && !c.model) selectModel(list[0]);
-
     if (successTarget.label !== '主 API') {
       showToast('已通过「' + successTarget.label + '」获取模型');
     }
   }
 
-  // ─── 联网搜索 ───
+  // ─── 联网搜索调用 ───
   async function performSearch(query, cfg) {
     const provider = cfg.searchProvider || 'tavily';
     const searchKey = provider === 'tavily' ? cfg.tavilyApiKey : cfg.serperApiKey;
-
-    if (!searchKey) {
-      return { error: '搜索 API Key 未填写' };
-    }
-
+    if (!searchKey) return { error: '搜索 API Key 未填写' };
     try {
       const res = await fetch('/api/aisearch', {
         method: 'POST',
@@ -2534,13 +2782,8 @@ html, body {
           apiKey: searchKey
         })
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        return { error: data.error || ('搜索失败 HTTP ' + res.status) };
-      }
-
+      if (!res.ok) return { error: data.error || ('搜索失败 HTTP ' + res.status) };
       return { results: data.results || [] };
     } catch (e) {
       return { error: '搜索网络异常: ' + (e.message || e) };
@@ -2557,25 +2800,24 @@ html, body {
     const text = inputEl.value.trim();
     if (!text) return;
 
-    if (curMeta && curMeta.configId && !configById(curMeta.configId)) {
-      alert('此对话的 API 配置已被删除，请重新选择配置。');
-      btnConfig.click();
+    if (curMeta && curMeta.configId && !modelConfigById(curMeta.configId)) {
+      alert('此对话的模型配置已被删除，请重新选择配置。');
+      btnModel.click();
       return;
     }
 
-    const c = curConfig();
+    const c = curModelConfig();
     if (!c.proxyUrl || !c.proxyPassword || !c.apiBase || !c.apiKey) {
-      showDiag('配置不完整', [
+      showDiag('模型配置不完整', [
         { k: '配置名', v: c.name },
         { k: '代理地址', v: c.proxyUrl || '(空)' },
         { k: '代理密码', v: c.proxyPassword ? '已填' : '(空)' },
         { k: 'API 地址', v: c.apiBase || '(空)' },
         { k: 'API Key', v: c.apiKey ? '已填' : '(空)' }
       ]);
-      openConfigEdit(c);
+      openModelEdit(c);
       return;
     }
-
     const model = curMeta?.model || c.model;
     if (!model) {
       showDiag('未选择模型', ['点击顶栏「模型」选择或手动输入。']);
@@ -2587,7 +2829,6 @@ html, body {
       const m = newConv();
       curId = m.id; curMeta = m; curTurns = [];
     }
-
     const convId = curId;
     const ti = curTurns.length;
     const turn = { user: { content: text }, assistant: { content: '', reasoning_content: '' }, ts: Date.now(), marked: false, searchResults: null };
@@ -2607,7 +2848,6 @@ html, body {
     inputEl.style.height = 'auto';
     if (welcomeEl.parentNode) welcomeEl.remove();
 
-    // 渲染用户消息
     const u = document.createElement('div');
     u.className = 'msg user';
     u.innerHTML = '<div class="ava">你</div><div class="wrap"><div class="bubble"></div><div class="msg-actions"><button data-act="copy">复制</button><button data-act="delete">删除</button><button data-act="mark">标记</button></div></div>';
@@ -2617,7 +2857,6 @@ html, body {
     u.querySelector('[data-act="mark"]').addEventListener('click', (e) => { e.stopPropagation(); toggleMark(ti); });
     chatEl.appendChild(u);
 
-    // 渲染 AI 占位消息
     const a = document.createElement('div');
     a.className = 'msg ai';
     a.innerHTML = '<div class="ava">AI</div><div class="wrap"><div class="bubble"></div><div class="msg-actions"><button data-act="copy">复制</button><button data-act="resend">重发</button><button data-act="delete">删除</button><button data-act="mark">标记</button></div></div>';
@@ -2636,28 +2875,26 @@ html, body {
 
     // ═══════ 联网搜索 ═══════
     let searchContext = '';
-    if (c.searchEnabled) {
-      const provider = c.searchProvider || 'tavily';
-      const searchKey = provider === 'tavily' ? c.tavilyApiKey : c.serperApiKey;
+    const sc = curSearchConfig();
+    if (sc && sc.enabled === true) {
+      const provider = sc.searchProvider || 'tavily';
+      const searchKey = provider === 'tavily' ? sc.tavilyApiKey : sc.serperApiKey;
       if (searchKey) {
-        // 显示搜索状态
         const statusEl = document.createElement('div');
         statusEl.className = 'search-status';
         statusEl.textContent = '🔍 正在搜索「' + text.slice(0, 30) + (text.length > 30 ? '…' : '') + '」...';
-        // 插到用户消息和 AI 消息之间
         chatEl.insertBefore(statusEl, a);
         scrollToBottom();
 
-        const searchResult = await performSearch(text, c);
+        const searchResult = await performSearch(text, sc);
 
         if (searchResult.error) {
-          statusEl.textContent = '⚠️ 搜索失败：' + searchResult.error + '（将继续对话）';
+          statusEl.textContent = '⚠️ 搜索失败：' + searchResult.error + '（继续对话）';
           statusEl.style.borderColor = 'var(--danger)';
           setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 3000);
         } else if (searchResult.results && searchResult.results.length > 0) {
           turn.searchResults = searchResult.results;
           S.setTurn(convId, ti, turn);
-
           searchContext = '以下是相关网页搜索结果，请基于这些信息回答用户问题。如果搜索结果不相关或不足，可以忽略它们并基于你自己的知识回答。\n\n';
           searchResult.results.forEach((r, i) => {
             searchContext += '[' + (i + 1) + '] ' + (r.title || '') + '\n';
@@ -2665,25 +2902,28 @@ html, body {
             searchContext += '来源：' + (r.url || '') + '\n\n';
           });
           searchContext += '---\n\n';
-
           statusEl.textContent = '✅ 搜索完成，共 ' + searchResult.results.length + ' 条结果';
           setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 2000);
         } else {
-          statusEl.textContent = '⚠️ 未找到相关结果（将继续对话）';
+          statusEl.textContent = '⚠️ 未找到相关结果（继续对话）';
           setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 2500);
         }
+      } else {
+        // 搜索已启用但未填 Key
+        const statusEl = document.createElement('div');
+        statusEl.className = 'search-status';
+        statusEl.textContent = '⚠️ 搜索已启用但未配置 API Key，跳过搜索';
+        chatEl.insertBefore(statusEl, a);
+        setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 3000);
       }
     }
 
-    // 构建上下文
     const ctx = CTX.build(curTurns.slice(0, -1), {
       systemPrompt: c.systemPrompt,
       summary: curMeta.summary || '',
       ctxWindow: c.ctxWindow || 64000,
       summaryThreshold: c.summaryThreshold || 75
     });
-
-    // 把当前用户消息加上，若有搜索上下文则前置
     const finalUserContent = searchContext ? (searchContext + '用户问题：' + text) : text;
     ctx.messages.push({ role: 'user', content: finalUserContent });
 
@@ -2821,101 +3061,272 @@ html, body {
       setSyncState(convId, 'local-newer');
       updateSendButton();
       renderConvList();
-
-      // 最终重绘以确保引用来源正确显示
       if (curId === convId && turn.searchResults && turn.searchResults.length > 0) {
         renderChat();
       }
     }
   }
 
-  // ─── 编辑配置 ───
-  let editingConfigId = null;
-  function openConfigEdit(cfg) {
-    editingConfigId = cfg ? cfg.id : null;
-    const c = cfg || defaultConfig('配置 ' + (configs.length + 1));
-    document.getElementById('configEditTitle').textContent = cfg ? '编辑配置' : '新建配置';
-    document.getElementById('ceName').value = c.name || '';
-    document.getElementById('ceProxyUrl').value = c.proxyUrl || '/api/aiapi';
-    document.getElementById('ceProxyPassword').value = c.proxyPassword || '';
-    document.getElementById('ceApiBase').value = c.apiBase || '';
-    document.getElementById('ceFallbackModelsUrl').value = c.fallbackModelsUrl || '';
-    document.getElementById('ceManualModels').value = c.manualModels || '';
-    document.getElementById('ceModelMode').value = c.modelMode || 'auto';
-    document.getElementById('ceCfAccountId').value = c.cfAccountId || '';
-    document.getElementById('ceApiKey').value = c.apiKey || '';
-    document.getElementById('ceSystem').value = c.systemPrompt || '';
-    document.getElementById('ceTemperature').value = (typeof c.temperature === 'number') ? c.temperature : '';
-    document.getElementById('ceAutoCollapse').checked = c.autoCollapseReason !== false;
-    document.getElementById('ceSearchEnabled').checked = c.searchEnabled === true;
-    document.getElementById('ceSearchProvider').value = c.searchProvider || 'tavily';
-    document.getElementById('ceTavilyApiKey').value = c.tavilyApiKey || '';
-    document.getElementById('ceSerperApiKey').value = c.serperApiKey || '';
-    document.getElementById('ceCtxWindow').value = c.ctxWindow ?? 64000;
-    document.getElementById('ceSummaryThreshold').value = c.summaryThreshold ?? 75;
-    document.getElementById('ceDelete').style.display = cfg ? 'inline-block' : 'none';
-    document.getElementById('configEditModal').classList.add('show');
+  // ─── 模型配置管理 ───
+  function openModelManager() {
+    renderModelManagerList();
+    document.getElementById('modelManagerModal').classList.add('show');
   }
-  function closeConfigEdit() {
-    document.getElementById('configEditModal').classList.remove('show');
-    editingConfigId = null;
+  function closeModelManager() {
+    document.getElementById('modelManagerModal').classList.remove('show');
   }
-  document.getElementById('ceCancel').addEventListener('click', closeConfigEdit);
-  document.getElementById('ceDelete').addEventListener('click', async () => {
-    if (!editingConfigId) return;
-    const id = editingConfigId;
-    closeConfigEdit();
-    await strictDeleteConfig(id);
+  function renderModelManagerList() {
+    modelManagerList.innerHTML = '';
+    const index = loadModelConfigIndex();
+    if (index.length === 0) {
+      modelManagerList.innerHTML = '<div class="popup-empty">无配置</div>';
+      return;
+    }
+    index.forEach(item => {
+      const state = getSyncState(item.id);
+      const isCurrent = item.id === currentModelConfigId;
+      const it = document.createElement('div');
+      it.className = 'conf-item' + (isCurrent ? ' active' : '');
+      it.innerHTML =
+        '<span class="sync-icon" data-state="' + state + '" title="' + state + '">' + stateIcon(state) + '</span>' +
+        '<span class="n">' + esc(item.name || '未命名') + '</span>' +
+        '<button data-act="edit">编辑</button>' +
+        '<button data-act="sync">同步</button>' +
+        '<button data-act="switch">' + (isCurrent ? '当前' : '切换') + '</button>' +
+        '<span class="m">' + esc(item.apiBase || '未设置地址') + '</span>';
+      it.querySelector('[data-act="edit"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const c = modelConfigs.find(x => x.id === item.id);
+        closeModelManager();
+        openModelEdit(c);
+      });
+      it.querySelector('[data-act="sync"]').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await syncModelConfigOne(item.id, false);
+        renderModelManagerList();
+      });
+      it.querySelector('[data-act="switch"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        currentModelConfigId = item.id;
+        setCookie(CUR_KEY, item.id);
+        modelsCache = loadModels();
+        updateModelLabel();
+        renderModelManagerList();
+      });
+      modelManagerList.appendChild(it);
+    });
+  }
+  document.getElementById('mmAdd').addEventListener('click', () => {
+    closeModelManager();
+    openModelEdit(null);
   });
-  document.getElementById('ceSave').addEventListener('click', () => {
-    const name = document.getElementById('ceName').value.trim() || '未命名配置';
-    const tempRaw = document.getElementById('ceTemperature').value.trim();
+  document.getElementById('mmClose').addEventListener('click', closeModelManager);
+  document.getElementById('mmSyncAll').addEventListener('click', async () => {
+    await syncModelConfigAll(false);
+    renderModelManagerList();
+  });
+  document.getElementById('mmCheckState').addEventListener('click', async () => {
+    await checkModelConfigState();
+    renderModelManagerList();
+  });
+
+  // ─── 模型配置编辑 ───
+  let editingModelConfigId = null;
+  function openModelEdit(cfg) {
+    editingModelConfigId = cfg ? cfg.id : null;
+    const c = cfg || defaultModelConfig('模型配置 ' + (modelConfigs.length + 1));
+    document.getElementById('meTitle').textContent = cfg ? '编辑模型配置' : '新建模型配置';
+    document.getElementById('meName').value = c.name || '';
+    document.getElementById('meProxyUrl').value = c.proxyUrl || '/api/aiapi';
+    document.getElementById('meProxyPassword').value = c.proxyPassword || '';
+    document.getElementById('meApiBase').value = c.apiBase || '';
+    document.getElementById('meFallbackModelsUrl').value = c.fallbackModelsUrl || '';
+    document.getElementById('meManualModels').value = c.manualModels || '';
+    document.getElementById('meModelMode').value = c.modelMode || 'auto';
+    document.getElementById('meCfAccountId').value = c.cfAccountId || '';
+    document.getElementById('meApiKey').value = c.apiKey || '';
+    document.getElementById('meSystem').value = c.systemPrompt || '';
+    document.getElementById('meTemperature').value = (typeof c.temperature === 'number') ? c.temperature : '';
+    document.getElementById('meAutoCollapse').checked = c.autoCollapseReason !== false;
+    document.getElementById('meCtxWindow').value = c.ctxWindow ?? 64000;
+    document.getElementById('meSummaryThreshold').value = c.summaryThreshold ?? 75;
+    document.getElementById('meDelete').style.display = cfg ? 'inline-block' : 'none';
+    document.getElementById('modelEditModal').classList.add('show');
+  }
+  function closeModelEdit() {
+    document.getElementById('modelEditModal').classList.remove('show');
+    editingModelConfigId = null;
+  }
+  document.getElementById('meCancel').addEventListener('click', closeModelEdit);
+  document.getElementById('meDelete').addEventListener('click', async () => {
+    if (!editingModelConfigId) return;
+    const id = editingModelConfigId;
+    closeModelEdit();
+    await strictDeleteModelConfig(id);
+  });
+  document.getElementById('meSave').addEventListener('click', () => {
+    const name = document.getElementById('meName').value.trim() || '未命名配置';
+    const tempRaw = document.getElementById('meTemperature').value.trim();
     let temperature = null;
     if (tempRaw !== '') {
       const n = parseFloat(tempRaw);
       if (!isNaN(n)) temperature = n;
     }
     const newCfg = {
-      id: editingConfigId || uuid(),
+      id: editingModelConfigId || uuid(),
       name,
-      proxyUrl: document.getElementById('ceProxyUrl').value.trim() || '/api/aiapi',
-      proxyPassword: document.getElementById('ceProxyPassword').value,
-      apiBase: document.getElementById('ceApiBase').value.trim(),
-      fallbackModelsUrl: document.getElementById('ceFallbackModelsUrl').value.trim(),
-      manualModels: document.getElementById('ceManualModels').value.trim(),
-      modelMode: document.getElementById('ceModelMode').value || 'auto',
-      cfAccountId: document.getElementById('ceCfAccountId').value.trim(),
-      apiKey: document.getElementById('ceApiKey').value,
-      systemPrompt: document.getElementById('ceSystem').value,
+      proxyUrl: document.getElementById('meProxyUrl').value.trim() || '/api/aiapi',
+      proxyPassword: document.getElementById('meProxyPassword').value,
+      apiBase: document.getElementById('meApiBase').value.trim(),
+      fallbackModelsUrl: document.getElementById('meFallbackModelsUrl').value.trim(),
+      manualModels: document.getElementById('meManualModels').value.trim(),
+      modelMode: document.getElementById('meModelMode').value || 'auto',
+      cfAccountId: document.getElementById('meCfAccountId').value.trim(),
+      apiKey: document.getElementById('meApiKey').value,
+      systemPrompt: document.getElementById('meSystem').value,
       temperature,
-      autoCollapseReason: document.getElementById('ceAutoCollapse').checked,
-      ctxWindow: parseInt(document.getElementById('ceCtxWindow').value) || 64000,
-      summaryThreshold: parseInt(document.getElementById('ceSummaryThreshold').value) || 75,
+      autoCollapseReason: document.getElementById('meAutoCollapse').checked,
+      ctxWindow: parseInt(document.getElementById('meCtxWindow').value) || 64000,
+      summaryThreshold: parseInt(document.getElementById('meSummaryThreshold').value) || 75,
       model: '',
-      searchEnabled: document.getElementById('ceSearchEnabled').checked,
-      searchProvider: document.getElementById('ceSearchProvider').value || 'tavily',
-      tavilyApiKey: document.getElementById('ceTavilyApiKey').value.trim(),
-      serperApiKey: document.getElementById('ceSerperApiKey').value.trim(),
       savedAt: Date.now()
     };
-    if (editingConfigId) {
-      const idx = configs.findIndex(c => c.id === editingConfigId);
+    if (editingModelConfigId) {
+      const idx = modelConfigs.findIndex(c => c.id === editingModelConfigId);
       if (idx >= 0) {
-        newCfg.model = configs[idx].model || '';
-        configs[idx] = newCfg;
+        newCfg.model = modelConfigs[idx].model || '';
+        modelConfigs[idx] = newCfg;
       }
     } else {
-      configs.push(newCfg);
-      currentConfigId = newCfg.id;
+      modelConfigs.push(newCfg);
+      currentModelConfigId = newCfg.id;
       setCookie(CUR_KEY, newCfg.id);
     }
-    saveConfig(newCfg);
+    saveModelConfig(newCfg);
     setSyncState(newCfg.id, 'local-newer');
-    closeConfigEdit();
-    updateConfigLabel();
+    closeModelEdit();
     updateModelLabel();
-    updateSearchToggle();
-    renderConfigManagerList();
+    renderModelManagerList();
+  });
+
+  // ─── 搜索配置管理 ───
+  function openSearchManager() {
+    renderSearchManagerList();
+    document.getElementById('searchManagerModal').classList.add('show');
+  }
+  function closeSearchManager() {
+    document.getElementById('searchManagerModal').classList.remove('show');
+  }
+  function renderSearchManagerList() {
+    searchManagerList.innerHTML = '';
+    const index = loadSearchConfigIndex();
+    if (index.length === 0) {
+      searchManagerList.innerHTML = '<div class="popup-empty">无配置</div>';
+      return;
+    }
+    index.forEach(item => {
+      const state = getSyncState(item.id);
+      const isCurrent = item.id === currentSearchConfigId;
+      const provider = item.provider === 'serper' ? 'Serper' : 'Tavily';
+      const it = document.createElement('div');
+      it.className = 'conf-item' + (isCurrent ? ' active' : '');
+      it.innerHTML =
+        '<span class="sync-icon" data-state="' + state + '" title="' + state + '">' + stateIcon(state) + '</span>' +
+        '<span class="n">' + esc(item.name || '未命名') + '</span>' +
+        '<button data-act="edit">编辑</button>' +
+        '<button data-act="sync">同步</button>' +
+        '<button data-act="switch">' + (isCurrent ? '当前' : '切换') + '</button>' +
+        '<span class="m">' + provider + (item.enabled ? ' · 已启用' : '') + '</span>';
+      it.querySelector('[data-act="edit"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const c = searchConfigs.find(x => x.id === item.id);
+        closeSearchManager();
+        openSearchEdit(c);
+      });
+      it.querySelector('[data-act="sync"]').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await syncSearchConfigOne(item.id, false);
+        renderSearchManagerList();
+      });
+      it.querySelector('[data-act="switch"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        currentSearchConfigId = item.id;
+        setCookie(SEARCH_CUR_KEY, item.id);
+        updateSearchLabel();
+        updateSearchEnabledCheck();
+        renderSearchManagerList();
+      });
+      searchManagerList.appendChild(it);
+    });
+  }
+  document.getElementById('smAdd').addEventListener('click', () => {
+    closeSearchManager();
+    openSearchEdit(null);
+  });
+  document.getElementById('smClose').addEventListener('click', closeSearchManager);
+  document.getElementById('smSyncAll').addEventListener('click', async () => {
+    await syncSearchConfigAll(false);
+    renderSearchManagerList();
+  });
+  document.getElementById('smCheckState').addEventListener('click', async () => {
+    await checkSearchConfigState();
+    renderSearchManagerList();
+  });
+
+  // ─── 搜索配置编辑 ───
+  let editingSearchConfigId = null;
+  function openSearchEdit(cfg) {
+    editingSearchConfigId = cfg ? cfg.id : null;
+    const c = cfg || defaultSearchConfig('搜索配置 ' + (searchConfigs.length + 1));
+    document.getElementById('seTitle').textContent = cfg ? '编辑搜索配置' : '新建搜索配置';
+    document.getElementById('seName').value = c.name || '';
+    document.getElementById('seProxyUrl').value = c.proxyUrl || '/api/aiapi';
+    document.getElementById('seProxyPassword').value = c.proxyPassword || '';
+    document.getElementById('seProvider').value = c.searchProvider || 'tavily';
+    document.getElementById('seTavilyKey').value = c.tavilyApiKey || '';
+    document.getElementById('seSerperKey').value = c.serperApiKey || '';
+    document.getElementById('seEnabled').checked = c.enabled === true;
+    document.getElementById('seDelete').style.display = cfg ? 'inline-block' : 'none';
+    document.getElementById('searchEditModal').classList.add('show');
+  }
+  function closeSearchEdit() {
+    document.getElementById('searchEditModal').classList.remove('show');
+    editingSearchConfigId = null;
+  }
+  document.getElementById('seCancel').addEventListener('click', closeSearchEdit);
+  document.getElementById('seDelete').addEventListener('click', async () => {
+    if (!editingSearchConfigId) return;
+    const id = editingSearchConfigId;
+    closeSearchEdit();
+    await strictDeleteSearchConfig(id);
+  });
+  document.getElementById('seSave').addEventListener('click', () => {
+    const name = document.getElementById('seName').value.trim() || '未命名配置';
+    const newCfg = {
+      id: editingSearchConfigId || uuid(),
+      name,
+      proxyUrl: document.getElementById('seProxyUrl').value.trim() || '/api/aiapi',
+      proxyPassword: document.getElementById('seProxyPassword').value,
+      searchProvider: document.getElementById('seProvider').value || 'tavily',
+      tavilyApiKey: document.getElementById('seTavilyKey').value.trim(),
+      serperApiKey: document.getElementById('seSerperKey').value.trim(),
+      enabled: document.getElementById('seEnabled').checked,
+      savedAt: Date.now()
+    };
+    if (editingSearchConfigId) {
+      const idx = searchConfigs.findIndex(c => c.id === editingSearchConfigId);
+      if (idx >= 0) searchConfigs[idx] = newCfg;
+    } else {
+      searchConfigs.push(newCfg);
+      currentSearchConfigId = newCfg.id;
+      setCookie(SEARCH_CUR_KEY, newCfg.id);
+    }
+    saveSearchConfig(newCfg);
+    setSyncState(newCfg.id, 'local-newer');
+    closeSearchEdit();
+    updateSearchLabel();
+    updateSearchEnabledCheck();
+    renderSearchManagerList();
   });
 
   // ─── 云同步面板 ───
@@ -3008,7 +3419,6 @@ html, body {
 
   document.getElementById('btnNewConv').addEventListener('click', () => {
     curId = null; curMeta = null; curTurns = [];
-    btnConfig.classList.remove('error');
     btnModel.classList.remove('error');
     renderChat();
     if (window.innerWidth <= 768 && window.innerHeight > window.innerWidth) closeSidebar();
@@ -3031,8 +3441,9 @@ html, body {
     const ids = S.idx();
     if (ids.length > 0) loadConv(ids[0]);
     renderChat();
-    updateConfigLabel();
-    updateSearchToggle();
+    updateModelLabel();
+    updateSearchLabel();
+    updateSearchEnabledCheck();
   })();
 
 })();
