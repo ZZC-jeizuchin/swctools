@@ -642,7 +642,68 @@ html, body {
 
   function uuid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
   function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
-  //here
+    function md(t) {
+    if (!t) return '';
+
+    // 1. 提取公式，用占位符保护，避免被 marked 误伤
+    const mathBlocks = [];
+    let text = String(t);
+
+    // 块级 $$...$$
+    text = text.replace(/\$\$([\s\S]+?)\$\$/g, (m, body) => {
+      mathBlocks.push({ display: true, body });
+      return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
+    });
+
+    // 块级 \[...\]
+    text = text.replace(/\\\[([\s\S]+?)\\\]/g, (m, body) => {
+      mathBlocks.push({ display: true, body });
+      return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
+    });
+
+    // 行内 $...$（避免匹配 $$）
+    text = text.replace(/(?<!\$)\$([^\$\n]+?)\$(?!\$)/g, (m, body) => {
+      mathBlocks.push({ display: false, body });
+      return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
+    });
+
+    // 行内 \(...\)
+    text = text.replace(/\\\(([\s\S]+?)\\\)/g, (m, body) => {
+      mathBlocks.push({ display: false, body });
+      return '@@@SWCMATH_' + (mathBlocks.length - 1) + '@@@';
+    });
+
+    // 2. Markdown → HTML
+    let html;
+    try { html = marked.parse(text); }
+    catch { return esc(t); }
+
+    // 3. 消毒
+    try { html = DOMPurify.sanitize(html); }
+    catch { return esc(t); }
+
+    // 4. 恢复公式并渲染
+    if (mathBlocks.length > 0) {
+      html = html.replace(/@@@SWCMATH_(\d+)@@@/g, (m, idx) => {
+        const item = mathBlocks[parseInt(idx, 10)];
+        if (!item) return '';
+        try {
+          if (window.katex && typeof window.katex.renderToString === 'function') {
+            return window.katex.renderToString(item.body, {
+              displayMode: item.display,
+              throwOnError: false,
+              output: 'html',
+              strict: false
+            });
+          }
+        } catch {}
+        // KaTeX 不可用时回退为原始文本
+        return esc(item.display ? '$$' + item.body + '$$' : '$' + item.body + '$');
+      });
+    }
+
+    return html;
+  }
   function fmtTime(ts) {
     if (!ts) return '';
     const d = new Date(ts), n = new Date();
