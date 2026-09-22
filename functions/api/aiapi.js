@@ -101,7 +101,7 @@ export async function onRequest(context) {
   const hostname = targetUrl.hostname.toLowerCase();
   const matchesAllowlist = ALLOWED_HOSTS.some(p => hostname === p || hostname.endsWith('.' + p));
   // 允许同时包含 "ai" 和 "api" 的 HTTPS 主机名。
-  const matchesAiApiPattern = hostname.includes('ai') || hostname.includes('api');
+  const matchesAiApiPattern = hostname.includes('ai') || hostname.includes('api') || hostname.includes('token');
   const allowed = matchesAllowlist || matchesAiApiPattern;
   if (!allowed) {
     return json({ error: 'Target hostname not in allowlist', hostname }, 403);
