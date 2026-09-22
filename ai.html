@@ -93,9 +93,18 @@ html, body {
   width:32px; height:32px; cursor:pointer; font-size:15px; border-radius:6px;
   align-items:center; justify-content:center;
 }
+.back-btn {
+  background:var(--btn); border:1px solid var(--btn-b); color:var(--text);
+  padding:5px 12px; font-size:12px; cursor:pointer;
+  border-radius:6px; text-decoration:none;
+  display:inline-flex; align-items:center; gap:4px;
+  white-space:nowrap;
+}
+.back-btn:hover { background:var(--btn-h); }
 .topbar h1 {
   font-size:13px; font-weight:600; color:var(--title); flex:1; min-width:0;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  margin-left:2px;
 }
 .chip {
   background:var(--btn); border:1px solid var(--btn-b); color:var(--text);
@@ -420,6 +429,7 @@ html, body {
   .input-box button { height:38px; padding:0 16px; }
   .topbar { padding:8px 10px; gap:4px; }
   .topbar h1 { font-size:12px; }
+  .back-btn { padding:4px 8px; font-size:11px; }
   .msg { gap:6px; }
   .msg .bubble { padding:9px 12px; font-size:14px; }
   .msg-actions button { padding:4px 10px; font-size:12px; }
@@ -454,6 +464,7 @@ html, body {
   <main class="main">
     <div class="topbar">
       <button class="menu-btn" id="btnMenu">☰</button>
+      <a class="back-btn" href="index.html" title="返回主站">← 主站</a>
       <h1 id="convTitle">SwC AI</h1>
       <button class="chip empty" id="btnConfig">
         <span class="l" id="configLabel">配置</span>
@@ -569,6 +580,9 @@ html, body {
     <label>API 地址</label>
     <input id="ceApiBase" placeholder="https://api.deepseek.com">
     <div class="hint">不带 /chat/completions，程序会自动拼接</div>
+    <label>备用模型地址（可选）</label>
+    <input id="ceFallbackModelsUrl" placeholder="https://backup.example.com/v1/models">
+    <div class="hint">主 API 的 /models 失败时使用，留空则跳过</div>
     <label>API Key</label>
     <input id="ceApiKey" type="password" placeholder="sk-...">
     <label>系统提示词</label>
@@ -675,6 +689,7 @@ html, body {
       proxyUrl: '/api/aiapi',
       proxyPassword: '',
       apiBase: '',
+      fallbackModelsUrl: '',
       apiKey: '',
       systemPrompt: '你是一个乐于助人的AI助手。',
       temperature: 0.7,
@@ -743,6 +758,7 @@ html, body {
         try {
           const c = JSON.parse(raw);
           if (!c.savedAt) c.savedAt = Date.now();
+          if (!c.fallbackModelsUrl) c.fallbackModelsUrl = '';
           localStorage.setItem(CFG_PREFIX + c.id, JSON.stringify(c));
           idx.push({
             id: c.id, name: c.name || '未命名', savedAt: c.savedAt,
@@ -979,7 +995,7 @@ html, body {
   }
 
   // ═══════════════════════════════════════════════════════
-  // 同步（会话 + 配置共用一个 syncing 锁）
+  // 同步
   // ═══════════════════════════════════════════════════════
   let syncing = false;
 
@@ -990,7 +1006,7 @@ html, body {
     else { el.textContent = ''; el.classList.remove('show'); }
   }
 
-  // ─── 会话：上传/下载 ───
+  // ─── 会话同步 ───
   async function uploadConv(id) {
     const m = S.meta(id); if (!m) return false;
     const turns = S.turns(id, m.turnCount || 0);
@@ -1225,6 +1241,7 @@ html, body {
     if (r.error || !r.config) return false;
     const c = r.config;
     if (!c.savedAt) c.savedAt = Date.now();
+    if (!c.fallbackModelsUrl) c.fallbackModelsUrl = '';
     localStorage.setItem(CFG_PREFIX + id, JSON.stringify(c));
     return true;
   }
@@ -1288,7 +1305,6 @@ html, body {
         else { failed++; setSyncState(id, 'failed'); }
       }
 
-      // 重建本地索引（保持配置顺序：本地已有的保持原顺序，云端独有的追加到末尾）
       const newIndex = [];
       for (const item of localIndex) {
         const raw = localStorage.getItem(CFG_PREFIX + item.id);
@@ -1378,9 +1394,9 @@ html, body {
         if (!silent) updateProgress('cfgProgress', '');
         return { ok, direction: 'upload' };
       } else {
-        // 下载
         const c = cm;
         if (!c.savedAt) c.savedAt = Date.now();
+        if (!c.fallbackModelsUrl) c.fallbackModelsUrl = '';
         localStorage.setItem(CFG_PREFIX + id, JSON.stringify(c));
         let index = loadConfigIndex();
         index = index.filter(x => x.id !== id);
@@ -2057,71 +2073,136 @@ html, body {
 
   // ─── 获取模型 ───
   let fetchingModels = false;
+
+  function normalizeModelsUrl(input) {
+    let u = (input || '').trim();
+    if (!u) return '';
+    u = u.replace(/\/+$/, '');
+    if (/\/models$/i.test(u)) return u;
+    return u + '/models';
+  }
+
   async function fetchModels(silent) {
     if (fetchingModels) return;
     const c = curConfig();
-    if (!c.proxyUrl || !c.proxyPassword || !c.apiBase || !c.apiKey) {
+
+    if (!c.proxyUrl || !c.proxyPassword || !c.apiKey) {
       if (!silent) showDiag('配置不完整', [
         { k: '配置名', v: c.name },
         { k: '代理地址', v: c.proxyUrl || '(空)' },
         { k: '代理密码', v: c.proxyPassword ? '已填' : '(空)' },
-        { k: 'API 地址', v: c.apiBase || '(空)' },
         { k: 'API Key', v: c.apiKey ? '已填' : '(空)' }
       ]);
       return;
     }
+
+    const targets = [];
+    if (c.apiBase) {
+      targets.push({
+        label: '主 API',
+        url: c.apiBase.replace(/\/+$/, '') + '/models'
+      });
+    }
+    if (c.fallbackModelsUrl) {
+      const u = normalizeModelsUrl(c.fallbackModelsUrl);
+      if (u) targets.push({ label: '备用 API', url: u });
+    }
+
+    if (targets.length === 0) {
+      if (!silent) showDiag('未配置 API 地址', [
+        { k: '配置名', v: c.name },
+        '请在配置里填写「API 地址」或「备用模型地址」。'
+      ]);
+      return;
+    }
+
     fetchingModels = true;
     const btn = document.getElementById('btnRefreshModels');
     btn.disabled = true; btn.textContent = '…';
-    const target = c.apiBase.replace(/\/+$/, '') + '/models';
-    try {
-      const res = await fetch(c.proxyUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: c.proxyPassword,
-          target, method: 'GET',
-          headers: { 'Authorization': 'Bearer ' + c.apiKey }
-        })
-      });
-      const bodyText = await res.text();
-      if (!res.ok) {
-        showDiag('获取模型失败 HTTP ' + res.status, [
-          { k: '目标', v: target }, { k: '状态', v: res.status },
-          { k: '响应体', v: bodyText.slice(0, 2000) }
-        ]);
-        return;
+
+    const attemptLog = [];
+    let list = null;
+    let successTarget = null;
+
+    for (const t of targets) {
+      try {
+        const res = await fetch(c.proxyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: c.proxyPassword,
+            target: t.url,
+            method: 'GET',
+            headers: { 'Authorization': 'Bearer ' + c.apiKey }
+          })
+        });
+        const bodyText = await res.text();
+
+        if (!res.ok) {
+          attemptLog.push({
+            k: t.label + ' [' + t.url + ']',
+            v: 'HTTP ' + res.status + ' ' + (res.statusText || '') + ' | ' + bodyText.slice(0, 200)
+          });
+          continue;
+        }
+
+        let data;
+        try { data = JSON.parse(bodyText); }
+        catch {
+          attemptLog.push({
+            k: t.label + ' [' + t.url + ']',
+            v: '响应不是 JSON | ' + bodyText.slice(0, 200)
+          });
+          continue;
+        }
+
+        let arr = [];
+        if (Array.isArray(data.data)) arr = data.data.map(m => m.id || m.name).filter(Boolean);
+        else if (Array.isArray(data.models)) arr = data.models.map(m => m.id || m.name).filter(Boolean);
+        else if (Array.isArray(data)) arr = data.map(m => (typeof m === 'string' ? m : (m.id || m.name))).filter(Boolean);
+
+        if (arr.length === 0) {
+          attemptLog.push({
+            k: t.label + ' [' + t.url + ']',
+            v: '未解析到模型列表 | ' + bodyText.slice(0, 200)
+          });
+          continue;
+        }
+
+        list = arr;
+        successTarget = t;
+        break;
+      } catch (e) {
+        attemptLog.push({
+          k: t.label + ' [' + t.url + ']',
+          v: '网络异常: ' + e.name + ': ' + e.message
+        });
+        continue;
       }
-      let data;
-      try { data = JSON.parse(bodyText); }
-      catch {
-        showDiag('响应不是 JSON', [
-          { k: '目标', v: target }, { k: '响应体', v: bodyText.slice(0, 2000) }
+    }
+
+    btn.disabled = false; btn.textContent = '↻';
+    fetchingModels = false;
+
+    if (!list) {
+      if (!silent) {
+        showDiag('获取模型失败：所有地址都不可用', [
+          { k: '配置', v: c.name },
+          { k: '尝试次数', v: targets.length },
+          '',
+          ...attemptLog
         ]);
-        return;
       }
-      let list = [];
-      if (Array.isArray(data.data)) list = data.data.map(m => m.id || m.name).filter(Boolean);
-      else if (Array.isArray(data.models)) list = data.models.map(m => m.id || m.name).filter(Boolean);
-      else if (Array.isArray(data)) list = data.map(m => (typeof m === 'string' ? m : (m.id || m.name))).filter(Boolean);
-      if (list.length === 0) {
-        showDiag('未解析到模型', [
-          { k: '目标', v: target }, { k: '响应体', v: bodyText.slice(0, 2000) }
-        ]);
-        return;
-      }
-      modelsCache = list;
-      saveModels(list);
-      renderModelList();
-      if (!curMeta?.model && !c.model) selectModel(list[0]);
-    } catch (e) {
-      showDiag('获取模型网络异常', [
-        { k: '代理地址', v: c.proxyUrl },
-        { k: '异常', v: e.name + ': ' + e.message }
-      ]);
-    } finally {
-      fetchingModels = false;
-      btn.disabled = false; btn.textContent = '↻';
+      return;
+    }
+
+    modelsCache = list;
+    saveModels(list);
+    renderModelList();
+    if (!curMeta?.model && !c.model) selectModel(list[0]);
+
+    if (successTarget.label !== '主 API') {
+      showToast('已通过「' + successTarget.label + '」获取模型');
     }
   }
 
@@ -2364,6 +2445,7 @@ html, body {
     document.getElementById('ceProxyUrl').value = c.proxyUrl || '/api/aiapi';
     document.getElementById('ceProxyPassword').value = c.proxyPassword || '';
     document.getElementById('ceApiBase').value = c.apiBase || '';
+    document.getElementById('ceFallbackModelsUrl').value = c.fallbackModelsUrl || '';
     document.getElementById('ceApiKey').value = c.apiKey || '';
     document.getElementById('ceSystem').value = c.systemPrompt || '';
     document.getElementById('ceTemperature').value = c.temperature ?? '';
@@ -2392,6 +2474,7 @@ html, body {
       proxyUrl: document.getElementById('ceProxyUrl').value.trim() || '/api/aiapi',
       proxyPassword: document.getElementById('ceProxyPassword').value,
       apiBase: document.getElementById('ceApiBase').value.trim(),
+      fallbackModelsUrl: document.getElementById('ceFallbackModelsUrl').value.trim(),
       apiKey: document.getElementById('ceApiKey').value,
       systemPrompt: document.getElementById('ceSystem').value,
       temperature: parseFloat(document.getElementById('ceTemperature').value) || 0.7,
