@@ -642,10 +642,7 @@ html, body {
 
   function uuid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
   function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
-  function md(t) {
-    try { return DOMPurify.sanitize(marked.parse(t || '')); }
-    catch { return esc(t || ''); }
-  }
+  //here
   function fmtTime(ts) {
     if (!ts) return '';
     const d = new Date(ts), n = new Date();
