@@ -297,7 +297,7 @@ html, body {
 .popup-item.active { background:var(--active); }
 .popup-item .n { flex:1; }
 .popup-item .chk { color:var(--ok); }
-.popup-item .sub { font-size:11px; color:var(--muted); }
+.popup-item .sub { font-size:11px; color:var(--muted); margin-left:6px; }
 .popup-empty { padding:24px; text-align:center; font-size:12px; color:var(--muted); }
 .popup-foot { border-top:1px solid var(--border); padding:8px; display:flex; gap:6px; }
 .popup-foot button {
@@ -545,16 +545,20 @@ html, body {
       <button class="menu-btn" id="btnMenu">☰</button>
       <a class="back-btn" href="index.html" title="返回主站">← 主站</a>
       <h1 id="convTitle">SwC AI</h1>
-      <button class="chip empty" id="btnModel" title="模型配置与模型选择">
-        <span class="l" id="modelLabel">模型</span>
+      <button class="chip empty" id="btnConfig" title="模型配置切换">
+        <span class="l" id="configLabel">配置</span>
         <span class="a">▾</span>
       </button>
-      <button class="chip empty" id="btnSearch" title="搜索配置与联网开关">
-        <span class="l" id="searchLabel">搜索</span>
+      <button class="chip empty" id="btnModel" title="模型选择">
+        <span class="l" id="modelLabel">模型</span>
         <span class="a">▾</span>
       </button>
       <button class="chip" id="btnReason" title="推理强度">
         <span id="reasonLabel">默认</span>
+        <span class="a">▾</span>
+      </button>
+      <button class="chip empty" id="btnSearch" title="搜索配置与联网开关">
+        <span class="l" id="searchLabel">搜索</span>
         <span class="a">▾</span>
       </button>
     </div>
@@ -562,7 +566,7 @@ html, body {
     <div class="chat" id="chat">
       <div class="welcome" id="welcome">
         <h2>SwC AI</h2>
-        <p>点击顶栏「模型」配置 AI 模型，「搜索」配置联网搜索</p>
+        <p>顶栏「配置」管理模型，「搜索」管理联网搜索</p>
       </div>
     </div>
 
@@ -575,7 +579,16 @@ html, body {
   </main>
 </div>
 
-<!-- 模型面板 -->
+<!-- 模型配置切换 Popup -->
+<div class="popup" id="configPopup" style="width:300px;">
+  <div class="popup-head">
+    <span style="flex:1;font-size:12px;color:var(--muted);font-weight:600;">模型配置</span>
+    <button id="btnManageModelConfigs" title="管理配置">⚙</button>
+  </div>
+  <div class="popup-list" id="configList"></div>
+</div>
+
+<!-- 模型选择 Popup -->
 <div class="popup" id="modelPopup" style="width:320px;">
   <div class="popup-head">
     <input id="modelSearch" placeholder="搜索模型...">
@@ -583,8 +596,7 @@ html, body {
   </div>
   <div class="popup-list" id="modelListPanel"></div>
   <div class="popup-foot">
-    <button id="btnManageModelConfigs">模型配置</button>
-    <button id="btnShowManual">手动输入</button>
+    <button id="btnShowManual">+ 手动输入模型名</button>
   </div>
   <div class="popup-manual" id="manualWrap">
     <input id="manualInput" placeholder="模型名称">
@@ -592,7 +604,7 @@ html, body {
   </div>
 </div>
 
-<!-- 搜索面板 -->
+<!-- 搜索 Popup -->
 <div class="popup" id="searchPopup" style="width:320px;">
   <div class="search-toggle-row">
     <input type="checkbox" id="searchEnabledCheck">
@@ -600,12 +612,12 @@ html, body {
   </div>
   <div class="popup-list" id="searchConfigList"></div>
   <div class="popup-foot">
-    <button id="btnManageSearchConfigs">搜索配置</button>
+    <button id="btnManageSearchConfigs">管理搜索配置</button>
     <button id="btnNewSearchConfig">新建</button>
   </div>
 </div>
 
-<!-- 推理强度面板 -->
+<!-- 推理强度 Popup -->
 <div class="popup" id="reasonPopup" style="width:180px;">
   <div class="popup-list" style="max-height:none;">
     <div class="popup-item" data-v="">默认</div>
@@ -618,7 +630,7 @@ html, body {
   </div>
 </div>
 
-<!-- 对话云同步面板 -->
+<!-- 对话云同步 Popup -->
 <div class="popup" id="cloudPopup" style="width:360px;">
   <div class="popup-head">
     <span style="flex:1;font-size:12px;color:var(--muted);font-weight:600;">对话云同步</span>
@@ -640,7 +652,7 @@ html, body {
   <button data-act="delete" class="danger">删除</button>
 </div>
 
-<!-- 模型配置管理 -->
+<!-- 模型配置管理 Modal -->
 <div class="modal config-manager" id="modelManagerModal">
   <div class="modal-card">
     <h3>模型配置管理</h3>
@@ -657,7 +669,7 @@ html, body {
   </div>
 </div>
 
-<!-- 模型配置编辑 -->
+<!-- 模型配置编辑 Modal -->
 <div class="modal" id="modelEditModal">
   <div class="modal-card">
     <h3 id="meTitle">新建模型配置</h3>
@@ -707,7 +719,7 @@ html, body {
   </div>
 </div>
 
-<!-- 搜索配置管理 -->
+<!-- 搜索配置管理 Modal -->
 <div class="modal config-manager" id="searchManagerModal">
   <div class="modal-card">
     <h3>搜索配置管理</h3>
@@ -724,7 +736,7 @@ html, body {
   </div>
 </div>
 
-<!-- 搜索配置编辑 -->
+<!-- 搜索配置编辑 Modal -->
 <div class="modal" id="searchEditModal">
   <div class="modal-card">
     <h3 id="seTitle">新建搜索配置</h3>
@@ -734,7 +746,7 @@ html, body {
     <input id="seProxyUrl" placeholder="/api/aiapi">
     <div class="hint">同源 Pages Functions 路径，一般不改</div>
     <label>代理密码</label>
-    <input id="seProxyPassword" type="password" placeholder="代理密码">
+    <input id="seProxyPassword" type="password" placeholder="代理密码（与 aiapi 相同）">
     <label>搜索提供商</label>
     <select id="seProvider">
       <option value="tavily">Tavily（AI 优化，每月 1000 免费积分）</option>
@@ -807,7 +819,6 @@ html, body {
     toastTimer = setTimeout(() => el.classList.remove('show'), 1500);
   }
 
-  // ─── KaTeX + Markdown ───
   function md(t) {
     if (!t) return '';
     const mathBlocks = [];
@@ -833,7 +844,6 @@ html, body {
     let html;
     try { html = marked.parse(text); }
     catch { return esc(t); }
-
     try { html = DOMPurify.sanitize(html); }
     catch { return esc(t); }
 
@@ -857,7 +867,6 @@ html, body {
     return html;
   }
 
-  // ─── Cookie ───
   function setCookie(name, value, days) {
     days = days || 365;
     const d = new Date();
@@ -872,9 +881,7 @@ html, body {
     document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
   }
 
-  // ═══════════════════════════════════════════════════════
-  // 模型配置（独立）
-  // ═══════════════════════════════════════════════════════
+  // ═══════════════ 模型配置（独立） ═══════════════
   const CFG_PREFIX = 'swc_ai_cfg_';
   const CFG_IDX_KEY = 'swc_ai_cfg_index';
   const CUR_KEY = 'swc_ai_current';
@@ -945,7 +952,6 @@ html, body {
       let ids = [];
       try { ids = JSON.parse(oldIds); } catch { ids = []; }
       if (ids.length === 0) { delCookie('swc_ai_cfg_ids'); return; }
-
       const idx = loadModelConfigIndex();
       const existing = new Set(idx.map(x => x.id));
       for (const id of ids) {
@@ -989,9 +995,7 @@ html, body {
   function curModelConfig() { return modelConfigs.find(c => c.id === currentModelConfigId) || modelConfigs[0]; }
   function modelConfigById(id) { return modelConfigs.find(c => c.id === id); }
 
-  // ═══════════════════════════════════════════════════════
-  // 搜索配置（独立）
-  // ═══════════════════════════════════════════════════════
+  // ═══════════════ 搜索配置（独立） ═══════════════
   const SEARCH_PREFIX = 'swc_ai_search_';
   const SEARCH_IDX_KEY = 'swc_ai_search_index';
   const SEARCH_CUR_KEY = 'swc_ai_search_current';
@@ -1063,11 +1067,8 @@ html, body {
     setCookie(SEARCH_CUR_KEY, currentSearchConfigId);
   }
   function curSearchConfig() { return searchConfigs.find(c => c.id === currentSearchConfigId) || searchConfigs[0]; }
-  function searchConfigById(id) { return searchConfigs.find(c => c.id === id); }
 
-  // ═══════════════════════════════════════════════════════
-  // 会话存储层
-  // ═══════════════════════════════════════════════════════
+  // ═══════════════ 会话存储 ═══════════════
   const IDX_KEY = 'swc_ai_index';
   const P = 'swc_ai_conv:';
 
@@ -1124,7 +1125,6 @@ html, body {
     }
   };
 
-  // ─── 同步状态 ───
   const SYNC_KEY = 'swc_ai_sync_states';
   function loadSyncStates() {
     try { const r = localStorage.getItem(SYNC_KEY); return r ? JSON.parse(r) : {}; } catch { return {}; }
@@ -1135,7 +1135,6 @@ html, body {
   function getSyncState(id) { return syncStates[id] || 'unknown'; }
   function delSyncState(id) { delete syncStates[id]; saveSyncStates(syncStates); }
 
-  // ─── 会话状态 ───
   let curId = null, curMeta = null, curTurns = [];
   const runningConvs = new Map();
 
@@ -1163,12 +1162,12 @@ html, body {
           setCookie(CUR_KEY, cfg.id);
           modelsCache = loadModels();
         }
-        btnModel.classList.remove('error');
+        btnConfig.classList.remove('error');
       } else {
-        btnModel.classList.add('error');
+        btnConfig.classList.add('error');
       }
     } else {
-      btnModel.classList.add('error');
+      btnConfig.classList.add('error');
     }
     return true;
   }
@@ -1194,7 +1193,6 @@ html, body {
     setSyncState(id, 'local-newer');
   }
 
-  // ─── 上下文 ───
   const CTX = {
     tk(t) {
       if (!t) return 0;
@@ -1231,7 +1229,6 @@ html, body {
     }
   };
 
-  // ─── 模型缓存 ───
   function modelsCacheKey() { return 'swc_ai_models_' + currentModelConfigId; }
   function loadModels() {
     try { const r = localStorage.getItem(modelsCacheKey()); return r ? JSON.parse(r) : []; }
@@ -1240,7 +1237,6 @@ html, body {
   function saveModels(list) { localStorage.setItem(modelsCacheKey(), JSON.stringify(list)); }
   let modelsCache = loadModels();
 
-  // ─── 云 API ───
   async function cloudApi(opts) {
     const token = getToken();
     if (!token) return { error: 'unauthorized' };
@@ -1267,11 +1263,7 @@ html, body {
     }
   }
 
-  // ═══════════════════════════════════════════════════════
-  // 同步
-  // ═══════════════════════════════════════════════════════
   let syncing = false;
-
   function updateProgress(elId, text) {
     const el = document.getElementById(elId);
     if (!el) return;
@@ -1279,7 +1271,7 @@ html, body {
     else { el.textContent = ''; el.classList.remove('show'); }
   }
 
-  // ─── 会话同步 ───
+  // ─── 对话同步 ───
   async function uploadConv(id) {
     const m = S.meta(id); if (!m) return false;
     const turns = S.turns(id, m.turnCount || 0);
@@ -1359,9 +1351,7 @@ html, body {
         renderChat();
       } else renderConvList();
       return { uploaded, downloaded, skipped, failed };
-    } finally {
-      syncing = false;
-    }
+    } finally { syncing = false; }
   }
   async function syncOne(id, silent) {
     if (syncing) return { busy: true };
@@ -1412,9 +1402,7 @@ html, body {
         if (!silent) updateProgress('cloudProgress', '');
         return { ok, direction: 'download' };
       }
-    } finally {
-      syncing = false;
-    }
+    } finally { syncing = false; }
   }
   async function forceUpload(id) {
     if (!getToken()) { showDiag('未登录', ['请先登录']); return false; }
@@ -1601,11 +1589,10 @@ html, body {
         alert(`模型配置同步完成\n上传 ${uploaded}，下载 ${downloaded}，跳过 ${skipped}，失败 ${failed}`);
       }
       renderModelManagerList();
+      updateConfigLabel();
       updateModelLabel();
       return { uploaded, downloaded, skipped, failed };
-    } finally {
-      syncing = false;
-    }
+    } finally { syncing = false; }
   }
   async function syncModelConfigOne(id, silent) {
     if (syncing) return { busy: true };
@@ -1663,13 +1650,12 @@ html, body {
         modelConfigs = loadModelConfigs();
         setSyncState(id, 'synced');
         renderModelManagerList();
+        updateConfigLabel();
         updateModelLabel();
         if (!silent) updateProgress('mmProgress', '');
         return { ok: true, direction: 'download' };
       }
-    } finally {
-      syncing = false;
-    }
+    } finally { syncing = false; }
   }
   async function checkModelConfigState() {
     if (!getToken()) { showDiag('未登录', ['请先登录']); return; }
@@ -1715,10 +1701,7 @@ html, body {
     if (cm && lm) {
       const ct = cm.savedAt || 0;
       const lt = lm.savedAt || 0;
-      if (ct !== lt) {
-        alert('该配置在云端有未同步的修改，请先同步再删除。');
-        return;
-      }
+      if (ct !== lt) { alert('该配置在云端有未同步的修改，请先同步再删除。'); return; }
     }
     const dr = await cloudApi({ type: 'config', id, method: 'DELETE' });
     if (dr.error) {
@@ -1737,6 +1720,7 @@ html, body {
       if (currentModelConfigId) setCookie(CUR_KEY, currentModelConfigId);
     }
     renderModelManagerList();
+    updateConfigLabel();
     updateModelLabel();
   }
 
@@ -1850,9 +1834,7 @@ html, body {
       updateSearchLabel();
       updateSearchEnabledCheck();
       return { uploaded, downloaded, skipped, failed };
-    } finally {
-      syncing = false;
-    }
+    } finally { syncing = false; }
   }
   async function syncSearchConfigOne(id, silent) {
     if (syncing) return { busy: true };
@@ -1915,9 +1897,7 @@ html, body {
         if (!silent) updateProgress('smProgress', '');
         return { ok: true, direction: 'download' };
       }
-    } finally {
-      syncing = false;
-    }
+    } finally { syncing = false; }
   }
   async function checkSearchConfigState() {
     if (!getToken()) { showDiag('未登录', ['请先登录']); return; }
@@ -1963,10 +1943,7 @@ html, body {
     if (cm && lm) {
       const ct = cm.savedAt || 0;
       const lt = lm.savedAt || 0;
-      if (ct !== lt) {
-        alert('该配置在云端有未同步的修改，请先同步再删除。');
-        return;
-      }
+      if (ct !== lt) { alert('该配置在云端有未同步的修改，请先同步再删除。'); return; }
     }
     const dr = await cloudApi({ type: 'search', id, method: 'DELETE' });
     if (dr.error) {
@@ -1989,21 +1966,23 @@ html, body {
     updateSearchEnabledCheck();
   }
 
-  // ═══════════════════════════════════════════════════════
-  // DOM
-  // ═══════════════════════════════════════════════════════
+  // ═══════════════ DOM ═══════════════
   const chatEl = document.getElementById('chat');
   const welcomeEl = document.getElementById('welcome');
   const inputEl = document.getElementById('input');
   const btnSend = document.getElementById('btnSend');
   const convListEl = document.getElementById('convList');
   const convTitleEl = document.getElementById('convTitle');
+  const btnConfig = document.getElementById('btnConfig');
+  const configLabel = document.getElementById('configLabel');
   const btnModel = document.getElementById('btnModel');
   const modelLabel = document.getElementById('modelLabel');
   const btnSearch = document.getElementById('btnSearch');
   const searchLabel = document.getElementById('searchLabel');
   const btnReason = document.getElementById('btnReason');
   const reasonLabel = document.getElementById('reasonLabel');
+  const configPopup = document.getElementById('configPopup');
+  const configList = document.getElementById('configList');
   const modelPopup = document.getElementById('modelPopup');
   const searchPopup = document.getElementById('searchPopup');
   const reasonPopup = document.getElementById('reasonPopup');
@@ -2023,7 +2002,6 @@ html, body {
   const modelManagerList = document.getElementById('modelManagerList');
   const searchManagerList = document.getElementById('searchManagerList');
 
-  // ─── 滚动 ───
   let isAtBottom = true, scrollPending = false;
   chatEl.addEventListener('scroll', () => {
     isAtBottom = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 60;
@@ -2035,7 +2013,6 @@ html, body {
   }
   function scrollToBottom() { isAtBottom = true; chatEl.scrollTop = chatEl.scrollHeight; }
 
-  // ─── 消息操作 ───
   function copyText(text) {
     if (!text) { showToast('无内容'); return; }
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -2088,7 +2065,6 @@ html, body {
     await send();
   }
 
-  // ─── 渲染 ───
   function makeTurnEl(turn, turnIdx, isGenerating) {
     const frag = document.createDocumentFragment();
     const marked = !!turn.marked;
@@ -2215,14 +2191,20 @@ html, body {
     else { btnSend.textContent = '发送'; btnSend.classList.remove('stop'); }
   }
 
+  function updateConfigLabel() {
+    const c = curModelConfig();
+    if (curMeta && curMeta.configId && !modelConfigById(curMeta.configId)) {
+      configLabel.textContent = '未绑定';
+      btnConfig.classList.add('error');
+    } else {
+      configLabel.textContent = c ? c.name : '配置';
+      btnConfig.classList.toggle('empty', !c);
+      btnConfig.classList.remove('error');
+    }
+  }
+
   function updateModelLabel() {
     const m = (curMeta?.model) || curModelConfig()?.model || '';
-    if (curMeta && curMeta.configId && !modelConfigById(curMeta.configId)) {
-      modelLabel.textContent = '未绑定';
-      btnModel.classList.add('error');
-      return;
-    }
-    btnModel.classList.remove('error');
     if (m) { modelLabel.textContent = m; btnModel.classList.remove('empty'); }
     else { modelLabel.textContent = '选择模型'; btnModel.classList.add('empty'); }
   }
@@ -2272,6 +2254,7 @@ html, body {
       scrollToBottom();
     }
     if (curId && runningConvs.has(curId)) bindDomRefs(curId);
+    updateConfigLabel();
     updateModelLabel();
     updateSearchLabel();
     updateReasonLabel();
@@ -2333,7 +2316,6 @@ html, body {
     });
   }
 
-  // ─── 会话菜单 ───
   let convMenuTargetId = null;
   function openConvMenu(anchor, convId) {
     convMenuTargetId = convId;
@@ -2386,7 +2368,6 @@ html, body {
     URL.revokeObjectURL(url);
   }
 
-  // ─── Popup ───
   function closeAllPopups() {
     document.querySelectorAll('.popup.show').forEach(p => p.classList.remove('show'));
     popupMask.classList.remove('show');
@@ -2411,7 +2392,48 @@ html, body {
   }
   popupMask.addEventListener('click', closeAllPopups);
 
-  // ─── 模型面板 ───
+  // ─── 配置 Popup ───
+  function renderConfigList() {
+    configList.innerHTML = '';
+    modelConfigs.forEach(c => {
+      const it = document.createElement('div');
+      it.className = 'popup-item' + (c.id === currentModelConfigId ? ' active' : '');
+      it.innerHTML = '<span class="n">' + esc(c.name) + '</span>' +
+        (c.id === currentModelConfigId ? '<span class="chk">✓</span>' : '');
+      it.addEventListener('click', () => { switchModelConfig(c.id); closeAllPopups(); });
+      configList.appendChild(it);
+    });
+  }
+  function switchModelConfig(id) {
+    currentModelConfigId = id;
+    setCookie(CUR_KEY, id);
+    if (curId && curMeta) {
+      curMeta.configId = id;
+      const c = modelConfigById(id);
+      curMeta.configName = c ? c.name : '';
+      curMeta.savedAt = Date.now();
+      curMeta.schema = 2;
+      S.setMeta(curId, curMeta);
+      setSyncState(curId, 'local-newer');
+    }
+    modelsCache = loadModels();
+    updateConfigLabel();
+    updateModelLabel();
+    renderModelList();
+  }
+  btnConfig.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (configPopup.classList.contains('show')) { closeAllPopups(); return; }
+    renderConfigList();
+    showPopup(configPopup, btnConfig);
+  });
+  configPopup.addEventListener('click', e => e.stopPropagation());
+  document.getElementById('btnManageModelConfigs').addEventListener('click', () => {
+    closeAllPopups();
+    openModelManager();
+  });
+
+  // ─── 模型 Popup ───
   function renderModelList() {
     const q = (modelSearchEl.value || '').toLowerCase().trim();
     const list = q ? modelsCache.filter(m => m.toLowerCase().includes(q)) : modelsCache;
@@ -2458,10 +2480,6 @@ html, body {
   document.getElementById('btnRefreshModels').addEventListener('click', (e) => {
     e.stopPropagation(); fetchModels(false);
   });
-  document.getElementById('btnManageModelConfigs').addEventListener('click', () => {
-    closeAllPopups();
-    openModelManager();
-  });
   document.getElementById('btnShowManual').addEventListener('click', () => {
     manualWrap.classList.add('show'); manualInput.focus();
   });
@@ -2475,7 +2493,7 @@ html, body {
   });
   modelPopup.addEventListener('click', e => e.stopPropagation());
 
-  // ─── 搜索面板 ───
+  // ─── 搜索 Popup ───
   function renderSearchConfigList() {
     searchConfigList.innerHTML = '';
     if (searchConfigs.length === 0) {
@@ -2490,16 +2508,15 @@ html, body {
       it.innerHTML = '<span class="n">' + esc(c.name) + '</span>' +
         '<span class="sub">' + provider + (keyFilled ? '' : ' · 未填 Key') + '</span>' +
         (c.id === currentSearchConfigId ? '<span class="chk">✓</span>' : '');
-      it.addEventListener('click', () => { switchSearchConfig(c.id); });
+      it.addEventListener('click', () => {
+        currentSearchConfigId = c.id;
+        setCookie(SEARCH_CUR_KEY, c.id);
+        renderSearchConfigList();
+        updateSearchLabel();
+        updateSearchEnabledCheck();
+      });
       searchConfigList.appendChild(it);
     });
-  }
-  function switchSearchConfig(id) {
-    currentSearchConfigId = id;
-    setCookie(SEARCH_CUR_KEY, id);
-    renderSearchConfigList();
-    updateSearchLabel();
-    updateSearchEnabledCheck();
   }
   btnSearch.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -2527,7 +2544,7 @@ html, body {
     openSearchEdit(null);
   });
 
-  // ─── 推理强度 ───
+  // ─── 推理 Popup ───
   btnReason.addEventListener('click', (e) => {
     e.stopPropagation();
     if (reasonPopup.classList.contains('show')) { closeAllPopups(); return; }
@@ -2609,8 +2626,7 @@ html, body {
         const bodyText = await res.text();
         if (!res.ok) {
           if (!silent) showDiag('Cloudflare 获取模型失败 HTTP ' + res.status, [
-            { k: '目标', v: cfUrl },
-            { k: '状态', v: res.status },
+            { k: '目标', v: cfUrl }, { k: '状态', v: res.status },
             { k: '响应体', v: bodyText.slice(0, 2000) }
           ]);
           return;
@@ -2619,8 +2635,7 @@ html, body {
         try { data = JSON.parse(bodyText); }
         catch {
           if (!silent) showDiag('响应不是 JSON', [
-            { k: '目标', v: cfUrl },
-            { k: '响应体', v: bodyText.slice(0, 2000) }
+            { k: '目标', v: cfUrl }, { k: '响应体', v: bodyText.slice(0, 2000) }
           ]);
           return;
         }
@@ -2632,8 +2647,7 @@ html, body {
         }
         if (list.length === 0) {
           if (!silent) showDiag('未解析到 Cloudflare 模型', [
-            { k: '目标', v: cfUrl },
-            { k: '响应体', v: bodyText.slice(0, 2000) }
+            { k: '目标', v: cfUrl }, { k: '响应体', v: bodyText.slice(0, 2000) }
           ]);
           return;
         }
@@ -2643,8 +2657,7 @@ html, body {
         if (!curMeta?.model && !c.model) selectModel(list[0]);
       } catch (e) {
         if (!silent) showDiag('Cloudflare 获取模型网络异常', [
-          { k: '代理地址', v: c.proxyUrl },
-          { k: '异常', v: e.name + ': ' + e.message }
+          { k: '代理地址', v: c.proxyUrl }, { k: '异常', v: e.name + ': ' + e.message }
         ]);
       } finally {
         fetchingModels = false;
@@ -2663,10 +2676,7 @@ html, body {
 
     const targets = [];
     if (c.apiBase) {
-      targets.push({
-        label: '主 API',
-        url: c.apiBase.replace(/\/+$/, '') + '/models'
-      });
+      targets.push({ label: '主 API', url: c.apiBase.replace(/\/+$/, '') + '/models' });
     }
     if (c.fallbackModelsUrl) {
       const u = (c.fallbackModelsUrl || '').trim();
@@ -2683,7 +2693,6 @@ html, body {
     fetchingModels = true;
     const btn = document.getElementById('btnRefreshModels');
     btn.disabled = true; btn.textContent = '…';
-
     const attemptLog = [];
     let list = null;
     let successTarget = null;
@@ -2701,7 +2710,6 @@ html, body {
           })
         });
         const bodyText = await res.text();
-
         if (!res.ok) {
           attemptLog.push({
             k: t.label + ' [' + t.url + ']',
@@ -2722,7 +2730,6 @@ html, body {
         if (Array.isArray(data.data)) arr = data.data.map(m => m.id || m.name).filter(Boolean);
         else if (Array.isArray(data.models)) arr = data.models.map(m => m.id || m.name).filter(Boolean);
         else if (Array.isArray(data)) arr = data.map(m => (typeof m === 'string' ? m : (m.id || m.name))).filter(Boolean);
-
         if (arr.length === 0) {
           attemptLog.push({
             k: t.label + ' [' + t.url + ']',
@@ -2802,7 +2809,7 @@ html, body {
 
     if (curMeta && curMeta.configId && !modelConfigById(curMeta.configId)) {
       alert('此对话的模型配置已被删除，请重新选择配置。');
-      btnModel.click();
+      btnConfig.click();
       return;
     }
 
@@ -2873,13 +2880,13 @@ html, body {
     isAtBottom = true;
     chatEl.scrollTop = chatEl.scrollHeight;
 
-    // ═══════ 联网搜索 ═══════
+    // 联网搜索
     let searchContext = '';
     const sc = curSearchConfig();
     if (sc && sc.enabled === true) {
       const provider = sc.searchProvider || 'tavily';
       const searchKey = provider === 'tavily' ? sc.tavilyApiKey : sc.serperApiKey;
-      if (searchKey) {
+      if (searchKey && sc.proxyPassword) {
         const statusEl = document.createElement('div');
         statusEl.className = 'search-status';
         statusEl.textContent = '🔍 正在搜索「' + text.slice(0, 30) + (text.length > 30 ? '…' : '') + '」...';
@@ -2909,10 +2916,9 @@ html, body {
           setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 2500);
         }
       } else {
-        // 搜索已启用但未填 Key
         const statusEl = document.createElement('div');
         statusEl.className = 'search-status';
-        statusEl.textContent = '⚠️ 搜索已启用但未配置 API Key，跳过搜索';
+        statusEl.textContent = searchKey ? '⚠️ 搜索配置缺少代理密码' : '⚠️ 搜索已启用但未配置 API Key，跳过搜索';
         chatEl.insertBefore(statusEl, a);
         setTimeout(() => { if (statusEl.parentNode) statusEl.remove(); }, 3000);
       }
@@ -3107,10 +3113,7 @@ html, body {
       });
       it.querySelector('[data-act="switch"]').addEventListener('click', (e) => {
         e.stopPropagation();
-        currentModelConfigId = item.id;
-        setCookie(CUR_KEY, item.id);
-        modelsCache = loadModels();
-        updateModelLabel();
+        switchModelConfig(item.id);
         renderModelManagerList();
       });
       modelManagerList.appendChild(it);
@@ -3130,7 +3133,6 @@ html, body {
     renderModelManagerList();
   });
 
-  // ─── 模型配置编辑 ───
   let editingModelConfigId = null;
   function openModelEdit(cfg) {
     editingModelConfigId = cfg ? cfg.id : null;
@@ -3205,6 +3207,7 @@ html, body {
     saveModelConfig(newCfg);
     setSyncState(newCfg.id, 'local-newer');
     closeModelEdit();
+    updateConfigLabel();
     updateModelLabel();
     renderModelManagerList();
   });
@@ -3273,7 +3276,6 @@ html, body {
     renderSearchManagerList();
   });
 
-  // ─── 搜索配置编辑 ───
   let editingSearchConfigId = null;
   function openSearchEdit(cfg) {
     editingSearchConfigId = cfg ? cfg.id : null;
@@ -3419,7 +3421,7 @@ html, body {
 
   document.getElementById('btnNewConv').addEventListener('click', () => {
     curId = null; curMeta = null; curTurns = [];
-    btnModel.classList.remove('error');
+    btnConfig.classList.remove('error');
     renderChat();
     if (window.innerWidth <= 768 && window.innerHeight > window.innerWidth) closeSidebar();
     inputEl.focus();
@@ -3441,6 +3443,7 @@ html, body {
     const ids = S.idx();
     if (ids.length > 0) loadConv(ids[0]);
     renderChat();
+    updateConfigLabel();
     updateModelLabel();
     updateSearchLabel();
     updateSearchEnabledCheck();
