@@ -2075,11 +2075,7 @@ html, body {
   let fetchingModels = false;
 
   function normalizeModelsUrl(input) {
-    let u = (input || '').trim();
-    if (!u) return '';
-    u = u.replace(/\/+$/, '');
-    if (/\/models$/i.test(u)) return u;
-    return u + '/models';
+    return (input || '').trim();
   }
 
   async function fetchModels(silent) {
@@ -2105,7 +2101,7 @@ html, body {
     }
     if (c.fallbackModelsUrl) {
       const u = normalizeModelsUrl(c.fallbackModelsUrl);
-      if (u) targets.push({ label: '备用 API', url: u });
+      if (u) targets.push({ label: '备用模型地址', url: u });
     }
 
     if (targets.length === 0) {
