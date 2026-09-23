@@ -145,11 +145,33 @@
     return refPanel;
   };
 
+  // ═══════════════════ 消息格式规范化（Cloudflare 兼容） ═══════════════════
+  // Cloudflare Workers AI 的 schema 比标准 OpenAI 更严格：
+  //   - assistant 消息必须有 content 字段，且必须是字符串（不能是 null / 数组）
+  //   - 系统消息的 content 不能是数组
+  // 在 agent 循环里回传历史时，如果 content 为 null 会直接 400。
+  function normalizeMessages(messages) {
+    return messages.map(m => {
+      const out = { ...m };
+      if (Array.isArray(out.content)) {
+        out.content = out.content.map(p => (p && p.text) || '').join('');
+      } else if (out.content === null || out.content === undefined) {
+        out.content = '';
+      } else {
+        out.content = String(out.content);
+      }
+      return out;
+    });
+  }
+
   // ═══════════════════ 流式请求一次 ═══════════════════
   async function streamFetchOnce(messages, tools, ctx) {
     const { c, model, turn, ac, updateStreamingUI } = ctx;
 
-    const body = { model, messages, stream: true };
+    const isCF = SWC.isCloudflareEndpoint(c.apiBase);
+    const finalMessages = isCF ? normalizeMessages(messages) : messages;
+
+    const body = { model, messages: finalMessages, stream: true };
     if (typeof c.temperature === 'number' && !isNaN(c.temperature)) body.temperature = c.temperature;
     if (turn.reasoning) body.reasoning_effort = turn.reasoning;
     if (tools && tools.length > 0) body.tools = tools;
@@ -177,10 +199,10 @@
       { k: 'tools 参数', v: toolsInfo },
       { k: 'temperature', v: typeof c.temperature === 'number' ? c.temperature : '(未发送)' },
       { k: 'reasoning_effort', v: turn.reasoning || '(未发送)' },
-      { k: 'messages 数量', v: messages.length },
+      { k: 'messages 数量', v: finalMessages.length },
       '',
       'messages 预览：',
-      JSON.stringify(messages, null, 2).slice(0, 3000)
+      JSON.stringify(finalMessages, null, 2).slice(0, 3000)
     ]);
 
     let res;
@@ -362,7 +384,6 @@
         if (canUseTools && currentTools.length > 0 && e.status && SWC.isToolsUnsupportedError(e.status, e.responseText)) {
           SWC.markModelNoToolSupport(model);
           SWC.showToast('模型不支持 Agent 模式，已降级为简单搜索');
-          // 清空已渲染内容
           turn.assistant.content = '';
           turn.assistant.reasoning_content = '';
           ctx.updateStreamingUI();
@@ -386,8 +407,12 @@
 
       if (!result.toolCalls || result.toolCalls.length === 0) break;
 
-      // 追加 assistant 消息（★ 回传 reasoning_content 以兼容 DeepSeek）
-      const assistantMsg = { role: 'assistant', content: result.content || null, tool_calls: result.toolCalls };
+      // ★ 追加 assistant 消息（content 强制字符串，兼容 Cloudflare）
+      const assistantMsg = {
+        role: 'assistant',
+        content: result.content || '',
+        tool_calls: result.toolCalls
+      };
       if (result.reasoningContent) assistantMsg.reasoning_content = result.reasoningContent;
       currentMessages.push(assistantMsg);
 
@@ -423,7 +448,7 @@
             ctx.showStatus('⚠️ 未找到结果', 1500);
           }
 
-          currentMessages.push({ role: 'tool', tool_call_id: tc.id || '', content: toolContent });
+          currentMessages.push({ role: 'tool', tool_call_id: tc.id || '', content: String(toolContent || '') });
         } else {
           currentMessages.push({ role: 'tool', tool_call_id: tc.id || '', content: '未知工具：' + (fnName || '(空)') });
         }
@@ -555,10 +580,7 @@
     let effectiveMode = 'off';
     if (searchEnabled && hasSearchKey) {
       if (searchMode === 'agent') {
-        if (SWC.isCloudflareEndpoint(c.apiBase)) {
-          effectiveMode = 'simple';
-          SWC.showToast('Cloudflare 端点不支持 tools，自动切换为简单模式');
-        } else if (SWC.isModelSupportTools(model)) {
+        if (SWC.isModelSupportTools(model)) {
           effectiveMode = 'agent';
         } else {
           effectiveMode = 'simple';
