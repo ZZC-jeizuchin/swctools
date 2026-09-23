@@ -6,6 +6,56 @@
 <title>SwC AI</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="ai.css">
+<script>
+(function(){
+  function show(text){
+    var box = document.getElementById('__swcSelfCheck');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = '__swcSelfCheck';
+      box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:50vh;overflow:auto;'
+        + 'background:rgba(0,0,0,.9);color:#0f0;padding:10px;z-index:2147483647;'
+        + 'font:12px/1.45 monospace;white-space:pre-wrap;';
+      document.body.appendChild(box);
+    }
+    box.textContent += text + '\n';
+  }
+  window.addEventListener('error', function(e){
+    show('[ERROR] ' + (e.message||'?') + '\n  at ' + (e.filename||'?') + ':' + (e.lineno||'?'));
+  }, true);
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e.reason;
+    show('[REJECT] ' + ((r && (r.stack || r.message)) || r));
+  });
+  window.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      var out = '=== SWC SELF CHECK ===';
+      out += '\nSWC: ' + (typeof window.SWC);
+      if (window.SWC) {
+        ['applyTheme','uuid','esc','state','S','loadConv','newConv','send',
+         'copyText','toggleMark','deleteTurn','resendTurn',
+         'renderChat','renderConvList','renderModelManagerList','openModelEdit',
+         'renderSearchManagerList','openSearchEdit','updateSendButton'].forEach(function(k){
+          out += '\n  SWC.' + k + ': ' + (typeof window.SWC[k]);
+        });
+        if (window.SWC.state) {
+          var st = window.SWC.state;
+          out += '\n  state.curId: ' + st.curId;
+          out += '\n  state.modelConfigs: ' + (st.modelConfigs||[]).length;
+          out += '\n  state.searchConfigs: ' + (st.searchConfigs||[]).length;
+        }
+      }
+      out += '\n#convList children: ' + document.querySelectorAll('#convList > *').length;
+      out += '\n#chat children: ' + document.querySelectorAll('#chat > *').length;
+      out += '\n#welcome exists: ' + !!document.getElementById('welcome');
+      out += '\n#configLabel text: "' + (document.getElementById('configLabel')||{}).textContent + '"';
+      out += '\n#modelLabel text: "' + (document.getElementById('modelLabel')||{}).textContent + '"';
+      out += '\n#searchLabel text: "' + (document.getElementById('searchLabel')||{}).textContent + '"';
+      show(out);
+    }, 800);
+  });
+})();
+</script>
 </head>
 <body>
 
