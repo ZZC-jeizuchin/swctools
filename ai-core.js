@@ -318,6 +318,8 @@ window.SWC = window.SWC || {};
 
   // ═══════════════════ 工具支持缓存 ═══════════════════
   const TOOL_SUPPORT_KEY = 'swc_ai_tool_support';
+  const TOOL_SUPPORT_TTL = 7 * 24 * 3600 * 1000; // 7 天
+
   SWC.loadToolSupportCache = function () {
     try { const r = localStorage.getItem(TOOL_SUPPORT_KEY); return r ? JSON.parse(r) : {}; }
     catch { return {}; }
@@ -327,11 +329,26 @@ window.SWC = window.SWC || {};
   };
   SWC.isModelSupportTools = function (model) {
     const cache = SWC.loadToolSupportCache();
-    return cache[model] !== false;
+    const v = cache[model];
+    if (v === undefined) return true;           // 无记录 → 默认支持
+    if (v === false) {                          // 旧格式（永久标记）→ 升级成带 TTL 的新格式
+      cache[model] = { ok: false, until: Date.now() + TOOL_SUPPORT_TTL };
+      SWC.saveToolSupportCache(cache);
+      return false;
+    }
+    if (v.ok === false) {
+      if (v.until && v.until <= Date.now()) {   // 已过期，清除并重试
+        delete cache[model];
+        SWC.saveToolSupportCache(cache);
+        return true;
+      }
+      return false;
+    }
+    return true;
   };
   SWC.markModelNoToolSupport = function (model) {
     const cache = SWC.loadToolSupportCache();
-    cache[model] = false;
+    cache[model] = { ok: false, until: Date.now() + TOOL_SUPPORT_TTL };
     SWC.saveToolSupportCache(cache);
   };
 
@@ -1060,16 +1077,21 @@ window.SWC = window.SWC || {};
   };
 
   // ═══════════════════ 工具不支持检测 ═══════════════════
+  // 只匹配"明确说不支持 tool / function calling"的错误，避免被其它 400 误判。
   SWC.isToolsUnsupportedError = function (status, responseText) {
     if (status !== 400 && status !== 404 && status !== 422 && status !== 500) return false;
     if (!responseText) return false;
     const t = String(responseText).toLowerCase();
     return (
-      t.includes('tool') || t.includes('function') ||
-      t.includes('not support') || t.includes('unsupported') ||
-      t.includes('unknown parameter') || t.includes('invalid parameter') ||
-      t.includes('unrecognized') || t.includes('oneof') ||
-      (t.includes('messages') && t.includes('content'))
+      /does\s+not\s+support\s+(tool|function)/.test(t) ||
+      /(tool|function)s?\s+(are\s+)?not\s+support/.test(t) ||
+      /unsupported\s+(tool|function)/.test(t) ||
+      /function\s+calling\s+is\s+not\s+support/.test(t) ||
+      /(tool|function)s?\s+is\s+not\s+support/.test(t) ||
+      /unknown\s+parameter[^\n]*\b(tool|function)/.test(t) ||
+      /invalid\s+parameter[^\n]*\b(tool|function)/.test(t) ||
+      /unrecognized[^\n]*\b(tool|function)/.test(t) ||
+      (/\boneof\b/.test(t) && /\btool/.test(t))
     );
   };
   SWC.isCloudflareEndpoint = function (apiBase) {
