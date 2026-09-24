@@ -123,6 +123,22 @@
     }
   };
 
+  // ═══════════════════ 搜索关键词提取 ═══════════════════
+  // 从用户输入里提取 **xxx** 形式的加粗内容，作为降级/简单模式的搜索关键词。
+  // 例如 "对比 **github** 和 **baidu**" → ["github", "baidu"] → 搜 "github baidu"
+  // 若未找到，返回空数组，调用方应回退到用整段文本搜索。
+  SWC.extractSearchKeywords = function (text) {
+    if (!text) return [];
+    const out = [];
+    const re = /\*\*([^*]+)\*\*/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const kw = m[1].trim();
+      if (kw) out.push(kw);
+    }
+    return out;
+  };
+
   // ═══════════════════ 引用来源面板 ═══════════════════
   SWC.buildRefsPanel = function (searchResults) {
     const refPanel = document.createElement('details');
@@ -328,8 +344,12 @@
       const provider = sc.searchProvider || 'tavily';
       const searchKey = provider === 'tavily' ? sc.tavilyApiKey : sc.serperApiKey;
       if (searchKey && sc.proxyPassword) {
-        const statusEl = ctx.showStatus('🔍 正在搜索「' + text.slice(0, 30) + (text.length > 30 ? '…' : '') + '」...');
-        const searchResult = await SWC.performSearch(text, sc);
+        // ★ 优先使用 **xxx** 中提取的关键词；没提取到才用整段文本
+        const keywords = SWC.extractSearchKeywords(text);
+        const searchQuery = keywords.length > 0 ? keywords.join(' ') : text;
+        const displayQuery = searchQuery.slice(0, 30) + (searchQuery.length > 30 ? '…' : '');
+        const statusEl = ctx.showStatus('🔍 正在搜索「' + displayQuery + '」...');
+        const searchResult = await SWC.performSearch(searchQuery, sc);
         if (statusEl) statusEl.remove();
 
         if (searchResult.error) {
@@ -600,8 +620,12 @@
       { k: '最终 effectiveMode', v: effectiveMode }
     ]);
 
+    // ★ systemHint 必须插到开头所有 system 消息之后，
+    //   否则 Cloudflare 等严格端点会报 "System message must be at the beginning"
     if (effectiveMode === 'agent' && sc.systemHint) {
-      ctx.messages.push({ role: 'system', content: sc.systemHint });
+      let insertAt = 0;
+      while (insertAt < ctx.messages.length && ctx.messages[insertAt].role === 'system') insertAt++;
+      ctx.messages.splice(insertAt, 0, { role: 'system', content: sc.systemHint });
     }
     ctx.messages.push({ role: 'user', content: text });
 
