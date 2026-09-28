@@ -174,6 +174,25 @@
       flex-shrink: 0;
     }
 
+    /* ★ 破解 按钮：只让文字动态闪烁，按钮本体样式不变 */
+    @keyframes crack-flash {
+      0%, 100% {
+        color: #ff2e2e;
+        text-shadow: 0 0 6px rgba(255, 46, 46, 0.85), 0 0 14px rgba(255, 46, 46, 0.45);
+        opacity: 1;
+      }
+      50% {
+        color: #ffb400;
+        text-shadow: 0 0 10px rgba(255, 180, 0, 0.95), 0 0 22px rgba(255, 180, 0, 0.55);
+        opacity: 0.78;
+      }
+    }
+    .cat-btn.crack-btn span {
+      display: inline-block;
+      font-weight: 700;
+      animation: crack-flash 1.15s ease-in-out infinite;
+    }
+
     /* 搜索区高度调整为35% */
     .jump-section {
       flex: 0 0 calc(var(--main-h) * 0.35);
@@ -296,6 +315,14 @@
     .perf-mode .modal-overlay, .perf-mode .drawer-overlay { transition: none !important; backdrop-filter: none !important; }
     .perf-mode .modal-card, .perf-mode .drawer-panel { transform: none !important; filter: none !important; transition: none !important; }
     .perf-mode .main-panel, .perf-mode .modal-card, .perf-mode .cat-btn, .perf-mode .tool-btn, .perf-mode .go-btn, .perf-mode .nav-btn, .perf-mode .link-item { box-shadow: none !important; }
+
+    /* ★ 性能模式下：破解闪烁降级为静态红色（不再重绘） */
+    .perf-mode .cat-btn.crack-btn span {
+      animation: none !important;
+      color: #2e9bff !important;
+      text-shadow: 0 0 6px rgba(46, 155, 255, 0.85) !important;
+      opacity: 1 !important;
+    }
   </style>
 </head>
 <body>
@@ -312,10 +339,10 @@
   </div>
   <div class="category-bar">
     <button class="cat-btn" data-cat="ai">AI工具</button>
+    <button class="cat-btn crack-btn" data-cat="crack"><span>破解</span></button>
     <button class="cat-btn" data-cat="search">搜索引擎</button>
     <button class="cat-btn" data-cat="media">通信音乐</button>
     <button class="cat-btn" data-cat="dev">开发</button>
-    <button class="cat-btn" data-cat="music">播放器</button>
     <button class="cat-btn" data-cat="other">其他</button>
     <button class="cat-btn" id="loginBtn" style="display:none;">登录</button>
   </div>
@@ -393,14 +420,14 @@
 
   const linkDB = {
     ai: [{ name: 'DeepSeek', url: 'https://chat.deepseek.com' },{name: 'SWC AI', url: 'ai.html'},{ name: 'Doubao', url: 'https://www.doubao.com' },{ name: 'Qwen', url: 'https://qianwen.aliyun.com' },{ name: 'Kimi', url: 'https://kimi.moonshot.cn' }, { name: 'Z ai', url: 'https://bigmodel.cn' }, { name: 'DS api', url: 'https://platform.deepseek.com' }, { name: 'Artificial Analysis', url: 'https://artificialanalysis.ai' }, { name: 'Live Bench', url: 'https://livebench.ai' }],
+    crack: [],
     search: [{ name: 'Google', url: 'https://www.google.com' },{ name: 'Bing (国内)', url: 'https://cn.bing.com' },{ name: 'Bing (国际)', url: 'https://www.bing.com' },{ name: 'MSN', url: 'https://www.msn.com' },{ name: 'DuckDuckGo', url: 'https://duckduckgo.com' },{ name: 'Baidu', url: 'https://baidu.com' },{ name: 'Yandex', url: 'https://yandex.com' },{ name: 'Yandex RU', url: 'https://yandex.ru' },{ name: 'Bilibili', url: 'https://bilibili.com' }],
     media: [{ name: '自由公园', url: 'https://ziyoupark.com' },{ name: 'XCloud Music', url: 'https://music.xcloudv.top' },{ name: 'ACFan', url: 'https://acfan.com' },{ name: 'PeanutDL', url: 'https://peanutdl.com' },{ name: 'WyAPI', url: 'https://wyapi.toubiec.cn' },{ name: 'GDStudio Music', url: 'https://music.gdstudio.org' },{ name: 'outlook', url: 'https://outlook.com' },{ name: 'yymp3', url: 'https://www.yymp3.com' }],
     dev: [{ name: 'GitHub', url: 'https://github.com' },{ name: 'Server', url: 'https://8.138.245.240:51743/ipanel' },{ name: 'IP.SB', url: 'https://www.ip.sb' },{ name: 'Intel', url: 'https://www.intel.com' },{ name: 'AMD', url: 'https://www.amd.com' },{ name: 'NVIDIA', url: 'https://www.nvidia.com' },{ name: 'Lenovo', url: 'https://www.lenovo.com' },{ name: 'Huawei', url: 'https://www.huawei.com' },{ name: 'Apple', url: 'https://www.apple.com' },{ name: 'Microsoft', url: 'https://www.microsoft.com' },{ name: 'cpp.sh', url: 'https://cpp.sh' },{ name: 'Python (官网)', url: 'https://www.python.org' },{ name: 'Python IDE', url: 'https://www.programiz.com/python-programming/online-compiler/' },{ name: 'Cloudflare', url: 'https://www.cloudflare.com' }],
-    music: [],
     other: [{ name: '电路设计', url: 'https://digiwleea.wleeaf.dev' }, { name: 'MMPan.top', url: 'https://mmpan.top' },{ name: 'CNN Edition', url: 'https://edition.cnn.com' },{ name: 'Poki', url: 'https://poki.com' },{ name: 'Steam', url: 'https://store.steampowered.com' },{ name: 'Slow Roads', url: 'https://slowroads.io' },{ name: 'CopyOS', url: 'https://copy.sh/v86' },{ name: '作者主页开源', url: 'https://github.com/ZZC-jeizuchin/swctools' }]
   };
-  const catNames = { ai:'AI工具', search:'搜索引擎', media:'通信音乐', dev:'开发', music:'播放器', other:'其他', login:'未登录' };
-  const categories = ['ai','search','media','dev','music','other','login'];
+  const catNames = { ai:'AI工具', crack:'破解', search:'搜索引擎', media:'通信音乐', dev:'开发', other:'其他', login:'未登录' };
+  const categories = ['ai','crack','search','media','dev','other','login'];
   const drawerTypes = ['device','ide','stress','base64'];
 
   function performJump(url, addTimestamp = true) {
@@ -567,12 +594,21 @@
     modalSlides.innerHTML = categories.map(cat => {
       if (cat === 'login') {
         return buildLoginCard();
-      } else if (cat === 'music') {
+      } else if (cat === 'crack') {
         return `
-          <div class="modal-card" data-cat="music">
-            <div class="modal-header"><h3>音乐播放器(如无跳转手动点击)</h3><button class="modal-close" data-close-modal>&times;</button></div>
-            <div style="display:flex;justify-content:center;padding:16px 0;">
-              <button class="nav-btn" style="max-width:260px;" onclick="location.href='music.html'">即将跳转</button>
+          <div class="modal-card" data-cat="crack">
+            <div class="modal-header"><h3 style="color:#ff2e2e;">破解</h3><button class="modal-close" data-close-modal>&times;</button></div>
+            <div style="display:flex;flex-direction:column;gap:12px;padding:16px 0;">
+              <button class="nav-btn" style="max-width:320px;margin:0 auto;" onclick="location.href='https://8.138.245.240:4698'">进入破解工具</button>
+            </div>
+          </div>`;
+      } else if (cat === 'media') {
+        return `
+          <div class="modal-card" data-cat="media">
+            <div class="modal-header"><h3>通信音乐</h3><button class="modal-close" data-close-modal>&times;</button></div>
+            <div class="link-grid">${linkDB.media.map(l => `<a class="link-item" href="${l.url}" target="_blank" rel="noopener">${l.name}</a>`).join('')}</div>
+            <div style="margin-top: calc(var(--main-h) * 0.02);display:flex;justify-content:center;">
+              <button class="nav-btn" style="max-width:260px;margin:0;" onclick="location.href='music.html'">音乐播放器（如无跳转手动点击）</button>
             </div>
           </div>`;
       } else {
@@ -790,10 +826,16 @@
     if (modalOverlay.classList.contains('show')) { recalcModalWidth(); translateToIndex(currentCatIndex, 0); showOnlyCurrentModalCard(currentCatIndex); }
   });
 
-  document.querySelectorAll('[data-cat]').forEach((btn, idx) => btn.addEventListener('click', ()=> openModalAt(idx)));
+  // ★ 按 data-cat 找索引，避免依赖 DOM 顺序
+  document.querySelectorAll('[data-cat]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = categories.indexOf(btn.dataset.cat);
+      if (idx >= 0) openModalAt(idx);
+    });
+  });
   loginBtn.addEventListener('click', () => {
     buildModalSlides();
-    openModalAt(6);
+    openModalAt(categories.indexOf('login'));
   });
 
   // ========== 抽屉系统 ==========
