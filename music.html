@@ -232,33 +232,47 @@
       let tracks = [];      // { url, name }
       let currentIndex = -1;
 
-      // 从直链提取文件名，去掉 .wav 后缀，并自动解码 URI 编码（中文显示）
+      // 更稳健的 URI 解码
+      function safeDecode(s) {
+        try { return decodeURIComponent(s); } catch (e) { return s; }
+      }
+
+      // 从直链提取文件名，去掉常见音频后缀，并自动解码 URI 编码（中文显示）
       function extractName(url) {
         try {
           const path = new URL(url).pathname;
           const parts = path.split('/').filter(Boolean);
           if (parts.length === 0) return url;
           const filename = parts[parts.length - 1];
-          return decodeURIComponent(filename.replace(/\.wav$/i, ''));
+          const name = filename.replace(/\.(wav|flac|mp3|ogg|opus|m4a)$/i, '');
+          return safeDecode(name);
         } catch (e) {
-          const fallback = url.split('/').pop().replace(/\.wav$/i, '') || url;
-          return decodeURIComponent(fallback);
+          const fallback = (url.split('/').pop() || url).replace(/\.(wav|flac|mp3|ogg|opus|m4a)$/i, '');
+          return safeDecode(fallback);
         }
       }
 
-      // 加载曲目列表
-      async function loadTrackList() {
+      // 加载曲目列表（带 cache-busting 和更稳健的错误输出）
+      async function loadTrackList({ cacheBust = true, showError = true } = {}) {
         try {
-          const response = await fetch(LIST_URL);
+          // 在 fetch 时要求不使用浏览器缓存，并可选择附加时间戳避免 CDN/中间层缓存
+          const url = LIST_URL + (cacheBust ? (LIST_URL.includes('?') ? '&' : '?') + '_=' + Date.now() : '');
+          const response = await fetch(url, { cache: 'no-store', mode: 'cors' });
           if (!response.ok) throw new Error('HTTP ' + response.status);
           const text = await response.text();
-          const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+          console.debug('[music.list] raw text:', text);
+
+          // 处理 BOM 与换行，兼容 CRLF/LF
+          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+          console.debug('[music.list] parsed lines:', lines);
+
           if (lines.length === 0) throw new Error('列表为空');
 
           tracks = lines.map(url => ({ url, name: extractName(url) }));
           renderTrackList();
         } catch (err) {
-          trackListEl.innerHTML = `<div class="error">⚠️ 加载失败：${err.message}</div>`;
+          console.error('loadTrackList error:', err);
+          if (showError) trackListEl.innerHTML = `<div class="error">⚠️ 加载失败：${err.message}</div>`;
         }
       }
 
@@ -328,8 +342,13 @@
         nowPlayingEl.textContent = '⚠️ 音频加载失败';
       });
 
-      // 启动加载
-      loadTrackList();
+      // 启动加载（首次强制 cache-bust）
+      loadTrackList({ cacheBust: true });
+
+      // 可选：定时自动刷新曲目列表（每 60 秒）以保证页面长期打开时能拿到最新列表
+      const AUTO_REFRESH_INTERVAL_MS = 60 * 1000; // 60s
+      let autoRefreshTimer = setInterval(() => loadTrackList({ cacheBust: true, showError: false }), AUTO_REFRESH_INTERVAL_MS);
+
     })();
   </script>
 </body>
